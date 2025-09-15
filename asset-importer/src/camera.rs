@@ -1,0 +1,91 @@
+//! Camera representation and utilities
+
+use crate::{
+    error::c_str_to_string_or_empty,
+    sys,
+    types::{from_ai_vector3d, Vector3D},
+};
+
+/// A camera in the scene
+pub struct Camera {
+    camera_ptr: *const sys::aiCamera,
+}
+
+impl Camera {
+    /// Create a Camera from a raw Assimp camera pointer
+    pub(crate) fn from_raw(camera_ptr: *const sys::aiCamera) -> Self {
+        Self { camera_ptr }
+    }
+
+    /// Get the raw camera pointer
+    pub fn as_raw(&self) -> *const sys::aiCamera {
+        self.camera_ptr
+    }
+
+    /// Get the name of the camera
+    pub fn name(&self) -> String {
+        unsafe {
+            let camera = &*self.camera_ptr;
+            c_str_to_string_or_empty(camera.mName.data.as_ptr() as *const i8)
+        }
+    }
+
+    /// Get the position of the camera
+    pub fn position(&self) -> Vector3D {
+        unsafe {
+            let camera = &*self.camera_ptr;
+            from_ai_vector3d(camera.mPosition)
+        }
+    }
+
+    /// Get the up vector of the camera
+    pub fn up(&self) -> Vector3D {
+        unsafe {
+            let camera = &*self.camera_ptr;
+            from_ai_vector3d(camera.mUp)
+        }
+    }
+
+    /// Get the look-at vector of the camera
+    pub fn look_at(&self) -> Vector3D {
+        unsafe {
+            let camera = &*self.camera_ptr;
+            from_ai_vector3d(camera.mLookAt)
+        }
+    }
+
+    /// Get the horizontal field of view in radians
+    pub fn horizontal_fov(&self) -> f32 {
+        unsafe { (*self.camera_ptr).mHorizontalFOV }
+    }
+
+    /// Get the near clipping plane distance
+    pub fn clip_plane_near(&self) -> f32 {
+        unsafe { (*self.camera_ptr).mClipPlaneNear }
+    }
+
+    /// Get the far clipping plane distance
+    pub fn clip_plane_far(&self) -> f32 {
+        unsafe { (*self.camera_ptr).mClipPlaneFar }
+    }
+
+    /// Get the aspect ratio
+    pub fn aspect(&self) -> f32 {
+        unsafe { (*self.camera_ptr).mAspect }
+    }
+
+    /// Get the orthographic width (for orthographic cameras)
+    pub fn orthographic_width(&self) -> f32 {
+        unsafe { (*self.camera_ptr).mOrthographicWidth }
+    }
+}
+
+impl Clone for Camera {
+    fn clone(&self) -> Self {
+        Self {
+            camera_ptr: self.camera_ptr,
+        }
+    }
+}
+
+impl Copy for Camera {}

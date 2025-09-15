@@ -1,0 +1,14 @@
+[workspace]
+members = ["asset-importer-sys", "asset-importer"]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.70"
+authors = ["Mingzhen Zhuang <superfrankie621@gmail.com>"]
+license = "MIT OR Apache-2.0"
+description = "Comprehensive Rust bindings for the Assimp 3D asset import library"
+homepage = "https://github.com/Latias94/asset-importer"
+repository = "https://github.com/Latias94/asset-importer"
+keywords = ["assimp", "3d", "mesh", "animation", "graphics"]

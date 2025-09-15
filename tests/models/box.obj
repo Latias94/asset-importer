@@ -1,0 +1,22 @@
+# Simple box model for testing
+v -1.0 -1.0  1.0
+v  1.0 -1.0  1.0
+v  1.0  1.0  1.0
+v -1.0  1.0  1.0
+v -1.0 -1.0 -1.0
+v  1.0 -1.0 -1.0
+v  1.0  1.0 -1.0
+v -1.0  1.0 -1.0
+
+# Front face
+f 1 2 3 4
+# Back face
+f 8 7 6 5
+# Left face
+f 5 1 4 8
+# Right face
+f 2 6 7 3
+# Top face
+f 4 3 7 8
+# Bottom face
+f 1 5 6 2

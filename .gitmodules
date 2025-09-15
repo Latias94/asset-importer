@@ -1,0 +1,3 @@
+[submodule "asset-importer-sys/assimp"]
+	path = asset-importer-sys/assimp
+	url = https://github.com/assimp/assimp.git

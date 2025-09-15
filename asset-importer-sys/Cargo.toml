@@ -1,0 +1,57 @@
+[package]
+name = "asset-importer-sys"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Low-level FFI bindings for the Assimp 3D asset import library"
+homepage = "https://github.com/Latias94/asset-importer"
+repository = "https://github.com/Latias94/asset-importer"
+documentation = "https://docs.rs/asset-importer-sys"
+categories = ["external-ffi-bindings", "rendering"]
+keywords = ["assimp", "3d", "ffi", "bindings"]
+build = "build.rs"
+links = "assimp"
+
+# Exclude unnecessary files to reduce package size
+exclude = [
+    "assimp/test/",
+    "assimp/samples/",
+    "assimp/tools/",
+    "assimp/doc/",
+    "assimp/contrib/",
+    "assimp/packaging/",
+]
+
+[dependencies]
+mint = { version = "0.5", optional = true }
+
+[build-dependencies]
+bindgen = "0.72"
+cc = "1.0"
+cmake = "0.1"
+pkg-config = { version = "0.3", optional = true }
+# For prebuilt binary support
+reqwest = { version = "0.12", features = ["blocking", "rustls-tls"], optional = true }
+tar = { version = "0.4", optional = true }
+flate2 = { version = "1.0", optional = true }
+
+[features]
+default = []
+# Enable mint math library integration
+mint = ["dep:mint"]
+# Enable type extensions with convenience methods
+type-extensions = []
+# Enable export functionality (includes more symbols)
+export = []
+# Enable static linking
+static = []
+# Use system-installed assimp instead of bundled
+system = ["pkg-config"]
+# Build assimp from source
+build-assimp = []
+# Use prebuilt binaries (downloads from GitHub releases)
+prebuilt = ["reqwest", "tar", "flate2"]
+# Control zlib linking
+nozlib = []
