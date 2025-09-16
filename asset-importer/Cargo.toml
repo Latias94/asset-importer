@@ -42,8 +42,7 @@ default = []
 mint = ["dep:mint", "asset-importer-sys/mint"]
 # Enable export functionality
 export = ["asset-importer-sys/export"]
-# Enable static linking
-static = ["asset-importer-sys/static"]
+
 # Enable system assimp (instead of bundled)
 system = ["asset-importer-sys/system"]
 # Build assimp from source

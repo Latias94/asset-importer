@@ -404,10 +404,10 @@ impl Material {
 
         unsafe {
             let mut path = sys::aiString::default();
-            let mut mapping = std::mem::MaybeUninit::uninit();
-            let mut uv_index = std::mem::MaybeUninit::uninit();
-            let mut blend = std::mem::MaybeUninit::uninit();
-            let mut op = std::mem::MaybeUninit::uninit();
+            let mut mapping = std::mem::MaybeUninit::<sys::aiTextureMapping::Type>::uninit();
+            let mut uv_index = std::mem::MaybeUninit::<u32>::uninit();
+            let mut blend = std::mem::MaybeUninit::<f32>::uninit();
+            let mut op = std::mem::MaybeUninit::<sys::aiTextureOp::Type>::uninit();
             let mut map_mode = [0u32; 3];
             let mut tex_flags: u32 = 0;
 

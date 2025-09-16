@@ -362,11 +362,17 @@ fn build_assimp_from_source(manifest_dir: &std::path::Path, _out_path: &std::pat
         // Disable being overly strict with warnings, which can cause build issues
         .define("ASSIMP_WARNINGS_AS_ERRORS", "OFF");
 
-    // Configure zlib based on nozlib feature
+    // Configure zlib based on nozlib feature and platform
+    // Follow assimp's default behavior: use system zlib on non-Windows platforms
     if cfg!(feature = "nozlib") {
         config.define("ASSIMP_BUILD_ZLIB", "OFF");
-    } else {
+    } else if target_os == "windows" {
+        // Use bundled zlib on Windows (assimp default)
         config.define("ASSIMP_BUILD_ZLIB", "ON");
+    } else {
+        // Use system zlib on non-Windows platforms (assimp default since v5.3.1+)
+        // This avoids fdopen macro conflicts on macOS
+        config.define("ASSIMP_BUILD_ZLIB", "OFF");
     }
 
     // Enable export functionality if requested
@@ -378,6 +384,12 @@ fn build_assimp_from_source(manifest_dir: &std::path::Path, _out_path: &std::pat
 
     // Force Release build to avoid runtime library conflicts
     config.profile("Release");
+
+    // Use static runtime library on Windows to match assimp's default
+    // This avoids runtime library conflicts (MT vs MD)
+    if target_os == "windows" && target_env == "msvc" {
+        config.static_crt(true);
+    }
 
     // Platform-specific configurations
     match target_os.as_str() {
@@ -584,6 +596,9 @@ fn compile_bridge_cpp(manifest_dir: &std::path::Path, built_include_dir: Option<
     #[cfg(target_env = "msvc")]
     {
         build.flag("/EHsc");
+        // Use static runtime library on Windows to match assimp's default
+        // This avoids runtime library conflicts (MT vs MD)
+        build.static_crt(true);
     }
 
     build.compile("assimp_rust_bridge");

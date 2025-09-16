@@ -67,8 +67,7 @@ mint = ["dep:mint"]
 type-extensions = []
 # Enable export functionality (includes more symbols)
 export = []
-# Enable static linking
-static = []
+
 # Use system-installed assimp instead of bundled
 system = ["pkg-config"]
 # Build assimp from source (explicit feature)
