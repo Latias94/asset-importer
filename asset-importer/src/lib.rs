@@ -108,6 +108,7 @@ pub mod metadata;
 pub mod progress;
 
 // Utility modules
+pub mod math;
 pub mod postprocess;
 pub mod utils;
 
@@ -137,6 +138,23 @@ pub mod version {
     /// Revision of Assimp
     pub fn assimp_version_revision() -> u32 {
         unsafe { crate::sys::aiGetVersionRevision() }
+    }
+
+    /// Version string reported by Assimp
+    pub fn assimp_version_string() -> String {
+        unsafe {
+            let p = crate::sys::aiGetVersionString();
+            if p.is_null() {
+                String::new()
+            } else {
+                std::ffi::CStr::from_ptr(p).to_string_lossy().into_owned()
+            }
+        }
+    }
+
+    /// Compile flags used to build Assimp
+    pub fn assimp_compile_flags() -> u32 {
+        unsafe { crate::sys::aiGetCompileFlags() }
     }
 }
 

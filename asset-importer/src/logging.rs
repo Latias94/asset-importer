@@ -120,7 +120,13 @@ struct LogStreamWrapper {
 
 /// Global logger instance
 pub struct Logger {
-    streams: Vec<LogStreamWrapper>,
+    streams: Vec<OwnedLogStream>,
+}
+
+struct OwnedLogStream {
+    ai_stream: sys::aiLogStream,
+    wrapper_ptr: *mut LogStreamWrapper,
+    stream: Arc<Mutex<dyn LogStream>>,
 }
 
 impl Logger {
@@ -133,32 +139,45 @@ impl Logger {
 
     /// Attach a log stream
     pub fn attach_stream(&mut self, stream: Arc<Mutex<dyn LogStream>>) -> Result<()> {
-        let wrapper = LogStreamWrapper { stream };
+        // Allocate wrapper and keep pointer for cleanup
+        let wrapper = LogStreamWrapper {
+            stream: stream.clone(),
+        };
+        let wrapper_ptr = Box::into_raw(Box::new(wrapper));
 
-        // Create the C callback structure
         let ai_stream = sys::aiLogStream {
             callback: Some(log_callback),
-            user: Box::into_raw(Box::new(wrapper)) as *mut c_char,
+            user: wrapper_ptr as *mut c_char,
         };
 
-        // Attach to Assimp
         unsafe {
             sys::aiAttachLogStream(&ai_stream);
         }
 
+        self.streams.push(OwnedLogStream {
+            ai_stream,
+            wrapper_ptr,
+            stream,
+        });
         Ok(())
     }
 
     /// Detach a log stream
     pub fn detach_stream(&mut self, stream: Arc<Mutex<dyn LogStream>>) -> Result<()> {
-        // Find and remove the stream
-        self.streams
-            .retain(|wrapper| !Arc::ptr_eq(&wrapper.stream, &stream));
-
-        // Note: We can't easily detach individual streams from Assimp
-        // without keeping track of the aiLogStream structures
-        // For now, we'll just remove from our list
-
+        // Find owned stream
+        if let Some(pos) = self
+            .streams
+            .iter()
+            .position(|s| Arc::ptr_eq(&s.stream, &stream))
+        {
+            let owned = self.streams.remove(pos);
+            unsafe {
+                // Detach this single stream
+                sys::aiDetachLogStream(&owned.ai_stream);
+                // Free wrapper
+                let _ = Box::from_raw(owned.wrapper_ptr);
+            }
+        }
         Ok(())
     }
 
@@ -167,7 +186,12 @@ impl Logger {
         unsafe {
             sys::aiDetachAllLogStreams();
         }
-        self.streams.clear();
+        // Free all wrappers
+        for s in self.streams.drain(..) {
+            unsafe {
+                let _ = Box::from_raw(s.wrapper_ptr);
+            }
+        }
     }
 
     /// Enable or disable verbose logging
@@ -242,7 +266,10 @@ pub fn attach_file_stream<P: AsRef<std::path::Path>>(path: P) -> Result<()> {
 
 /// Convenience function to enable verbose logging
 pub fn enable_verbose_logging(enable: bool) {
-    global_logger().lock().unwrap().enable_verbose_logging(enable);
+    global_logger()
+        .lock()
+        .unwrap()
+        .enable_verbose_logging(enable);
 }
 
 /// Convenience function to detach all log streams

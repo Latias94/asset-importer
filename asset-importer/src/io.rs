@@ -19,6 +19,19 @@ pub trait FileSystem {
     /// Open a file for reading
     fn open(&self, path: &str) -> Result<Box<dyn FileStream>>;
 
+    /// Open a file with explicit mode (e.g., "rb", "wb", "ab", "r+b").
+    /// Default implementation falls back to `open` for read-only modes.
+    fn open_with_mode(&self, path: &str, mode: &str) -> Result<Box<dyn FileStream>> {
+        if mode.starts_with('r') {
+            self.open(path)
+        } else {
+            Err(crate::error::Error::io_error(format!(
+                "Unsupported open mode: {}",
+                mode
+            )))
+        }
+    }
+
     /// Get the directory separator character
     fn separator(&self) -> char {
         std::path::MAIN_SEPARATOR
@@ -65,6 +78,40 @@ impl FileSystem for DefaultFileSystem {
     fn open(&self, path: &str) -> Result<Box<dyn FileStream>> {
         let file =
             std::fs::File::open(path).map_err(|e| crate::error::Error::io_error(e.to_string()))?;
+        Ok(Box::new(StdFileStream::new(file)))
+    }
+
+    fn open_with_mode(&self, path: &str, mode: &str) -> Result<Box<dyn FileStream>> {
+        use std::fs::OpenOptions;
+        let mut options = OpenOptions::new();
+        let mut read = false;
+        let mut write = false;
+        let mut append = false;
+        let mut truncate = false;
+        // Basic parsing of mode
+        if mode.contains('+') {
+            read = true;
+            write = true;
+        } else if mode.starts_with('r') {
+            read = true;
+        } else if mode.starts_with('w') {
+            write = true;
+            truncate = true;
+        } else if mode.starts_with('a') {
+            write = true;
+            append = true;
+        }
+
+        options
+            .read(read)
+            .write(write)
+            .append(append)
+            .truncate(truncate)
+            .create(write || append);
+
+        let file = options
+            .open(path)
+            .map_err(|e| crate::error::Error::io_error(e.to_string()))?;
         Ok(Box::new(StdFileStream::new(file)))
     }
 }
@@ -231,8 +278,6 @@ impl FileStream for MemoryFileStream {
     }
 }
 
-
-
 /// Wrapper for integrating Rust FileSystem with Assimp's aiFileIO
 pub struct AssimpFileIO {
     file_system: Arc<Mutex<dyn FileSystem>>,
@@ -281,21 +326,16 @@ extern "C" fn file_open_proc(
             Err(_) => return ptr::null_mut(),
         };
 
-        // Convert mode to Rust string (for now we only support read mode)
+        // Convert mode to Rust string
         let mode_cstr = CStr::from_ptr(mode);
         let mode_str = match mode_cstr.to_str() {
             Ok(s) => s,
             Err(_) => return ptr::null_mut(),
         };
 
-        // Only support read mode for now
-        if !mode_str.starts_with('r') {
-            return ptr::null_mut();
-        }
-
         // Open the file
         let stream = match file_system.lock() {
-            Ok(fs) => match fs.open(filename_str) {
+            Ok(fs) => match fs.open_with_mode(filename_str, mode_str) {
                 Ok(stream) => stream,
                 Err(_) => return ptr::null_mut(),
             },

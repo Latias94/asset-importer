@@ -1,6 +1,7 @@
 //! Scene importer functionality
 
-use std::ffi::CString;
+use std::ffi::{CStr, CString};
+use std::os::raw::{c_char, c_void};
 use std::path::Path;
 
 use crate::{
@@ -11,6 +12,8 @@ use crate::{
     scene::Scene,
     sys,
 };
+
+use crate::types::to_ai_matrix4x4;
 
 /// A property store for configuring import behavior
 ///
@@ -271,8 +274,11 @@ impl ImportBuilder {
         let c_path = CString::new(path_str.as_ref())
             .map_err(|_| Error::invalid_parameter("Invalid file path"))?;
 
-        // Create property store if we have properties
-        let property_store = if self.properties.is_empty() {
+        // Determine if we will use the C++ bridge
+        let use_bridge = self.progress_handler.is_some();
+
+        // Create property store only for the pure C API path
+        let property_store = if use_bridge || self.properties.is_empty() {
             std::ptr::null_mut()
         } else {
             self.create_property_store()
@@ -287,26 +293,73 @@ impl ImportBuilder {
             .as_ref()
             .map_or(std::ptr::null_mut(), |io| io as *const _ as *mut _);
 
-        // Import the scene
-        let scene_ptr = unsafe {
-            if property_store.is_null() && file_io_ptr.is_null() {
-                sys::aiImportFile(c_path.as_ptr(), self.post_process.as_raw())
-            } else if file_io_ptr.is_null() {
-                sys::aiImportFileExWithProperties(
-                    c_path.as_ptr(),
-                    self.post_process.as_raw(),
-                    std::ptr::null_mut(),
-                    property_store,
-                )
-            } else if property_store.is_null() {
-                sys::aiImportFileEx(c_path.as_ptr(), self.post_process.as_raw(), file_io_ptr)
-            } else {
-                sys::aiImportFileExWithProperties(
+        // If a progress handler is provided, use the C++ bridge to set it.
+        let scene_ptr = if use_bridge {
+            let handler = self.progress_handler.unwrap();
+            // Prepare property list for the bridge
+            let (ffi_props, _name_bufs, _value_str_bufs) = build_rust_properties(&self.properties)?;
+
+            // Prepare progress callback state
+            extern "C" fn progress_cb(
+                percentage: f32,
+                message: *const c_char,
+                user: *mut c_void,
+            ) -> bool {
+                if user.is_null() {
+                    return true;
+                }
+                let handler: &mut dyn ProgressHandler =
+                    unsafe { &mut *(user as *mut Box<dyn ProgressHandler>) };
+                let msg_opt = if message.is_null() {
+                    None
+                } else {
+                    unsafe { CStr::from_ptr(message) }.to_str().ok()
+                };
+                handler.update(percentage, msg_opt)
+            }
+
+            // Box the handler to pass across FFI and reclaim after call
+            let mut boxed: Box<Box<dyn ProgressHandler>> = Box::new(handler);
+            let user_ptr = &mut *boxed as *mut Box<dyn ProgressHandler> as *mut c_void;
+
+            let ptr = unsafe {
+                sys::aiImportFileExWithProgressRust(
                     c_path.as_ptr(),
                     self.post_process.as_raw(),
                     file_io_ptr,
-                    property_store,
+                    ffi_props.as_ptr(),
+                    ffi_props.len(),
+                    Some(progress_cb),
+                    user_ptr,
                 )
+            };
+
+            // Reclaim box (drop) now that import returned
+            drop(boxed);
+
+            ptr
+        } else {
+            // Fallback to C API paths
+            unsafe {
+                if property_store.is_null() && file_io_ptr.is_null() {
+                    sys::aiImportFile(c_path.as_ptr(), self.post_process.as_raw())
+                } else if file_io_ptr.is_null() {
+                    sys::aiImportFileExWithProperties(
+                        c_path.as_ptr(),
+                        self.post_process.as_raw(),
+                        std::ptr::null_mut(),
+                        property_store,
+                    )
+                } else if property_store.is_null() {
+                    sys::aiImportFileEx(c_path.as_ptr(), self.post_process.as_raw(), file_io_ptr)
+                } else {
+                    sys::aiImportFileExWithProperties(
+                        c_path.as_ptr(),
+                        self.post_process.as_raw(),
+                        file_io_ptr,
+                        property_store,
+                    )
+                }
             }
         };
 
@@ -319,11 +372,23 @@ impl ImportBuilder {
 
         // Check if import was successful
         if scene_ptr.is_null() {
+            // Prefer bridge error if using it
+            let last_bridge_err = unsafe { sys::aiGetLastErrorStringRust() };
+            if !last_bridge_err.is_null() {
+                let msg = unsafe { CStr::from_ptr(last_bridge_err) }
+                    .to_string_lossy()
+                    .into_owned();
+                return Err(Error::other(msg));
+            }
             return Err(Error::from_assimp());
         }
 
-        // Create safe wrapper
-        unsafe { Scene::from_raw(scene_ptr) }
+        // Create safe wrapper (bridge import is deep-copied -> FreeScene; C API -> ReleaseImport)
+        if use_bridge {
+            unsafe { Scene::from_raw_copied(scene_ptr) }
+        } else {
+            unsafe { Scene::from_raw_import(scene_ptr) }
+        }
     }
 
     /// Import a scene from memory buffer
@@ -336,30 +401,76 @@ impl ImportBuilder {
 
         let hint_ptr = hint_cstr.as_ref().map_or(std::ptr::null(), |s| s.as_ptr());
 
-        // Create property store if we have properties
-        let property_store = if self.properties.is_empty() {
+        // Determine if we will use the C++ bridge
+        let use_bridge = self.progress_handler.is_some();
+
+        // Create property store only for the pure C API path
+        let property_store = if use_bridge || self.properties.is_empty() {
             std::ptr::null_mut()
         } else {
             self.create_property_store()
         };
 
-        // Import from memory
-        let scene_ptr = unsafe {
-            if property_store.is_null() {
-                sys::aiImportFileFromMemory(
-                    data.as_ptr() as *const std::os::raw::c_char,
+        // Import from memory (bridge if progress specified)
+        let scene_ptr = if use_bridge {
+            let handler = self.progress_handler.unwrap();
+            // Prepare properties
+            let (ffi_props, _name_bufs, _value_str_bufs) = build_rust_properties(&self.properties)?;
+
+            extern "C" fn progress_cb(
+                percentage: f32,
+                message: *const c_char,
+                user: *mut c_void,
+            ) -> bool {
+                if user.is_null() {
+                    return true;
+                }
+                let handler: &mut dyn ProgressHandler =
+                    unsafe { &mut *(user as *mut Box<dyn ProgressHandler>) };
+                let msg_opt = if message.is_null() {
+                    None
+                } else {
+                    unsafe { CStr::from_ptr(message) }.to_str().ok()
+                };
+                handler.update(percentage, msg_opt)
+            }
+
+            let mut boxed: Box<Box<dyn ProgressHandler>> = Box::new(handler);
+            let user_ptr = &mut *boxed as *mut Box<dyn ProgressHandler> as *mut c_void;
+
+            let ptr = unsafe {
+                sys::aiImportFileFromMemoryWithProgressRust(
+                    data.as_ptr() as *const c_char,
                     data.len() as u32,
                     self.post_process.as_raw(),
                     hint_ptr,
+                    ffi_props.as_ptr(),
+                    ffi_props.len(),
+                    Some(progress_cb),
+                    user_ptr,
                 )
-            } else {
-                sys::aiImportFileFromMemoryWithProperties(
-                    data.as_ptr() as *const std::os::raw::c_char,
-                    data.len() as u32,
-                    self.post_process.as_raw(),
-                    hint_ptr,
-                    property_store,
-                )
+            };
+
+            drop(boxed);
+            ptr
+        } else {
+            unsafe {
+                if property_store.is_null() {
+                    sys::aiImportFileFromMemory(
+                        data.as_ptr() as *const std::os::raw::c_char,
+                        data.len() as u32,
+                        self.post_process.as_raw(),
+                        hint_ptr,
+                    )
+                } else {
+                    sys::aiImportFileFromMemoryWithProperties(
+                        data.as_ptr() as *const std::os::raw::c_char,
+                        data.len() as u32,
+                        self.post_process.as_raw(),
+                        hint_ptr,
+                        property_store,
+                    )
+                }
             }
         };
 
@@ -372,11 +483,21 @@ impl ImportBuilder {
 
         // Check if import was successful
         if scene_ptr.is_null() {
+            let last_bridge_err = unsafe { sys::aiGetLastErrorStringRust() };
+            if !last_bridge_err.is_null() {
+                let msg = unsafe { CStr::from_ptr(last_bridge_err) }
+                    .to_string_lossy()
+                    .into_owned();
+                return Err(Error::other(msg));
+            }
             return Err(Error::from_assimp());
         }
 
-        // Create safe wrapper
-        unsafe { Scene::from_raw(scene_ptr) }
+        if use_bridge {
+            unsafe { Scene::from_raw_copied(scene_ptr) }
+        } else {
+            unsafe { Scene::from_raw_import(scene_ptr) }
+        }
     }
 
     /// Create a property store with the configured properties
@@ -457,6 +578,59 @@ impl ImportBuilder {
 
         store
     }
+}
+
+// Build property array for the C++ bridge. Returns (ffi_props, name_bufs, value_str_bufs)
+fn build_rust_properties(
+    props: &[(String, PropertyValue)],
+) -> Result<(Vec<sys::aiRustProperty>, Vec<CString>, Vec<CString>)> {
+    let mut ffi_props = Vec::with_capacity(props.len());
+    let mut name_bufs: Vec<CString> = Vec::with_capacity(props.len());
+    let mut value_str_bufs: Vec<CString> = Vec::new();
+
+    for (name, value) in props {
+        let c_name = CString::new(name.as_str())
+            .map_err(|_| Error::invalid_parameter("Invalid property name"))?;
+        let mut p = sys::aiRustProperty {
+            name: c_name.as_ptr(),
+            kind: sys::aiRustPropertyKind::aiRustPropertyKind_Integer, // default, will set below
+            int_value: 0,
+            float_value: 0.0,
+            string_value: std::ptr::null(),
+            matrix_value: sys::aiMatrix4x4::default(),
+        };
+
+        match value {
+            PropertyValue::Integer(v) => {
+                p.kind = sys::aiRustPropertyKind::aiRustPropertyKind_Integer;
+                p.int_value = *v;
+            }
+            PropertyValue::Boolean(v) => {
+                p.kind = sys::aiRustPropertyKind::aiRustPropertyKind_Boolean;
+                p.int_value = if *v { 1 } else { 0 };
+            }
+            PropertyValue::Float(v) => {
+                p.kind = sys::aiRustPropertyKind::aiRustPropertyKind_Float;
+                p.float_value = *v;
+            }
+            PropertyValue::String(s) => {
+                p.kind = sys::aiRustPropertyKind::aiRustPropertyKind_String;
+                let c_val = CString::new(s.as_str())
+                    .map_err(|_| Error::invalid_parameter("Invalid property string value"))?;
+                p.string_value = c_val.as_ptr();
+                value_str_bufs.push(c_val);
+            }
+            PropertyValue::Matrix(m) => {
+                p.kind = sys::aiRustPropertyKind::aiRustPropertyKind_Matrix4x4;
+                p.matrix_value = to_ai_matrix4x4(*m);
+            }
+        }
+
+        name_bufs.push(c_name);
+        ffi_props.push(p);
+    }
+
+    Ok((ffi_props, name_bufs, value_str_bufs))
 }
 
 impl Default for ImportBuilder {

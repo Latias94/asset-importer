@@ -935,7 +935,10 @@ impl ApplicationHandler for App {
 
                 self.camera.process_mouse_movement(xoffset, yoffset, true);
             }
-            WindowEvent::MouseWheel { delta: winit::event::MouseScrollDelta::LineDelta(_, y), .. } => {
+            WindowEvent::MouseWheel {
+                delta: winit::event::MouseScrollDelta::LineDelta(_, y),
+                ..
+            } => {
                 self.camera.process_mouse_scroll(y);
             }
             _ => {}

@@ -22,3 +22,54 @@
 #include <assimp/texture.h>
 #include <assimp/metadata.h>
 #include <assimp/version.h>
+
+// === Rust bridging types for progress + properties ===
+
+// A simple property kind to avoid C unions in the public header
+typedef enum aiRustPropertyKind {
+    aiRustPropertyKind_Integer = 0,
+    aiRustPropertyKind_Float = 1,
+    aiRustPropertyKind_String = 2,
+    aiRustPropertyKind_Matrix4x4 = 3,
+    aiRustPropertyKind_Boolean = 4
+} aiRustPropertyKind;
+
+// A property descriptor used to pass Importer properties from Rust to C++
+typedef struct aiRustProperty {
+    const char* name;                 // property key name
+    aiRustPropertyKind kind;          // active kind below
+    int          int_value;           // also used for bool (0/1)
+    float        float_value;
+    const char*  string_value;        // UTF-8, null-terminated
+    struct aiMatrix4x4 matrix_value;  // row-major, as in Assimp
+} aiRustProperty;
+
+// Progress callback signature used by the bridge. Return false to cancel.
+typedef bool (*aiRustProgressCallback)(float percentage, const char* message, void* user);
+
+// Import a file with optional custom IO, properties and a progress callback.
+// Returns a deep-copied aiScene which can be freed with aiFreeScene.
+ASSIMP_API const struct aiScene* aiImportFileExWithProgressRust(
+    const char* path,
+    unsigned int flags,
+    const struct aiFileIO* file_io, // nullable
+    const struct aiRustProperty* props,
+    size_t props_count,
+    aiRustProgressCallback progress_cb, // nullable
+    void* progress_user // nullable
+);
+
+// Import from memory with properties + progress callback support.
+ASSIMP_API const struct aiScene* aiImportFileFromMemoryWithProgressRust(
+    const char* data,
+    unsigned int length,
+    unsigned int flags,
+    const char* hint, // nullable
+    const struct aiRustProperty* props,
+    size_t props_count,
+    aiRustProgressCallback progress_cb, // nullable
+    void* progress_user // nullable
+);
+
+// Get the last error message produced by the Rust C++ bridge (thread-local).
+ASSIMP_API const char* aiGetLastErrorStringRust(void);

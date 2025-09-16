@@ -5,6 +5,7 @@ use std::path::Path;
 
 use crate::{
     error::{Error, Result},
+    io::{AssimpFileIO, FileSystem},
     scene::Scene,
     sys,
 };
@@ -14,6 +15,7 @@ use crate::{
 pub struct ExportBuilder {
     format_id: String,
     preprocessing: u32,
+    file_system: Option<std::sync::Arc<std::sync::Mutex<dyn FileSystem>>>,
 }
 
 impl ExportBuilder {
@@ -22,12 +24,22 @@ impl ExportBuilder {
         Self {
             format_id: format_id.into(),
             preprocessing: 0,
+            file_system: None,
         }
     }
 
     /// Set preprocessing steps to apply before export
     pub fn with_preprocessing(mut self, steps: u32) -> Self {
         self.preprocessing = steps;
+        self
+    }
+
+    /// Use a custom file system for exporting (uses aiExportSceneEx)
+    pub fn with_file_system(
+        mut self,
+        file_system: std::sync::Arc<std::sync::Mutex<dyn FileSystem>>,
+    ) -> Self {
+        self.file_system = Some(file_system);
         self
     }
 
@@ -39,13 +51,26 @@ impl ExportBuilder {
         let c_format = CString::new(self.format_id.as_str())
             .map_err(|_| Error::invalid_parameter("Invalid format ID"))?;
 
-        let result = unsafe {
-            sys::aiExportScene(
-                scene.as_raw(),
-                c_format.as_ptr(),
-                c_path.as_ptr(),
-                self.preprocessing,
-            )
+        let result = if let Some(fs) = &self.file_system {
+            let file_io = AssimpFileIO::new(fs.clone()).create_ai_file_io();
+            unsafe {
+                sys::aiExportSceneEx(
+                    scene.as_raw(),
+                    c_format.as_ptr(),
+                    &file_io as *const _ as *mut _,
+                    c_path.as_ptr(),
+                    self.preprocessing,
+                )
+            }
+        } else {
+            unsafe {
+                sys::aiExportScene(
+                    scene.as_raw(),
+                    c_format.as_ptr(),
+                    c_path.as_ptr(),
+                    self.preprocessing,
+                )
+            }
         };
 
         if result == sys::aiReturn::Type::aiReturn_SUCCESS {

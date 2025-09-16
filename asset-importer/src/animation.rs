@@ -81,6 +81,62 @@ impl Animation {
             index: 0,
         }
     }
+
+    /// Get the number of mesh animation channels (vertex anim via aiAnimMesh)
+    pub fn num_mesh_channels(&self) -> usize {
+        unsafe { (*self.animation_ptr).mNumMeshChannels as usize }
+    }
+
+    /// Get a mesh animation channel
+    pub fn mesh_channel(&self, index: usize) -> Option<MeshAnimation> {
+        if index >= self.num_mesh_channels() {
+            return None;
+        }
+        unsafe {
+            let ptr = *(*self.animation_ptr).mMeshChannels.add(index);
+            if ptr.is_null() {
+                None
+            } else {
+                Some(MeshAnimation { channel_ptr: ptr })
+            }
+        }
+    }
+
+    /// Iterate mesh animation channels
+    pub fn mesh_channels(&self) -> MeshAnimationIterator {
+        MeshAnimationIterator {
+            animation_ptr: self.animation_ptr,
+            index: 0,
+        }
+    }
+
+    /// Get the number of morph mesh animation channels
+    pub fn num_morph_mesh_channels(&self) -> usize {
+        unsafe { (*self.animation_ptr).mNumMorphMeshChannels as usize }
+    }
+
+    /// Get a morph mesh animation channel
+    pub fn morph_mesh_channel(&self, index: usize) -> Option<MorphMeshAnimation> {
+        if index >= self.num_morph_mesh_channels() {
+            return None;
+        }
+        unsafe {
+            let ptr = *(*self.animation_ptr).mMorphMeshChannels.add(index);
+            if ptr.is_null() {
+                None
+            } else {
+                Some(MorphMeshAnimation { channel_ptr: ptr })
+            }
+        }
+    }
+
+    /// Iterate morph mesh animation channels
+    pub fn morph_mesh_channels(&self) -> MorphMeshAnimationIterator {
+        MorphMeshAnimationIterator {
+            animation_ptr: self.animation_ptr,
+            index: 0,
+        }
+    }
 }
 
 /// Animation data for a single node
@@ -210,3 +266,147 @@ impl Iterator for NodeAnimationIterator {
 }
 
 impl ExactSizeIterator for NodeAnimationIterator {}
+
+/// Mesh animation key
+#[repr(C)]
+pub struct MeshKey {
+    pub time: f64,
+    pub value: u32, // index into aiMesh::mAnimMeshes
+}
+
+/// Mesh animation of a specific mesh (aiMeshAnim)
+pub struct MeshAnimation {
+    channel_ptr: *const sys::aiMeshAnim,
+}
+
+impl MeshAnimation {
+    pub fn name(&self) -> String {
+        unsafe {
+            let ch = &*self.channel_ptr;
+            c_str_to_string_or_empty(ch.mName.data.as_ptr())
+        }
+    }
+
+    pub fn num_keys(&self) -> usize {
+        unsafe { (*self.channel_ptr).mNumKeys as usize }
+    }
+
+    pub fn keys(&self) -> &[MeshKey] {
+        unsafe {
+            let ch = &*self.channel_ptr;
+            std::slice::from_raw_parts(ch.mKeys as *const MeshKey, ch.mNumKeys as usize)
+        }
+    }
+}
+
+/// Iterator over mesh animation channels
+pub struct MeshAnimationIterator {
+    animation_ptr: *const sys::aiAnimation,
+    index: usize,
+}
+
+impl Iterator for MeshAnimationIterator {
+    type Item = MeshAnimation;
+    fn next(&mut self) -> Option<Self::Item> {
+        unsafe {
+            let anim = &*self.animation_ptr;
+            if self.index >= anim.mNumMeshChannels as usize {
+                None
+            } else {
+                let ptr = *anim.mMeshChannels.add(self.index);
+                self.index += 1;
+                if ptr.is_null() {
+                    None
+                } else {
+                    Some(MeshAnimation { channel_ptr: ptr })
+                }
+            }
+        }
+    }
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        unsafe {
+            let anim = &*self.animation_ptr;
+            let remaining = (anim.mNumMeshChannels as usize).saturating_sub(self.index);
+            (remaining, Some(remaining))
+        }
+    }
+}
+
+impl ExactSizeIterator for MeshAnimationIterator {}
+
+/// Morph mesh key (weights for multiple targets)
+pub struct MorphMeshKey<'a> {
+    pub time: f64,
+    pub values: &'a [u32],
+    pub weights: &'a [f64],
+}
+
+/// Morph mesh animation channel (aiMeshMorphAnim)
+pub struct MorphMeshAnimation {
+    channel_ptr: *const sys::aiMeshMorphAnim,
+}
+
+impl MorphMeshAnimation {
+    pub fn name(&self) -> String {
+        unsafe { c_str_to_string_or_empty((*self.channel_ptr).mName.data.as_ptr()) }
+    }
+    pub fn num_keys(&self) -> usize {
+        unsafe { (*self.channel_ptr).mNumKeys as usize }
+    }
+
+    pub fn key(&self, index: usize) -> Option<MorphMeshKey<'_>> {
+        if index >= self.num_keys() {
+            return None;
+        }
+        unsafe {
+            let ch = &*self.channel_ptr;
+            let key = &*ch.mKeys.add(index);
+            let n = key.mNumValuesAndWeights as usize;
+            if key.mValues.is_null() || key.mWeights.is_null() {
+                return None;
+            }
+            let values = std::slice::from_raw_parts(key.mValues, n);
+            let weights = std::slice::from_raw_parts(key.mWeights, n);
+            Some(MorphMeshKey {
+                time: key.mTime,
+                values,
+                weights,
+            })
+        }
+    }
+}
+
+/// Iterator over morph mesh animation channels
+pub struct MorphMeshAnimationIterator {
+    animation_ptr: *const sys::aiAnimation,
+    index: usize,
+}
+
+impl Iterator for MorphMeshAnimationIterator {
+    type Item = MorphMeshAnimation;
+    fn next(&mut self) -> Option<Self::Item> {
+        unsafe {
+            let anim = &*self.animation_ptr;
+            if self.index >= anim.mNumMorphMeshChannels as usize {
+                None
+            } else {
+                let ptr = *anim.mMorphMeshChannels.add(self.index);
+                self.index += 1;
+                if ptr.is_null() {
+                    None
+                } else {
+                    Some(MorphMeshAnimation { channel_ptr: ptr })
+                }
+            }
+        }
+    }
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        unsafe {
+            let anim = &*self.animation_ptr;
+            let remaining = (anim.mNumMorphMeshChannels as usize).saturating_sub(self.index);
+            (remaining, Some(remaining))
+        }
+    }
+}
+
+impl ExactSizeIterator for MorphMeshAnimationIterator {}

@@ -37,7 +37,8 @@ use crate::sys;
 
 // Re-export glam types as our primary math types
 pub use glam::{
-    Mat4 as Matrix4x4, Quat as Quaternion, Vec2 as Vector2D, Vec3 as Vector3D, Vec4 as Vector4D,
+    Mat3 as Matrix3x3, Mat4 as Matrix4x4, Quat as Quaternion, Vec2 as Vector2D, Vec3 as Vector3D,
+    Vec4 as Vector4D,
 };
 
 /// RGB color type (alias for Vector3D)
@@ -80,35 +81,66 @@ pub fn to_ai_vector2d(v: Vector2D) -> sys::aiVector2D {
 /// Convert aiMatrix4x4 to glam Mat4
 #[inline]
 pub fn from_ai_matrix4x4(m: sys::aiMatrix4x4) -> Matrix4x4 {
-    Matrix4x4::from_cols_array_2d(&[
-        [m.a1, m.a2, m.a3, m.a4],
-        [m.b1, m.b2, m.b3, m.b4],
-        [m.c1, m.c2, m.c3, m.c4],
-        [m.d1, m.d2, m.d3, m.d4],
-    ])
+    // Assimp uses row-major matrix with members a1..d4 being rows.
+    // glam Mat4 expects columns. Map rows -> columns appropriately.
+    Matrix4x4::from_cols(
+        Vector4D::new(m.a1, m.b1, m.c1, m.d1),
+        Vector4D::new(m.a2, m.b2, m.c2, m.d2),
+        Vector4D::new(m.a3, m.b3, m.c3, m.d3),
+        Vector4D::new(m.a4, m.b4, m.c4, m.d4),
+    )
 }
 
 /// Convert glam Mat4 to aiMatrix4x4
 #[inline]
 pub fn to_ai_matrix4x4(m: Matrix4x4) -> sys::aiMatrix4x4 {
+    // Convert glam column vectors into Assimp row-major fields
     let cols = m.to_cols_array_2d();
     sys::aiMatrix4x4 {
         a1: cols[0][0],
-        a2: cols[0][1],
-        a3: cols[0][2],
-        a4: cols[0][3],
-        b1: cols[1][0],
+        a2: cols[1][0],
+        a3: cols[2][0],
+        a4: cols[3][0],
+        b1: cols[0][1],
         b2: cols[1][1],
-        b3: cols[1][2],
-        b4: cols[1][3],
-        c1: cols[2][0],
-        c2: cols[2][1],
+        b3: cols[2][1],
+        b4: cols[3][1],
+        c1: cols[0][2],
+        c2: cols[1][2],
         c3: cols[2][2],
-        c4: cols[2][3],
-        d1: cols[3][0],
-        d2: cols[3][1],
-        d3: cols[3][2],
+        c4: cols[3][2],
+        d1: cols[0][3],
+        d2: cols[1][3],
+        d3: cols[2][3],
         d4: cols[3][3],
+    }
+}
+
+/// Convert aiMatrix3x3 to glam Mat3
+#[inline]
+pub fn from_ai_matrix3x3(m: sys::aiMatrix3x3) -> Matrix3x3 {
+    // aiMatrix3x3 is row-major. glam Mat3 expects columns.
+    Matrix3x3::from_cols(
+        Vector3D::new(m.a1, m.b1, m.c1),
+        Vector3D::new(m.a2, m.b2, m.c2),
+        Vector3D::new(m.a3, m.b3, m.c3),
+    )
+}
+
+/// Convert glam Mat3 to aiMatrix3x3
+#[inline]
+pub fn to_ai_matrix3x3(m: Matrix3x3) -> sys::aiMatrix3x3 {
+    let cols = m.to_cols_array_2d();
+    sys::aiMatrix3x3 {
+        a1: cols[0][0],
+        a2: cols[1][0],
+        a3: cols[2][0],
+        b1: cols[0][1],
+        b2: cols[1][1],
+        b3: cols[2][1],
+        c1: cols[0][2],
+        c2: cols[1][2],
+        c3: cols[2][2],
     }
 }
 

@@ -183,6 +183,35 @@ impl Mesh {
         }
     }
 
+    /// Get the number of animation meshes (morph targets)
+    pub fn num_anim_meshes(&self) -> usize {
+        unsafe { (*self.mesh_ptr).mNumAnimMeshes as usize }
+    }
+
+    /// Get an animation mesh by index
+    pub fn anim_mesh(&self, index: usize) -> Option<AnimMesh> {
+        if index >= self.num_anim_meshes() {
+            return None;
+        }
+        unsafe {
+            let mesh = &*self.mesh_ptr;
+            let ptr = *mesh.mAnimMeshes.add(index);
+            if ptr.is_null() {
+                None
+            } else {
+                Some(AnimMesh { anim_ptr: ptr })
+            }
+        }
+    }
+
+    /// Iterate over animation meshes
+    pub fn anim_meshes(&self) -> AnimMeshIterator {
+        AnimMeshIterator {
+            mesh_ptr: self.mesh_ptr,
+            index: 0,
+        }
+    }
+
     /// Get the number of bones in the mesh
     pub fn num_bones(&self) -> usize {
         unsafe { (*self.mesh_ptr).mNumBones as usize }
@@ -281,3 +310,154 @@ impl Iterator for FaceIterator {
 }
 
 impl ExactSizeIterator for FaceIterator {}
+
+/// An animation mesh (morph target) that replaces certain vertex streams
+pub struct AnimMesh {
+    anim_ptr: *const sys::aiAnimMesh,
+}
+
+impl AnimMesh {
+    /// Name of this anim mesh (if present)
+    pub fn name(&self) -> String {
+        unsafe {
+            let n = &(*self.anim_ptr).mName;
+            if n.length == 0 {
+                return String::new();
+            }
+            let slice = std::slice::from_raw_parts(n.data.as_ptr() as *const u8, n.length as usize);
+            String::from_utf8_lossy(slice).into_owned()
+        }
+    }
+    /// Number of vertices in this anim mesh
+    pub fn num_vertices(&self) -> usize {
+        unsafe { (*self.anim_ptr).mNumVertices as usize }
+    }
+
+    /// Replacement positions (if present)
+    pub fn vertices(&self) -> Option<Vec<Vector3D>> {
+        unsafe {
+            let m = &*self.anim_ptr;
+            if m.mVertices.is_null() {
+                None
+            } else {
+                let slice = std::slice::from_raw_parts(m.mVertices, m.mNumVertices as usize);
+                Some(slice.iter().map(|&v| from_ai_vector3d(v)).collect())
+            }
+        }
+    }
+
+    /// Replacement normals (if present)
+    pub fn normals(&self) -> Option<Vec<Vector3D>> {
+        unsafe {
+            let m = &*self.anim_ptr;
+            if m.mNormals.is_null() {
+                None
+            } else {
+                let slice = std::slice::from_raw_parts(m.mNormals, m.mNumVertices as usize);
+                Some(slice.iter().map(|&v| from_ai_vector3d(v)).collect())
+            }
+        }
+    }
+
+    /// Replacement tangents (if present)
+    pub fn tangents(&self) -> Option<Vec<Vector3D>> {
+        unsafe {
+            let m = &*self.anim_ptr;
+            if m.mTangents.is_null() {
+                None
+            } else {
+                let slice = std::slice::from_raw_parts(m.mTangents, m.mNumVertices as usize);
+                Some(slice.iter().map(|&v| from_ai_vector3d(v)).collect())
+            }
+        }
+    }
+
+    /// Replacement bitangents (if present)
+    pub fn bitangents(&self) -> Option<Vec<Vector3D>> {
+        unsafe {
+            let m = &*self.anim_ptr;
+            if m.mBitangents.is_null() {
+                None
+            } else {
+                let slice = std::slice::from_raw_parts(m.mBitangents, m.mNumVertices as usize);
+                Some(slice.iter().map(|&v| from_ai_vector3d(v)).collect())
+            }
+        }
+    }
+
+    /// Replacement vertex colors for a specific channel
+    pub fn vertex_colors(&self, channel: usize) -> Option<Vec<Color4D>> {
+        if channel >= sys::AI_MAX_NUMBER_OF_COLOR_SETS as usize {
+            return None;
+        }
+        unsafe {
+            let m = &*self.anim_ptr;
+            let ptr = m.mColors[channel];
+            if ptr.is_null() {
+                None
+            } else {
+                let slice = std::slice::from_raw_parts(ptr, m.mNumVertices as usize);
+                Some(slice.iter().map(|&c| from_ai_color4d(c)).collect())
+            }
+        }
+    }
+
+    /// Replacement texture coordinates for a specific channel
+    pub fn texture_coords(&self, channel: usize) -> Option<Vec<Vector3D>> {
+        if channel >= sys::AI_MAX_NUMBER_OF_TEXTURECOORDS as usize {
+            return None;
+        }
+        unsafe {
+            let m = &*self.anim_ptr;
+            let ptr = m.mTextureCoords[channel];
+            if ptr.is_null() {
+                None
+            } else {
+                let slice = std::slice::from_raw_parts(ptr, m.mNumVertices as usize);
+                Some(slice.iter().map(|&v| from_ai_vector3d(v)).collect())
+            }
+        }
+    }
+
+    /// Weight of this anim mesh
+    pub fn weight(&self) -> f32 {
+        unsafe { (*self.anim_ptr).mWeight }
+    }
+}
+
+/// Iterator over anim meshes
+pub struct AnimMeshIterator {
+    mesh_ptr: *const sys::aiMesh,
+    index: usize,
+}
+
+impl Iterator for AnimMeshIterator {
+    type Item = AnimMesh;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        unsafe {
+            let mesh = &*self.mesh_ptr;
+            if self.index >= mesh.mNumAnimMeshes as usize {
+                None
+            } else {
+                let ptr = *mesh.mAnimMeshes.add(self.index);
+                self.index += 1;
+                if ptr.is_null() {
+                    None
+                } else {
+                    Some(AnimMesh { anim_ptr: ptr })
+                }
+            }
+        }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        unsafe {
+            let mesh = &*self.mesh_ptr;
+            let remaining = (mesh.mNumAnimMeshes as usize).saturating_sub(self.index);
+            (remaining, Some(remaining))
+        }
+    }
+}
+
+impl ExactSizeIterator for AnimMeshIterator {}

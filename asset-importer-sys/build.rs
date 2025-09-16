@@ -25,11 +25,7 @@ fn main() {
     }
 
     // Determine build strategy and generate bindings
-    let built_include_dir = if cfg!(feature = "prebuilt") {
-        // Use prebuilt binaries
-        link_prebuilt_assimp(&out_dir);
-        None
-    } else if cfg!(feature = "system") {
+    let built_include_dir = if cfg!(feature = "system") {
         // Explicitly use system assimp
         link_system_assimp();
         None
@@ -39,13 +35,15 @@ fn main() {
         // Use the built include directory which has config.h
         Some(out_dir.join("build").join("include"))
     } else {
-        // Default: build from source (most reliable option)
-        build_assimp_from_source(&manifest_dir, &out_dir);
-        // Use the built include directory which has config.h
-        Some(out_dir.join("build").join("include"))
+        // Default: use prebuilt binaries for fast, friction-free builds
+        link_prebuilt_assimp(&out_dir);
+        None
     };
 
     generate_bindings(&manifest_dir, &out_dir, built_include_dir.as_deref());
+
+    // Build the C++ bridge (progress + IOSystem wrappers)
+    compile_bridge_cpp(&manifest_dir, built_include_dir.as_deref());
 }
 
 fn link_system_assimp() {
@@ -126,7 +124,6 @@ fn try_system_assimp() -> bool {
     false
 }
 
-#[cfg(feature = "prebuilt")]
 fn link_prebuilt_assimp(out_dir: &std::path::Path) {
     let target = env::var("TARGET").unwrap();
     let crate_version = env::var("CARGO_PKG_VERSION").unwrap();
@@ -156,7 +153,6 @@ fn link_prebuilt_assimp(out_dir: &std::path::Path) {
     extract_prebuilt_package(&ar_src_dir, &archive_name, out_dir, link_type);
 }
 
-#[cfg(feature = "prebuilt")]
 fn download_prebuilt_package(out_dir: &std::path::Path, archive_name: &str) {
     let crate_version = env::var("CARGO_PKG_VERSION").unwrap();
     let download_url = format!(
@@ -208,7 +204,6 @@ fn download_prebuilt_package(out_dir: &std::path::Path, archive_name: &str) {
     );
 }
 
-#[cfg(feature = "prebuilt")]
 fn extract_prebuilt_package(
     ar_src_dir: &std::path::Path,
     archive_name: &str,
@@ -244,11 +239,30 @@ fn extract_prebuilt_package(
         extract_dir.join("bin").display()
     );
 
-    // Link the library
+    // Link the library (auto-detect Windows import lib name like assimp-vc143-mt.lib)
+    let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap();
+    let mut lib_name = String::from("assimp");
+    if target_os == "windows" {
+        let lib_dir = extract_dir.join("lib");
+        if let Ok(read) = fs::read_dir(&lib_dir) {
+            for entry in read.flatten() {
+                let p = entry.path();
+                if let Some(name) = p.file_name().and_then(|s| s.to_str()) {
+                    let lower = name.to_ascii_lowercase();
+                    if lower.starts_with("assimp") && lower.ends_with(".lib") {
+                        if let Some(stem) = p.file_stem().and_then(|s| s.to_str()) {
+                            lib_name = stem.to_string();
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
     if link_type == "static" {
-        println!("cargo:rustc-link-lib=static=assimp");
+        println!("cargo:rustc-link-lib=static={}", lib_name);
     } else {
-        println!("cargo:rustc-link-lib=assimp");
+        println!("cargo:rustc-link-lib={}", lib_name);
     }
 
     // Link system dependencies
@@ -258,11 +272,6 @@ fn extract_prebuilt_package(
         "cargo:warning=Using prebuilt assimp from: {}",
         extract_dir.display()
     );
-}
-
-#[cfg(not(feature = "prebuilt"))]
-fn link_prebuilt_assimp(_out_dir: &std::path::Path) {
-    panic!("Prebuilt feature is not enabled. Use --features prebuilt to enable prebuilt binary support.");
 }
 
 #[allow(dead_code)]
@@ -526,7 +535,9 @@ fn generate_bindings(
         .generate_comments(true)
         .disable_untagged_union()
         // Force enums to be i32 to ensure consistency across platforms
-        .default_enum_style(bindgen::EnumVariation::Rust { non_exhaustive: false })
+        .default_enum_style(bindgen::EnumVariation::Rust {
+            non_exhaustive: false,
+        })
         .constified_enum_module(".*");
 
     // Add include paths from environment (for system builds)
@@ -554,4 +565,24 @@ fn generate_bindings(
     if !config_exists {
         let _ = std::fs::remove_file(config_file);
     }
+}
+
+fn compile_bridge_cpp(manifest_dir: &std::path::Path, built_include_dir: Option<&std::path::Path>) {
+    let mut build = cc::Build::new();
+    build.cpp(true);
+    build.file(manifest_dir.join("wrapper.cpp"));
+
+    // Include paths for Assimp headers
+    build.include(manifest_dir.join("assimp").join("include"));
+    if let Some(dir) = built_include_dir {
+        build.include(dir);
+    }
+
+    // On Windows, ensure exceptions for MSVC (consistent with Assimp build)
+    #[cfg(target_env = "msvc")]
+    {
+        build.flag("/EHsc");
+    }
+
+    build.compile("assimp_rust_bridge");
 }

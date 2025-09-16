@@ -20,14 +20,14 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-# Default - builds from source (reliable, self-contained)
+# Default – Prebuilt binaries (fastest, friction‑free)
 asset-importer = "0.1"
-
-# Or use prebuilt binaries (fastest, when available)
-asset-importer = { version = "0.1", features = ["prebuilt"] }
 
 # Or use system-installed assimp
 asset-importer = { version = "0.1", features = ["system"] }
+
+# Or build from the bundled source (full control)
+asset-importer = { version = "0.1", features = ["build-assimp"] }
 ```
 
 Basic usage:
@@ -52,26 +52,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ## Build Options
 
-### Build from Source (Default)
+### Default: Prebuilt Binaries
 
 ```toml
 asset-importer = "0.1"
 ```
 
-- **Reliable**: Works on all platforms with C++ compiler
-- **Self-contained**: No external dependencies needed
-- **Consistent**: Same Assimp version for all users
-- **Requires**: CMake, C++ compiler
-
-### Prebuilt Binaries (Coming Soon)
-
-```toml
-asset-importer = { version = "0.1", features = ["prebuilt"] }
-```
-
 - **Fastest**: No compilation time
-- **Convenient**: No build tools required
-- **Note**: Not yet available, will be added in future releases
+- **Convenient**: No native toolchain required
+- **Cross‑platform**: Provided for common targets
 
 ### System Library
 
@@ -94,6 +83,17 @@ asset-importer = {
     ]
 }
 ```
+
+## Why prebuilt by default?
+
+- Great first‑time experience: avoids heavy native toolchains and long CMake builds
+- Mirrors the ergonomics of projects like russimp‑sys (see `repo-ref/russimp-sys/build.rs`)
+- You can still opt into `system` or `build-assimp` for full control
+
+If your environment blocks network access or you prefer hermetic builds, use:
+
+- `--features system` to link an existing installation
+- `--features build-assimp` to compile the submodule with CMake
 
 ## Architecture
 

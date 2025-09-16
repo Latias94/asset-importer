@@ -186,87 +186,17 @@ pub fn get_importer_desc(extension: &str) -> Option<ImporterDesc> {
 /// }
 /// ```
 pub fn get_all_importer_descs() -> Vec<ImporterDesc> {
-    // Common file extensions to check
-    let common_extensions = [
-        "3ds",
-        "3mf",
-        "ac",
-        "amf",
-        "ase",
-        "assbin",
-        "assimp",
-        "b3d",
-        "blend",
-        "bvh",
-        "c4d",
-        "cob",
-        "collada",
-        "csm",
-        "dae",
-        "dxf",
-        "fbx",
-        "gltf",
-        "glb",
-        "hmp",
-        "ifc",
-        "ifczip",
-        "iqm",
-        "irr",
-        "irrmesh",
-        "lwo",
-        "lws",
-        "lxo",
-        "md2",
-        "md3",
-        "md5anim",
-        "md5camera",
-        "md5mesh",
-        "mdc",
-        "mdl",
-        "mesh",
-        "mot",
-        "ms3d",
-        "ndo",
-        "nff",
-        "obj",
-        "off",
-        "ogex",
-        "pk3",
-        "ply",
-        "pmx",
-        "prj",
-        "q3o",
-        "q3s",
-        "raw",
-        "scn",
-        "sib",
-        "smd",
-        "stl",
-        "stp",
-        "ter",
-        "uc",
-        "vta",
-        "x",
-        "x3d",
-        "x3db",
-        "xgl",
-        "xml",
-        "zgl",
-    ];
-
-    let mut importers = Vec::new();
-    let mut seen_names = std::collections::HashSet::new();
-
-    for extension in &common_extensions {
-        if let Some(desc) = get_importer_desc(extension) {
-            // Avoid duplicates by checking the name
-            if seen_names.insert(desc.name.clone()) {
-                importers.push(desc);
+    let count = unsafe { sys::aiGetImportFormatCount() };
+    let mut out = Vec::with_capacity(count);
+    for i in 0..count {
+        unsafe {
+            let ptr = sys::aiGetImportFormatDescription(i);
+            if !ptr.is_null() {
+                out.push(ImporterDesc::from_raw(&*ptr));
             }
         }
     }
-
-    importers
+    out
 }
 
 #[cfg(test)]

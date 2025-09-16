@@ -3,11 +3,7 @@
 //! This module provides safe Rust wrappers around Assimp's metadata functionality,
 //! allowing you to access additional information stored in 3D models.
 
-use crate::{
-    error::Result,
-    sys,
-    types::Vector3D,
-};
+use crate::{error::Result, sys, types::Vector3D};
 
 /// Common metadata keys used across different file formats
 pub mod common_metadata {

@@ -13,7 +13,7 @@ pub enum Error {
     #[error("Import failed: {message}")]
     ImportFailed {
         /// Error message describing the import failure
-        message: String
+        message: String,
     },
 
     /// Export operation failed
@@ -21,21 +21,21 @@ pub enum Error {
     #[error("Export failed: {message}")]
     ExportFailed {
         /// Error message describing the export failure
-        message: String
+        message: String,
     },
 
     /// Invalid file path or file not found
     #[error("File error: {message}")]
     FileError {
         /// Error message describing the file error
-        message: String
+        message: String,
     },
 
     /// Invalid parameters or configuration
     #[error("Invalid parameter: {message}")]
     InvalidParameter {
         /// Error message describing the invalid parameter
-        message: String
+        message: String,
     },
 
     /// Memory allocation failed
@@ -46,21 +46,21 @@ pub enum Error {
     #[error("Unsupported format: {format}")]
     UnsupportedFormat {
         /// The unsupported format name
-        format: String
+        format: String,
     },
 
     /// I/O operation failed
     #[error("I/O error: {message}")]
     IoError {
         /// Error message describing the I/O error
-        message: String
+        message: String,
     },
 
     /// Invalid scene data
     #[error("Invalid scene: {message}")]
     InvalidScene {
         /// Error message describing the scene validation error
-        message: String
+        message: String,
     },
 
     /// String conversion error (UTF-8)
@@ -75,7 +75,7 @@ pub enum Error {
     #[error("{message}")]
     Other {
         /// Custom error message
-        message: String
+        message: String,
     },
 }
 
@@ -158,8 +158,6 @@ impl Error {
         }
     }
 }
-
-
 
 /// Convert a C string to a Rust string, returning empty string for null pointers
 pub(crate) fn c_str_to_string_or_empty(ptr: *const std::os::raw::c_char) -> String {

@@ -4,7 +4,7 @@ use std::ffi::CString;
 
 use crate::{
     sys,
-    types::{Color3D, Color4D},
+    types::{Color3D, Color4D, Vector2D, Vector3D},
 };
 
 /// Standard material property keys as defined by Assimp
@@ -43,6 +43,40 @@ pub mod material_keys {
     pub const BLEND_FUNC: &str = "$mat.blend";
     /// Two sided
     pub const TWOSIDED: &str = "$mat.twosided";
+
+    // PBR-related keys (from material.h)
+    /// Base color factor (RGBA)
+    pub const BASE_COLOR: &str = "$clr.base";
+    /// Metallic factor
+    pub const METALLIC_FACTOR: &str = "$mat.metallicFactor";
+    /// Roughness factor
+    pub const ROUGHNESS_FACTOR: &str = "$mat.roughnessFactor";
+    /// Specular factor
+    pub const SPECULAR_FACTOR: &str = "$mat.specularFactor";
+    /// Glossiness factor (spec/gloss workflow)
+    pub const GLOSSINESS_FACTOR: &str = "$mat.glossinessFactor";
+    /// Sheen color factor
+    pub const SHEEN_COLOR_FACTOR: &str = "$clr.sheen.factor";
+    /// Sheen roughness factor
+    pub const SHEEN_ROUGHNESS_FACTOR: &str = "$mat.sheen.roughnessFactor";
+    /// Clearcoat factor
+    pub const CLEARCOAT_FACTOR: &str = "$mat.clearcoat.factor";
+    /// Clearcoat roughness factor
+    pub const CLEARCOAT_ROUGHNESS_FACTOR: &str = "$mat.clearcoat.roughnessFactor";
+    /// Transmission factor
+    pub const TRANSMISSION_FACTOR: &str = "$mat.transmission.factor";
+    /// Volume thickness factor
+    pub const VOLUME_THICKNESS_FACTOR: &str = "$mat.volume.thicknessFactor";
+    /// Volume attenuation distance
+    pub const VOLUME_ATTENUATION_DISTANCE: &str = "$mat.volume.attenuationDistance";
+    /// Volume attenuation color
+    pub const VOLUME_ATTENUATION_COLOR: &str = "$mat.volume.attenuationColor";
+    /// Emissive intensity
+    pub const EMISSIVE_INTENSITY: &str = "$mat.emissiveIntensity";
+    /// Anisotropy factor
+    pub const ANISOTROPY_FACTOR: &str = "$mat.anisotropyFactor";
+    /// Anisotropy rotation
+    pub const ANISOTROPY_ROTATION: &str = "$mat.anisotropyRotation";
 }
 
 /// A material containing properties like colors, textures, and shading parameters
@@ -219,6 +253,87 @@ impl Material {
         self.get_float_property(material_keys::SHININESS_STRENGTH)
     }
 
+    /// Base color factor (RGBA)
+    pub fn base_color(&self) -> Option<Color4D> {
+        self.get_color_property(material_keys::BASE_COLOR)
+    }
+
+    /// Metallic factor
+    pub fn metallic_factor(&self) -> Option<f32> {
+        self.get_float_property(material_keys::METALLIC_FACTOR)
+    }
+
+    /// Roughness factor
+    pub fn roughness_factor(&self) -> Option<f32> {
+        self.get_float_property(material_keys::ROUGHNESS_FACTOR)
+    }
+
+    /// Glossiness factor (spec/gloss workflow)
+    pub fn glossiness_factor(&self) -> Option<f32> {
+        self.get_float_property(material_keys::GLOSSINESS_FACTOR)
+    }
+
+    /// Specular factor
+    pub fn specular_factor(&self) -> Option<f32> {
+        self.get_float_property(material_keys::SPECULAR_FACTOR)
+    }
+
+    /// Sheen color factor
+    pub fn sheen_color_factor(&self) -> Option<Color4D> {
+        self.get_color_property(material_keys::SHEEN_COLOR_FACTOR)
+    }
+
+    /// Sheen roughness factor
+    pub fn sheen_roughness_factor(&self) -> Option<f32> {
+        self.get_float_property(material_keys::SHEEN_ROUGHNESS_FACTOR)
+    }
+
+    /// Clearcoat factor
+    pub fn clearcoat_factor(&self) -> Option<f32> {
+        self.get_float_property(material_keys::CLEARCOAT_FACTOR)
+    }
+
+    /// Clearcoat roughness factor
+    pub fn clearcoat_roughness_factor(&self) -> Option<f32> {
+        self.get_float_property(material_keys::CLEARCOAT_ROUGHNESS_FACTOR)
+    }
+
+    /// Transmission factor
+    pub fn transmission_factor(&self) -> Option<f32> {
+        self.get_float_property(material_keys::TRANSMISSION_FACTOR)
+    }
+
+    /// Volume thickness factor
+    pub fn volume_thickness_factor(&self) -> Option<f32> {
+        self.get_float_property(material_keys::VOLUME_THICKNESS_FACTOR)
+    }
+
+    /// Volume attenuation distance
+    pub fn volume_attenuation_distance(&self) -> Option<f32> {
+        self.get_float_property(material_keys::VOLUME_ATTENUATION_DISTANCE)
+    }
+
+    /// Volume attenuation color
+    pub fn volume_attenuation_color(&self) -> Option<Color3D> {
+        self.get_color_property(material_keys::VOLUME_ATTENUATION_COLOR)
+            .map(|c| Color3D::new(c.x, c.y, c.z))
+    }
+
+    /// Emissive intensity
+    pub fn emissive_intensity(&self) -> Option<f32> {
+        self.get_float_property(material_keys::EMISSIVE_INTENSITY)
+    }
+
+    /// Anisotropy factor
+    pub fn anisotropy_factor(&self) -> Option<f32> {
+        self.get_float_property(material_keys::ANISOTROPY_FACTOR)
+    }
+
+    /// Anisotropy rotation
+    pub fn anisotropy_rotation(&self) -> Option<f32> {
+        self.get_float_property(material_keys::ANISOTROPY_ROTATION)
+    }
+
     /// Get the opacity factor
     pub fn opacity(&self) -> Option<f32> {
         self.get_float_property(material_keys::OPACITY)
@@ -249,11 +364,36 @@ impl Material {
         self.get_integer_property(material_keys::SHADING_MODEL)
     }
 
+    /// Get the shading model as an enum
+    pub fn shading_model_enum(&self) -> Option<ShadingModel> {
+        self.shading_model()
+            .map(|v| ShadingModel::from_raw(v as u32))
+    }
+
     /// Check if the material is two-sided
     pub fn is_two_sided(&self) -> bool {
         self.get_integer_property(material_keys::TWOSIDED)
             .map(|v| v != 0)
             .unwrap_or(false)
+    }
+
+    /// Check if the material is unlit (NoShading/Unlit)
+    pub fn is_unlit(&self) -> bool {
+        match self.shading_model_enum() {
+            Some(ShadingModel::NoShading) => true,
+            _ => false,
+        }
+    }
+
+    /// Get the blend mode for the material
+    pub fn blend_mode(&self) -> Option<BlendMode> {
+        self.get_integer_property(material_keys::BLEND_FUNC)
+            .map(|v| BlendMode::from_raw(v as u32))
+    }
+
+    /// Check if the material is unlit (NoShading/Unlit)
+    pub fn is_unlit(&self) -> bool {
+        matches!(self.shading_model_enum(), Some(ShadingModel::NoShading))
     }
 
     /// Get the number of textures for a specific type
@@ -274,6 +414,7 @@ impl Material {
             let mut blend = std::mem::MaybeUninit::uninit();
             let mut op = std::mem::MaybeUninit::uninit();
             let mut map_mode = [0u32; 3];
+            let mut tex_flags: u32 = 0;
 
             let result = sys::aiGetMaterialTexture(
                 self.material_ptr,
@@ -285,7 +426,7 @@ impl Material {
                 blend.as_mut_ptr(),
                 op.as_mut_ptr(),
                 map_mode.as_mut_ptr() as *mut _,
-                std::ptr::null_mut(),
+                &mut tex_flags as *mut u32,
             );
 
             if result == sys::aiReturn::aiReturn_SUCCESS {
@@ -298,6 +439,52 @@ impl Material {
                 let blend_val = blend.assume_init();
                 let op_val = op.assume_init();
 
+                // Try read UV transform
+                let mut uv_transform = std::mem::MaybeUninit::<sys::aiUVTransform>::uninit();
+                let uv_ok = sys::aiGetMaterialUVTransform(
+                    self.material_ptr,
+                    texture_type as _,
+                    index as u32,
+                    uv_transform.as_mut_ptr(),
+                ) == sys::aiReturn::aiReturn_SUCCESS;
+
+                let uv_transform = if uv_ok {
+                    let t = uv_transform.assume_init();
+                    Some(UVTransform {
+                        translation: Vector2D::new(t.mTranslation.x, t.mTranslation.y),
+                        scaling: Vector2D::new(t.mScaling.x, t.mScaling.y),
+                        rotation: t.mRotation,
+                    })
+                } else {
+                    None
+                };
+
+                // Try read TEXMAP_AXIS via property API ("$tex.mapaxis")
+                let axis = {
+                    let key = std::ffi::CString::new("$tex.mapaxis").unwrap();
+                    let mut prop_ptr: *const sys::aiMaterialProperty = std::ptr::null();
+                    let ok = sys::aiGetMaterialProperty(
+                        self.material_ptr,
+                        key.as_ptr(),
+                        texture_type as u32,
+                        index as u32,
+                        &mut prop_ptr,
+                    ) == sys::aiReturn::aiReturn_SUCCESS;
+                    if ok && !prop_ptr.is_null() {
+                        let prop = &*prop_ptr;
+                        if prop.mData.is_null()
+                            || prop.mDataLength < std::mem::size_of::<sys::aiVector3D>() as u32
+                        {
+                            None
+                        } else {
+                            let v = *(prop.mData as *const sys::aiVector3D);
+                            Some(Vector3D::new(v.x, v.y, v.z))
+                        }
+                    } else {
+                        None
+                    }
+                };
+
                 Some(TextureInfo {
                     path: path_str,
                     mapping: TextureMapping::from_raw(mapping_val),
@@ -309,6 +496,9 @@ impl Material {
                         TextureMapMode::from_raw(map_mode[1] as i32),
                         TextureMapMode::from_raw(map_mode[2] as i32),
                     ],
+                    flags: TextureFlags::from_bits_truncate(tex_flags),
+                    uv_transform,
+                    axis,
                 })
             } else {
                 None
@@ -355,6 +545,223 @@ pub enum TextureType {
     DiffuseRoughness = sys::aiTextureType::aiTextureType_DIFFUSE_ROUGHNESS as u32,
     /// Ambient occlusion texture (shadowing)
     AmbientOcclusion = sys::aiTextureType::aiTextureType_AMBIENT_OCCLUSION as u32,
+    /// Unknown texture type
+    Unknown = sys::aiTextureType::aiTextureType_UNKNOWN as u32,
+    /// Sheen layer (PBR)
+    Sheen = sys::aiTextureType::aiTextureType_SHEEN as u32,
+    /// Clearcoat layer (PBR)
+    Clearcoat = sys::aiTextureType::aiTextureType_CLEARCOAT as u32,
+    /// Transmission layer (PBR)
+    Transmission = sys::aiTextureType::aiTextureType_TRANSMISSION as u32,
+    /// Maya base color (compat)
+    MayaBase = sys::aiTextureType::aiTextureType_MAYA_BASE as u32,
+    /// Maya specular (compat)
+    MayaSpecular = sys::aiTextureType::aiTextureType_MAYA_SPECULAR as u32,
+    /// Maya specular color (compat)
+    MayaSpecularColor = sys::aiTextureType::aiTextureType_MAYA_SPECULAR_COLOR as u32,
+    /// Maya specular roughness (compat)
+    MayaSpecularRoughness = sys::aiTextureType::aiTextureType_MAYA_SPECULAR_ROUGHNESS as u32,
+    /// Anisotropy (PBR)
+    Anisotropy = sys::aiTextureType::aiTextureType_ANISOTROPY as u32,
+    /// glTF metallic-roughness packed
+    GltfMetallicRoughness = sys::aiTextureType::aiTextureType_GLTF_METALLIC_ROUGHNESS as u32,
+}
+
+/// High-level shading model
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ShadingModel {
+    Flat,
+    Gouraud,
+    Phong,
+    Blinn,
+    Toon,
+    OrenNayar,
+    Minnaert,
+    CookTorrance,
+    NoShading,
+    Fresnel,
+    PbrSpecularGlossiness,
+    PbrMetallicRoughness,
+    Unknown(u32),
+}
+
+impl ShadingModel {
+    fn from_raw(v: u32) -> Self {
+        use sys::aiShadingMode;
+        match v {
+            x if x == aiShadingMode::aiShadingMode_Flat as u32 => ShadingModel::Flat,
+            x if x == aiShadingMode::aiShadingMode_Gouraud as u32 => ShadingModel::Gouraud,
+            x if x == aiShadingMode::aiShadingMode_Phong as u32 => ShadingModel::Phong,
+            x if x == aiShadingMode::aiShadingMode_Blinn as u32 => ShadingModel::Blinn,
+            x if x == aiShadingMode::aiShadingMode_Toon as u32 => ShadingModel::Toon,
+            x if x == aiShadingMode::aiShadingMode_OrenNayar as u32 => ShadingModel::OrenNayar,
+            x if x == aiShadingMode::aiShadingMode_Minnaert as u32 => ShadingModel::Minnaert,
+            x if x == aiShadingMode::aiShadingMode_CookTorrance as u32 => {
+                ShadingModel::CookTorrance
+            }
+            x if x == aiShadingMode::aiShadingMode_NoShading as u32 => ShadingModel::NoShading,
+            x if x == aiShadingMode::aiShadingMode_Fresnel as u32 => ShadingModel::Fresnel,
+            x if x == aiShadingMode::aiShadingMode_PBR_Specular_Glossiness as u32 => {
+                ShadingModel::PbrSpecularGlossiness
+            }
+            x if x == aiShadingMode::aiShadingMode_PBR_Metallic_Roughness as u32 => {
+                ShadingModel::PbrMetallicRoughness
+            }
+            other => ShadingModel::Unknown(other),
+        }
+    }
+}
+
+/// Blend mode for material layers
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BlendMode {
+    Default,
+    Additive,
+    Unknown(u32),
+}
+
+impl BlendMode {
+    fn from_raw(v: u32) -> Self {
+        match v {
+            x if x == sys::aiBlendMode::aiBlendMode_Default as u32 => BlendMode::Default,
+            x if x == sys::aiBlendMode::aiBlendMode_Additive as u32 => BlendMode::Additive,
+            other => BlendMode::Unknown(other),
+        }
+    }
+}
+
+/// Which PBR workflow this material uses (heuristic from material.h docs)
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PbrWorkflow {
+    MetallicRoughness,
+    SpecularGlossiness,
+    Unknown,
+}
+
+impl Material {
+    /// Determine PBR workflow based on present factors
+    pub fn pbr_workflow(&self) -> PbrWorkflow {
+        if self.metallic_factor().is_some() || self.roughness_factor().is_some() {
+            PbrWorkflow::MetallicRoughness
+        } else if self.glossiness_factor().is_some() || self.specular_factor().is_some() {
+            PbrWorkflow::SpecularGlossiness
+        } else {
+            PbrWorkflow::Unknown
+        }
+    }
+
+    // ---------- Convenience texture getters ----------
+    pub fn base_color_texture(&self, index: usize) -> Option<TextureInfo> {
+        self.texture(TextureType::BaseColor, index)
+    }
+
+    pub fn metallic_roughness_texture(&self) -> Option<TextureInfo> {
+        // glTF packed metallic-roughness (one texture, index 0)
+        self.texture(TextureType::GltfMetallicRoughness, 0)
+    }
+
+    pub fn emission_texture(&self, index: usize) -> Option<TextureInfo> {
+        self.texture(TextureType::EmissionColor, index)
+    }
+
+    pub fn normal_texture(&self, index: usize) -> Option<TextureInfo> {
+        self.texture(TextureType::Normals, index)
+    }
+
+    pub fn sheen_color_texture(&self) -> Option<TextureInfo> {
+        // sheen color texture is TextureType::Sheen, index 0
+        self.texture(TextureType::Sheen, 0)
+    }
+
+    pub fn sheen_roughness_texture(&self) -> Option<TextureInfo> {
+        // sheen roughness texture is TextureType::Sheen, index 1
+        self.texture(TextureType::Sheen, 1)
+    }
+
+    pub fn clearcoat_texture(&self) -> Option<TextureInfo> {
+        self.texture(TextureType::Clearcoat, 0)
+    }
+
+    pub fn clearcoat_roughness_texture(&self) -> Option<TextureInfo> {
+        self.texture(TextureType::Clearcoat, 1)
+    }
+
+    pub fn clearcoat_normal_texture(&self) -> Option<TextureInfo> {
+        self.texture(TextureType::Clearcoat, 2)
+    }
+
+    pub fn transmission_texture(&self) -> Option<TextureInfo> {
+        self.texture(TextureType::Transmission, 0)
+    }
+
+    pub fn volume_thickness_texture(&self) -> Option<TextureInfo> {
+        // Defined to use aiTextureType_TRANSMISSION, index 1
+        self.texture(TextureType::Transmission, 1)
+    }
+
+    pub fn anisotropy_texture(&self) -> Option<TextureInfo> {
+        self.texture(TextureType::Anisotropy, 0)
+    }
+
+    /// Albedo texture (alias of BaseColor)
+    pub fn albedo_texture(&self, index: usize) -> Option<TextureInfo> {
+        self.base_color_texture(index)
+    }
+
+    /// Metallic texture (separate channel, not glTF packed)
+    pub fn metallic_texture(&self, index: usize) -> Option<TextureInfo> {
+        self.texture(TextureType::Metalness, index)
+    }
+
+    /// Roughness texture (separate channel, not glTF packed)
+    pub fn roughness_texture(&self, index: usize) -> Option<TextureInfo> {
+        self.texture(TextureType::DiffuseRoughness, index)
+    }
+
+    /// Ambient occlusion texture
+    pub fn ambient_occlusion_texture(&self, index: usize) -> Option<TextureInfo> {
+        self.texture(TextureType::AmbientOcclusion, index)
+    }
+
+    /// Lightmap texture
+    pub fn lightmap_texture(&self, index: usize) -> Option<TextureInfo> {
+        self.texture(TextureType::Lightmap, index)
+    }
+
+    /// Displacement texture
+    pub fn displacement_texture(&self, index: usize) -> Option<TextureInfo> {
+        self.texture(TextureType::Displacement, index)
+    }
+
+    /// Reflection/environment texture
+    pub fn reflection_texture(&self, index: usize) -> Option<TextureInfo> {
+        self.texture(TextureType::Reflection, index)
+    }
+
+    /// Opacity texture
+    pub fn opacity_texture(&self, index: usize) -> Option<TextureInfo> {
+        self.texture(TextureType::Opacity, index)
+    }
+
+    /// Height map texture (some formats use this for parallax/bump)
+    pub fn height_texture(&self, index: usize) -> Option<TextureInfo> {
+        self.texture(TextureType::Height, index)
+    }
+
+    /// Specular map (spec/gloss workflow)
+    pub fn specular_texture(&self, index: usize) -> Option<TextureInfo> {
+        self.texture(TextureType::Specular, index)
+    }
+
+    /// Glossiness map (spec/gloss workflow)
+    pub fn glossiness_texture(&self, index: usize) -> Option<TextureInfo> {
+        self.texture(TextureType::Shininess, index)
+    }
+
+    /// Emissive map (PBR emission color)
+    pub fn emissive_texture(&self, index: usize) -> Option<TextureInfo> {
+        self.texture(TextureType::EmissionColor, index)
+    }
 }
 
 /// Texture mapping modes
@@ -465,4 +872,28 @@ pub struct TextureInfo {
     pub operation: TextureOperation,
     /// Texture map modes for U, V, W coordinates
     pub map_modes: [TextureMapMode; 3],
+    /// Texture flags
+    pub flags: TextureFlags,
+    /// Optional UV transform
+    pub uv_transform: Option<UVTransform>,
+    /// Optional texture mapping axis
+    pub axis: Option<Vector3D>,
+}
+
+/// UV transform information
+#[derive(Debug, Clone, Copy)]
+pub struct UVTransform {
+    pub translation: Vector2D,
+    pub scaling: Vector2D,
+    pub rotation: f32,
+}
+
+bitflags::bitflags! {
+    /// Texture flags (material.h: aiTextureFlags)
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+    pub struct TextureFlags: u32 {
+        const INVERT        = sys::aiTextureFlags::aiTextureFlags_Invert as u32;
+        const USE_ALPHA     = sys::aiTextureFlags::aiTextureFlags_UseAlpha as u32;
+        const IGNORE_ALPHA  = sys::aiTextureFlags::aiTextureFlags_IgnoreAlpha as u32;
+    }
 }

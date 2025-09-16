@@ -95,6 +95,16 @@ impl Default for MemoryInfo {
 pub struct Scene {
     /// Raw pointer to the Assimp scene
     scene_ptr: NonNull<sys::aiScene>,
+    /// How to release the scene when dropped
+    release_kind: SceneRelease,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SceneRelease {
+    /// Scene returned by aiImportFile* family, free with aiReleaseImport
+    ReleaseImport,
+    /// Scene created via aiCopyScene, free with aiFreeScene
+    FreeScene,
 }
 
 impl Scene {
@@ -106,15 +116,45 @@ impl Scene {
     /// - `scene_ptr` is a valid pointer to an aiScene
     /// - The scene was allocated by Assimp and should be freed with aiReleaseImport
     /// - The scene pointer remains valid for the lifetime of this Scene
-    pub unsafe fn from_raw(scene_ptr: *const sys::aiScene) -> Result<Self> {
+    pub unsafe fn from_raw_import(scene_ptr: *const sys::aiScene) -> Result<Self> {
         let scene_ptr = NonNull::new(scene_ptr as *mut sys::aiScene).ok_or(Error::NullPointer)?;
 
-        Ok(Self { scene_ptr })
+        Ok(Self {
+            scene_ptr,
+            release_kind: SceneRelease::ReleaseImport,
+        })
+    }
+
+    /// Create a Scene from a deep-copied Assimp scene pointer (aiCopyScene)
+    /// The scene will be freed with aiFreeScene.
+    ///
+    /// # Safety
+    /// Caller must ensure `scene_ptr` is valid and was allocated by aiCopyScene.
+    pub unsafe fn from_raw_copied(scene_ptr: *const sys::aiScene) -> Result<Self> {
+        let scene_ptr = NonNull::new(scene_ptr as *mut sys::aiScene).ok_or(Error::NullPointer)?;
+        Ok(Self {
+            scene_ptr,
+            release_kind: SceneRelease::FreeScene,
+        })
     }
 
     /// Get the raw scene pointer
     pub fn as_raw(&self) -> *const sys::aiScene {
         self.scene_ptr.as_ptr()
+    }
+
+    /// Apply Assimp post-processing to this scene in-place
+    pub fn apply_postprocess(&mut self, flags: crate::postprocess::PostProcessSteps) -> Result<()> {
+        unsafe {
+            let new_ptr = sys::aiApplyPostProcessing(self.scene_ptr.as_ptr(), flags.as_raw());
+            if new_ptr.is_null() {
+                return Err(Error::invalid_scene("Post-processing failed"));
+            }
+            // Update pointer; ownership/allocator unchanged
+            self.scene_ptr =
+                NonNull::new(new_ptr as *mut sys::aiScene).ok_or(Error::NullPointer)?;
+        }
+        Ok(())
     }
 
     /// Load a scene from a file with default settings
@@ -437,7 +477,10 @@ impl Scene {
 impl Drop for Scene {
     fn drop(&mut self) {
         unsafe {
-            sys::release_import(self.scene_ptr.as_ptr());
+            match self.release_kind {
+                SceneRelease::ReleaseImport => sys::release_import(self.scene_ptr.as_ptr()),
+                SceneRelease::FreeScene => sys::aiFreeScene(self.scene_ptr.as_ptr()),
+            }
         }
     }
 }
@@ -625,5 +668,18 @@ impl Scene {
         self.textures()
             .filter(|texture| texture.is_uncompressed())
             .collect()
+    }
+
+    /// Get embedded texture by filename hint (e.g. "*0", "*1")
+    pub fn embedded_texture_by_name(&self, name: &str) -> Option<Texture> {
+        let c = std::ffi::CString::new(name).ok()?;
+        unsafe {
+            let tex = sys::aiGetEmbeddedTexture(self.scene_ptr.as_ptr(), c.as_ptr());
+            if tex.is_null() {
+                None
+            } else {
+                Texture::from_raw(tex).ok()
+            }
+        }
     }
 }

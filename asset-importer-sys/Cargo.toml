@@ -54,13 +54,10 @@ bindgen = "0.72"
 cc = "1.0"
 cmake = "0.1"
 pkg-config = { version = "0.3", optional = true }
-# For prebuilt binary support
-reqwest = { version = "0.12", features = [
-    "blocking",
-    "rustls-tls",
-], optional = true }
-tar = { version = "0.4", optional = true }
-flate2 = { version = "1.0", optional = true }
+# Prebuilt binary support used by default path in build.rs
+reqwest = { version = "0.12", features = ["blocking", "rustls-tls"] }
+tar = { version = "0.4" }
+flate2 = { version = "1.0" }
 
 [features]
 default = []
@@ -75,8 +72,7 @@ static = []
 # Use system-installed assimp instead of bundled
 system = ["pkg-config"]
 # Build assimp from source
-build-assimp = ["tar", "flate2"]
-# Use prebuilt binaries (downloads from GitHub releases)
-prebuilt = ["reqwest", "tar", "flate2"]
+build-assimp = []
+# Prebuilt binaries are the default path in build.rs (no feature required)
 # Control zlib linking
 nozlib = []
