@@ -13,10 +13,11 @@
 //!
 //! # Usage
 //!
-//! ```rust
+//! ```rust,no_run
 //! use asset_importer::types::*;
 //! use asset_importer::Importer;
 //!
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! let scene = Importer::new().import_file("model.obj")?;
 //! for mesh in scene.meshes() {
 //!     for vertex in mesh.vertices() {
@@ -28,6 +29,8 @@
 //!         let transformed = Matrix4x4::from_rotation_x(1.57) * vertex.extend(1.0);
 //!     }
 //! }
+//! # Ok(())
+//! # }
 //! ```
 
 use crate::sys;

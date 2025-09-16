@@ -17,11 +17,22 @@ categories = [
     "graphics",
 ]
 keywords = ["assimp", "3d", "mesh", "animation", "graphics"]
-readme = "README.md"
-exclude = ["examples/models/", "tests/models/"]
+readme = "../README.md"
+exclude = [
+    "examples/",
+    "tests/models/",
+    ".vscode/",
+    ".idea/",
+    "*.tmp",
+    "*.log",
+    "target/",
+    "*.md",
+]
 
 [dependencies]
-asset-importer-sys = { path = "../asset-importer-sys", version = "0.1.0" }
+asset-importer-sys = { path = "../asset-importer-sys", version = "0.1.0", features = [
+    "build-assimp",
+] }
 thiserror = "2.0"
 bitflags = "2.0"
 glam = "0.30"
@@ -42,3 +53,39 @@ build-assimp = ["asset-importer-sys/build-assimp"]
 
 [dev-dependencies]
 approx = "0.5"
+
+# Example dependencies for the model loading demo
+[[example]]
+name = "model_loading_demo"
+path = "examples/model_loading_demo.rs"
+
+[dev-dependencies.winit]
+version = "0.30"
+
+[dev-dependencies.glow]
+version = "0.14"
+
+[dev-dependencies.image]
+version = "0.25"
+default-features = false
+features = ["png", "jpeg"]
+
+[dev-dependencies.glam]
+version = "0.30"
+
+[dev-dependencies.bytemuck]
+version = "1.0"
+features = ["derive"]
+
+[dev-dependencies.glutin]
+version = "0.32"
+
+[dev-dependencies.glutin-winit]
+version = "0.5"
+
+[dev-dependencies.raw-window-handle]
+version = "0.6"
+
+# 添加 OpenGL 加载器
+[dev-dependencies.gl]
+version = "0.14"

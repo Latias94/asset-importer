@@ -16,16 +16,18 @@
 //! ## Quick Start
 //!
 //! ```rust,no_run
-//! use asset_importer::{Importer, PostProcessSteps};
+//! use asset_importer::{Importer, postprocess::PostProcessSteps};
 //!
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! let importer = Importer::new();
 //! let scene = importer
-//!     .read_file("model.fbx")?
+//!     .read_file("model.fbx")
 //!     .with_post_process(PostProcessSteps::TRIANGULATE | PostProcessSteps::FLIP_UVS)
-//!     .import()?;
+//!     .import_file("model.fbx")?;
 //!
-//! println!("Loaded {} meshes", scene.meshes().len());
-//! # Ok::<(), Box<dyn std::error::Error>>(())
+//! println!("Loaded {} meshes", scene.meshes().count());
+//! # Ok(())
+//! # }
 //! ```
 //!
 //! ## Architecture
@@ -46,8 +48,8 @@ pub use asset_importer_sys as sys;
 // Re-export common types for convenience
 pub use crate::{
     error::{Error, Result},
-    importer::Importer,
-    scene::Scene,
+    importer::{import_properties, ImportBuilder, Importer, PropertyStore, PropertyValue},
+    scene::{MemoryInfo, Scene},
     types::*,
 };
 
@@ -60,9 +62,27 @@ pub use crate::logging::{LogLevel, LogStream, Logger};
 // Re-export metadata functionality
 pub use crate::metadata::{Metadata, MetadataEntry, MetadataType};
 
+// Re-export material functionality
+pub use crate::material::{material_keys, Material, TextureInfo, TextureType};
+
+// Re-export texture functionality
+pub use crate::texture::{Texel, Texture, TextureData, TextureIterator};
+
+// Re-export AABB functionality
+pub use crate::aabb::AABB;
+
+// Re-export bone functionality
+pub use crate::bone::{Bone, BoneIterator, VertexWeight};
+
+// Re-export importer description functionality
+pub use crate::importer_desc::{
+    get_all_importer_descs, get_importer_desc, ImporterDesc, ImporterFlags,
+};
+
 // Core modules
 pub mod error;
 pub mod importer;
+pub mod importer_desc;
 pub mod scene;
 pub mod types;
 
@@ -73,6 +93,11 @@ pub mod light;
 pub mod material;
 pub mod mesh;
 pub mod node;
+
+// Data structure modules
+pub mod aabb;
+pub mod bone;
+pub mod texture;
 
 // Advanced features
 #[cfg(feature = "export")]

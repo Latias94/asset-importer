@@ -6,13 +6,90 @@ use crate::{
     animation::Animation,
     camera::Camera,
     error::{Error, Result},
+    importer::{Importer, PropertyStore},
     light::Light,
     material::Material,
     mesh::Mesh,
     metadata::Metadata,
     node::Node,
+    postprocess::PostProcessSteps,
     sys,
+    texture::{Texture, TextureIterator},
 };
+
+/// Memory usage information for a scene
+///
+/// This structure provides detailed information about the memory consumption
+/// of different components in an imported scene.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MemoryInfo {
+    /// Storage allocated for texture data (in bytes)
+    pub textures: u32,
+    /// Storage allocated for material data (in bytes)
+    pub materials: u32,
+    /// Storage allocated for mesh data (in bytes)
+    pub meshes: u32,
+    /// Storage allocated for node data (in bytes)
+    pub nodes: u32,
+    /// Storage allocated for animation data (in bytes)
+    pub animations: u32,
+    /// Storage allocated for camera data (in bytes)
+    pub cameras: u32,
+    /// Storage allocated for light data (in bytes)
+    pub lights: u32,
+    /// Total storage allocated for the full import (in bytes)
+    pub total: u32,
+}
+
+impl MemoryInfo {
+    /// Create a new empty memory info
+    pub fn new() -> Self {
+        Self {
+            textures: 0,
+            materials: 0,
+            meshes: 0,
+            nodes: 0,
+            animations: 0,
+            cameras: 0,
+            lights: 0,
+            total: 0,
+        }
+    }
+
+    /// Get the total memory usage in bytes
+    pub fn total_bytes(&self) -> u32 {
+        self.total
+    }
+
+    /// Get the total memory usage in kilobytes
+    pub fn total_kb(&self) -> f64 {
+        self.total as f64 / 1024.0
+    }
+
+    /// Get the total memory usage in megabytes
+    pub fn total_mb(&self) -> f64 {
+        self.total as f64 / (1024.0 * 1024.0)
+    }
+
+    /// Get a breakdown of memory usage by component
+    pub fn breakdown(&self) -> Vec<(&'static str, u32)> {
+        vec![
+            ("Textures", self.textures),
+            ("Materials", self.materials),
+            ("Meshes", self.meshes),
+            ("Nodes", self.nodes),
+            ("Animations", self.animations),
+            ("Cameras", self.cameras),
+            ("Lights", self.lights),
+        ]
+    }
+}
+
+impl Default for MemoryInfo {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 /// A 3D scene containing meshes, materials, animations, and other assets
 pub struct Scene {
@@ -40,6 +117,98 @@ impl Scene {
         self.scene_ptr.as_ptr()
     }
 
+    /// Load a scene from a file with default settings
+    ///
+    /// This is a convenience method that provides a russimp-compatible interface.
+    /// For more control, use `Importer::new().read_file(path).import_file(path)`.
+    pub fn from_file<P: AsRef<std::path::Path>>(path: P) -> Result<Self> {
+        Importer::new().import_file(path)
+    }
+
+    /// Load a scene from a file with post-processing steps
+    ///
+    /// This is a convenience method that provides a russimp-compatible interface.
+    /// For more control, use the `Importer` and `ImportBuilder` APIs.
+    pub fn from_file_with_flags<P: AsRef<std::path::Path>>(
+        path: P,
+        post_process: PostProcessSteps,
+    ) -> Result<Self> {
+        Importer::new()
+            .read_file(&path)
+            .with_post_process(post_process)
+            .import_file(path)
+    }
+
+    /// Load a scene from a file with properties and post-processing steps
+    ///
+    /// This is a convenience method that provides a russimp-compatible interface.
+    /// For more control, use the `Importer` and `ImportBuilder` APIs.
+    ///
+    /// # Example
+    /// ```rust,no_run
+    /// use asset_importer::{Scene, PropertyStore, postprocess::PostProcessSteps, import_properties};
+    ///
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let mut props = PropertyStore::new();
+    /// props.set_int(import_properties::FBX_PRESERVE_PIVOTS, 0);
+    ///
+    /// let scene = Scene::from_file_with_props(
+    ///     "model.fbx",
+    ///     PostProcessSteps::TRIANGULATE | PostProcessSteps::GEN_SMOOTH_NORMALS,
+    ///     &props
+    /// )?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn from_file_with_props<P: AsRef<std::path::Path>>(
+        path: P,
+        post_process: PostProcessSteps,
+        props: &PropertyStore,
+    ) -> Result<Self> {
+        Importer::new()
+            .read_file(&path)
+            .with_post_process(post_process)
+            .with_property_store_ref(props)
+            .import_file(path)
+    }
+
+    /// Load a scene from memory with default settings
+    ///
+    /// This is a convenience method that provides a russimp-compatible interface.
+    pub fn from_memory(data: &[u8], hint: Option<&str>) -> Result<Self> {
+        Importer::new().import_from_memory(data, hint)
+    }
+
+    /// Load a scene from memory with post-processing steps
+    ///
+    /// This is a convenience method that provides a russimp-compatible interface.
+    pub fn from_memory_with_flags(
+        data: &[u8],
+        hint: Option<&str>,
+        post_process: PostProcessSteps,
+    ) -> Result<Self> {
+        Importer::new()
+            .read_from_memory(data)
+            .with_post_process(post_process)
+            .import_from_memory(data, hint)
+    }
+
+    /// Load a scene from memory with properties and post-processing steps
+    ///
+    /// This is a convenience method that provides a russimp-compatible interface.
+    pub fn from_memory_with_props(
+        data: &[u8],
+        hint: Option<&str>,
+        post_process: PostProcessSteps,
+        props: &PropertyStore,
+    ) -> Result<Self> {
+        Importer::new()
+            .read_from_memory(data)
+            .with_post_process(post_process)
+            .with_property_store_ref(props)
+            .import_from_memory(data, hint)
+    }
+
     /// Get the scene flags
     pub fn flags(&self) -> u32 {
         unsafe { self.scene_ptr.as_ref().mFlags }
@@ -58,6 +227,38 @@ impl Scene {
     /// Check if the scene contains validation warnings
     pub fn has_validation_warnings(&self) -> bool {
         self.flags() & sys::AI_SCENE_FLAGS_VALIDATION_WARNING != 0
+    }
+
+    /// Get memory requirements for this scene
+    ///
+    /// Returns information about the memory consumption of different components
+    /// of the imported scene.
+    pub fn memory_requirements(&self) -> Result<MemoryInfo> {
+        let mut info = sys::aiMemoryInfo {
+            textures: 0,
+            materials: 0,
+            meshes: 0,
+            nodes: 0,
+            animations: 0,
+            cameras: 0,
+            lights: 0,
+            total: 0,
+        };
+
+        unsafe {
+            sys::aiGetMemoryRequirements(self.scene_ptr.as_ptr(), &mut info);
+        }
+
+        Ok(MemoryInfo {
+            textures: info.textures,
+            materials: info.materials,
+            meshes: info.meshes,
+            nodes: info.nodes,
+            animations: info.animations,
+            cameras: info.cameras,
+            lights: info.lights,
+            total: info.total,
+        })
     }
 
     /// Check if the scene is non-verbose
@@ -365,5 +566,64 @@ impl Scene {
     pub fn metadata(&self) -> Result<Metadata> {
         let scene = unsafe { self.scene_ptr.as_ref() };
         unsafe { Metadata::from_raw(scene.mMetaData) }
+    }
+
+    /// Get the number of textures in the scene
+    pub fn num_textures(&self) -> usize {
+        unsafe { (*self.scene_ptr.as_ptr()).mNumTextures as usize }
+    }
+
+    /// Get a texture by index
+    pub fn texture(&self, index: usize) -> Option<Texture> {
+        if index >= self.num_textures() {
+            return None;
+        }
+
+        unsafe {
+            let scene = self.scene_ptr.as_ref();
+            let texture_ptr = *scene.mTextures.add(index);
+            if texture_ptr.is_null() {
+                None
+            } else {
+                Texture::from_raw(texture_ptr).ok()
+            }
+        }
+    }
+
+    /// Get an iterator over all textures in the scene
+    pub fn textures(&self) -> TextureIterator {
+        unsafe {
+            let scene = self.scene_ptr.as_ref();
+            TextureIterator::new(scene.mTextures, self.num_textures())
+        }
+    }
+
+    /// Check if the scene has embedded textures
+    pub fn has_textures(&self) -> bool {
+        self.num_textures() > 0
+    }
+
+    /// Find a texture by filename
+    pub fn find_texture_by_filename(&self, filename: &str) -> Option<Texture> {
+        self.textures().find(|texture| {
+            texture
+                .filename()
+                .map(|name| name == filename)
+                .unwrap_or(false)
+        })
+    }
+
+    /// Get all compressed textures
+    pub fn compressed_textures(&self) -> Vec<Texture> {
+        self.textures()
+            .filter(|texture| texture.is_compressed())
+            .collect()
+    }
+
+    /// Get all uncompressed textures
+    pub fn uncompressed_textures(&self) -> Vec<Texture> {
+        self.textures()
+            .filter(|texture| texture.is_uncompressed())
+            .collect()
     }
 }

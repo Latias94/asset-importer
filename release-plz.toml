@@ -1,0 +1,51 @@
+[workspace]
+# Global configuration for all packages
+dependencies_update = true # run `cargo update` in the release PR
+git_release_enable = false # disable GitHub releases by default (enable per package)
+pr_labels = ["release"] # add the `release` label to the release Pull Request
+pr_branch_prefix = "release-plz-" # PR branch prefix
+publish_timeout = "15m" # set a longer timeout for `cargo publish` due to large binaries
+semver_check = true # enable API breaking changes checks
+changelog_update = false # DISABLE automatic changelog updates - we'll manage manually
+
+# Custom release body template (since we manage changelog manually)
+git_release_body = """
+## Installation
+
+### Using prebuilt binaries
+
+Download the appropriate archive for your platform from the assets below.
+
+### Using Cargo
+
+```bash
+cargo add {{ package }}
+```
+
+### Changes
+
+See [CHANGELOG.md](./CHANGELOG.md) for detailed changes in this release.
+
+{% if remote.contributors %}
+### Contributors
+{% for contributor in remote.contributors %}
+* @{{ contributor.username }}
+{% endfor %}
+{% endif %}
+"""
+
+# Package-specific configuration for asset-importer-sys
+[[package]]
+name = "asset-importer-sys"
+git_release_enable = true # enable GitHub releases for sys crate
+changelog_path = "./asset-importer-sys/CHANGELOG.md" # separate changelog for sys crate
+changelog_update = false # manually managed changelog
+publish = true # publish sys crate first since asset-importer depends on it
+
+# Package-specific configuration for asset-importer
+[[package]]
+name = "asset-importer"
+git_release_enable = true # enable GitHub releases for main crate
+changelog_path = "./asset-importer/CHANGELOG.md" # separate changelog for main crate
+changelog_update = false # manually managed changelog
+publish = true # publish after sys crate

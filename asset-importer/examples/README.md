@@ -60,6 +60,45 @@ Provides:
 - Format distribution analysis
 - Error reporting for failed files
 
+### Advanced Features
+
+#### `model_loading_demo.rs` 🎯 **NEW: Complete 3D Rendering Demo**
+A comprehensive 3D model viewer showcasing the complete integration of asset-importer with modern OpenGL rendering.
+```bash
+cargo run --example model_loading_demo --features build-assimp -- path/to/model.obj
+```
+
+**🌟 This is the flagship example demonstrating asset-importer as a complete Assimp binding!**
+
+Features:
+- ✅ **Complete Model Loading**: Supports all Assimp formats (OBJ, FBX, GLTF, DAE, 3DS, PLY, etc.)
+- ✅ **Modern OpenGL Rendering**: VAO/VBO/EBO with shader programs
+- ✅ **Mesh & Texture Support**: Multi-mesh models with diffuse and specular textures
+- ✅ **Phong Lighting**: Ambient, diffuse, and specular lighting
+- ✅ **FPS Camera**: WASD movement, mouse look, scroll zoom
+- ✅ **Real-time Rendering**: Complete render loop with proper MVP matrices
+
+Controls:
+- **WASD**: Camera movement
+- **Mouse**: Look around
+- **Mouse wheel**: Zoom in/out
+- **ESC**: Exit
+
+This example follows the LearnOpenGL tutorial architecture and demonstrates the full power of asset-importer for real-world 3D applications.
+
+#### `advanced_material_properties.rs`
+Demonstrates the enhanced material system and PropertyStore API.
+```bash
+cargo run --example advanced_material_properties --features build-assimp -- path/to/model.fbx
+```
+
+Features:
+- PropertyStore for advanced import configuration
+- Comprehensive material property access (colors, textures, physical properties)
+- Material flags and texture information analysis
+- Enhanced scene metadata accessors
+- Import property constants for common settings
+
 ## Test Models
 
 The `models/` directory contains simple test models for experimentation:

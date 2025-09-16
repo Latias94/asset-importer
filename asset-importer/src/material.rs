@@ -1,10 +1,50 @@
 //! Material representation and properties
 
+use std::ffi::CString;
+
 use crate::{
     error::{c_str_to_string_or_empty, Error, Result},
     sys,
     types::{Color3D, Color4D},
 };
+
+/// Standard material property keys as defined by Assimp
+pub mod material_keys {
+    /// Material name
+    pub const NAME: &str = "?mat.name";
+    /// Diffuse color
+    pub const COLOR_DIFFUSE: &str = "$clr.diffuse";
+    /// Ambient color
+    pub const COLOR_AMBIENT: &str = "$clr.ambient";
+    /// Specular color
+    pub const COLOR_SPECULAR: &str = "$clr.specular";
+    /// Emissive color
+    pub const COLOR_EMISSIVE: &str = "$clr.emissive";
+    /// Transparent color
+    pub const COLOR_TRANSPARENT: &str = "$clr.transparent";
+    /// Reflective color
+    pub const COLOR_REFLECTIVE: &str = "$clr.reflective";
+    /// Shininess factor
+    pub const SHININESS: &str = "$mat.shininess";
+    /// Shininess strength
+    pub const SHININESS_STRENGTH: &str = "$mat.shinpercent";
+    /// Opacity
+    pub const OPACITY: &str = "$mat.opacity";
+    /// Transparency factor
+    pub const TRANSPARENCYFACTOR: &str = "$mat.transparencyfactor";
+    /// Bump scaling
+    pub const BUMPSCALING: &str = "$mat.bumpscaling";
+    /// Refraction index
+    pub const REFRACTI: &str = "$mat.refracti";
+    /// Reflectivity
+    pub const REFLECTIVITY: &str = "$mat.reflectivity";
+    /// Shading model
+    pub const SHADING_MODEL: &str = "$mat.shadingm";
+    /// Blend function
+    pub const BLEND_FUNC: &str = "$mat.blend";
+    /// Two sided
+    pub const TWOSIDED: &str = "$mat.twosided";
+}
 
 /// A material containing properties like colors, textures, and shading parameters
 pub struct Material {
@@ -24,70 +64,197 @@ impl Material {
 
     /// Get the name of the material
     pub fn name(&self) -> String {
-        self.get_string_property("?mat.name").unwrap_or_default()
+        self.get_string_property(material_keys::NAME)
+            .unwrap_or_default()
     }
 
     /// Get a string property from the material
     pub fn get_string_property(&self, key: &str) -> Option<String> {
-        // This is a simplified implementation
-        // The actual implementation would need to use aiGetMaterialString
-        // which requires proper handling of aiString structure
-        None
+        let c_key = CString::new(key).ok()?;
+        let mut ai_string = sys::aiString::default();
+
+        let result = unsafe {
+            sys::aiGetMaterialString(
+                self.material_ptr,
+                c_key.as_ptr(),
+                0, // type
+                0, // index
+                &mut ai_string,
+            )
+        };
+
+        if result == sys::aiReturn_aiReturn_SUCCESS {
+            // Convert aiString to Rust String
+            let len = ai_string.length as usize;
+            if len > 0 && len < ai_string.data.len() {
+                let bytes: &[u8] = unsafe {
+                    std::slice::from_raw_parts(ai_string.data.as_ptr() as *const u8, len)
+                };
+                String::from_utf8(bytes.to_vec()).ok()
+            } else {
+                None
+            }
+        } else {
+            None
+        }
     }
 
     /// Get a float property from the material
     pub fn get_float_property(&self, key: &str) -> Option<f32> {
-        // This is a simplified implementation
-        // The actual implementation would need to use aiGetMaterialFloat
-        None
+        let c_key = CString::new(key).ok()?;
+        let mut value = 0.0f32;
+        let mut max = 1u32;
+
+        let result = unsafe {
+            sys::aiGetMaterialFloatArray(
+                self.material_ptr,
+                c_key.as_ptr(),
+                0, // type
+                0, // index
+                &mut value,
+                &mut max,
+            )
+        };
+
+        if result == sys::aiReturn_aiReturn_SUCCESS && max > 0 {
+            Some(value)
+        } else {
+            None
+        }
     }
 
     /// Get an integer property from the material
     pub fn get_integer_property(&self, key: &str) -> Option<i32> {
-        // This is a simplified implementation
-        // The actual implementation would need to use aiGetMaterialInteger
-        None
+        let c_key = CString::new(key).ok()?;
+        let mut value = 0i32;
+        let mut max = 1u32;
+
+        let result = unsafe {
+            sys::aiGetMaterialIntegerArray(
+                self.material_ptr,
+                c_key.as_ptr(),
+                0, // type
+                0, // index
+                &mut value,
+                &mut max,
+            )
+        };
+
+        if result == sys::aiReturn_aiReturn_SUCCESS && max > 0 {
+            Some(value)
+        } else {
+            None
+        }
     }
 
     /// Get a color property from the material
     pub fn get_color_property(&self, key: &str) -> Option<Color4D> {
-        // This is a simplified implementation
-        // The actual implementation would need to use aiGetMaterialColor
-        None
+        let c_key = CString::new(key).ok()?;
+        let mut color = sys::aiColor4D {
+            r: 0.0,
+            g: 0.0,
+            b: 0.0,
+            a: 1.0,
+        };
+
+        let result = unsafe {
+            sys::aiGetMaterialColor(
+                self.material_ptr,
+                c_key.as_ptr(),
+                0, // type
+                0, // index
+                &mut color,
+            )
+        };
+
+        if result == sys::aiReturn_aiReturn_SUCCESS {
+            Some(Color4D::new(color.r, color.g, color.b, color.a))
+        } else {
+            None
+        }
     }
 
     /// Get the diffuse color
     pub fn diffuse_color(&self) -> Option<Color3D> {
-        self.get_color_property("$clr.diffuse")
+        self.get_color_property(material_keys::COLOR_DIFFUSE)
             .map(|c| Color3D::new(c.x, c.y, c.z))
     }
 
     /// Get the specular color
     pub fn specular_color(&self) -> Option<Color3D> {
-        self.get_color_property("$clr.specular")
+        self.get_color_property(material_keys::COLOR_SPECULAR)
             .map(|c| Color3D::new(c.x, c.y, c.z))
     }
 
     /// Get the ambient color
     pub fn ambient_color(&self) -> Option<Color3D> {
-        self.get_color_property("$clr.ambient")
+        self.get_color_property(material_keys::COLOR_AMBIENT)
             .map(|c| Color3D::new(c.x, c.y, c.z))
     }
 
     /// Get the emissive color
     pub fn emissive_color(&self) -> Option<Color3D> {
-        self.get_color_property("$clr.emissive")
+        self.get_color_property(material_keys::COLOR_EMISSIVE)
+            .map(|c| Color3D::new(c.x, c.y, c.z))
+    }
+
+    /// Get the transparent color
+    pub fn transparent_color(&self) -> Option<Color3D> {
+        self.get_color_property(material_keys::COLOR_TRANSPARENT)
+            .map(|c| Color3D::new(c.x, c.y, c.z))
+    }
+
+    /// Get the reflective color
+    pub fn reflective_color(&self) -> Option<Color3D> {
+        self.get_color_property(material_keys::COLOR_REFLECTIVE)
             .map(|c| Color3D::new(c.x, c.y, c.z))
     }
 
     /// Get the shininess factor
     pub fn shininess(&self) -> Option<f32> {
-        self.get_float_property("$mat.shininess")
+        self.get_float_property(material_keys::SHININESS)
+    }
+
+    /// Get the shininess strength
+    pub fn shininess_strength(&self) -> Option<f32> {
+        self.get_float_property(material_keys::SHININESS_STRENGTH)
     }
 
     /// Get the opacity factor
     pub fn opacity(&self) -> Option<f32> {
-        self.get_float_property("$mat.opacity")
+        self.get_float_property(material_keys::OPACITY)
+    }
+
+    /// Get the transparency factor
+    pub fn transparency_factor(&self) -> Option<f32> {
+        self.get_float_property(material_keys::TRANSPARENCYFACTOR)
+    }
+
+    /// Get the bump scaling factor
+    pub fn bump_scaling(&self) -> Option<f32> {
+        self.get_float_property(material_keys::BUMPSCALING)
+    }
+
+    /// Get the refraction index
+    pub fn refraction_index(&self) -> Option<f32> {
+        self.get_float_property(material_keys::REFRACTI)
+    }
+
+    /// Get the reflectivity factor
+    pub fn reflectivity(&self) -> Option<f32> {
+        self.get_float_property(material_keys::REFLECTIVITY)
+    }
+
+    /// Get the shading model
+    pub fn shading_model(&self) -> Option<i32> {
+        self.get_integer_property(material_keys::SHADING_MODEL)
+    }
+
+    /// Check if the material is two-sided
+    pub fn is_two_sided(&self) -> bool {
+        self.get_integer_property(material_keys::TWOSIDED)
+            .map(|v| v != 0)
+            .unwrap_or(false)
     }
 
     /// Get the number of textures for a specific type

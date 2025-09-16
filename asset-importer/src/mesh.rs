@@ -1,6 +1,9 @@
 //! Mesh representation and utilities
 
 use crate::{
+    aabb::AABB,
+    bone::{Bone, BoneIterator},
+    error::{Error, Result},
     sys,
     types::{from_ai_color4d, from_ai_vector2d, from_ai_vector3d, Color4D, Vector2D, Vector3D},
 };
@@ -171,6 +174,59 @@ impl Mesh {
     /// Check if the mesh contains polygons
     pub fn has_polygons(&self) -> bool {
         self.primitive_types() & (sys::aiPrimitiveType_aiPrimitiveType_POLYGON as u32) != 0
+    }
+
+    /// Get the axis-aligned bounding box of the mesh
+    pub fn aabb(&self) -> AABB {
+        unsafe {
+            let mesh = &*self.mesh_ptr;
+            AABB::from(&mesh.mAABB)
+        }
+    }
+
+    /// Get the number of bones in the mesh
+    pub fn num_bones(&self) -> usize {
+        unsafe { (*self.mesh_ptr).mNumBones as usize }
+    }
+
+    /// Get a bone by index
+    pub fn bone(&self, index: usize) -> Option<Bone> {
+        if index >= self.num_bones() {
+            return None;
+        }
+
+        unsafe {
+            let mesh = &*self.mesh_ptr;
+            let bone_ptr = *mesh.mBones.add(index);
+            if bone_ptr.is_null() {
+                None
+            } else {
+                Bone::from_raw(bone_ptr).ok()
+            }
+        }
+    }
+
+    /// Get an iterator over all bones in the mesh
+    pub fn bones(&self) -> BoneIterator {
+        unsafe {
+            let mesh = &*self.mesh_ptr;
+            BoneIterator::new(mesh.mBones, self.num_bones())
+        }
+    }
+
+    /// Check if the mesh has bones (is rigged for skeletal animation)
+    pub fn has_bones(&self) -> bool {
+        self.num_bones() > 0
+    }
+
+    /// Find a bone by name
+    pub fn find_bone_by_name(&self, name: &str) -> Option<Bone> {
+        self.bones().find(|bone| bone.name() == name)
+    }
+
+    /// Get all bone names
+    pub fn bone_names(&self) -> Vec<String> {
+        self.bones().map(|bone| bone.name()).collect()
     }
 }
 

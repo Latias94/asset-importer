@@ -113,6 +113,23 @@ Contributions welcome! Areas needing help:
 - Documentation improvements
 - Platform-specific testing
 
+### Development Workflow
+
+We use manual changelog management with automated releases:
+
+1. **Make changes** to code
+2. **Update CHANGELOG.md** under `[Unreleased]` section:
+   - `asset-importer-sys/CHANGELOG.md` for FFI changes
+   - `asset-importer/CHANGELOG.md` for API changes
+3. **Commit with conventional commits**:
+   ```bash
+   git commit -m "feat: add new animation API"
+   git commit -m "fix: resolve memory leak in parsing"
+   ```
+4. **Push to main** - automated CI will handle versioning and releases
+
+See [MANUAL_CHANGELOG_GUIDE.md](MANUAL_CHANGELOG_GUIDE.md) for detailed instructions.
+
 ## License
 
 Licensed under either of:

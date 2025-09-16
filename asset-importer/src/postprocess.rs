@@ -115,6 +115,32 @@ impl PostProcessSteps {
     pub fn from_raw(value: u32) -> Self {
         Self::from_bits_truncate(value)
     }
+
+    /// Validate that the post-processing flags are compatible
+    ///
+    /// Some post-processing steps are mutually exclusive and cannot be used together.
+    /// This function checks for such conflicts and returns an error if any are found.
+    pub fn validate(&self) -> Result<(), String> {
+        // Check for mutually exclusive flags
+        if self.contains(PostProcessSteps::GEN_SMOOTH_NORMALS)
+            && self.contains(PostProcessSteps::GEN_NORMALS)
+        {
+            return Err("GEN_SMOOTH_NORMALS and GEN_NORMALS are incompatible".to_string());
+        }
+
+        if self.contains(PostProcessSteps::OPTIMIZE_GRAPH)
+            && self.contains(PostProcessSteps::PRE_TRANSFORM_VERTICES)
+        {
+            return Err("OPTIMIZE_GRAPH and PRE_TRANSFORM_VERTICES are incompatible".to_string());
+        }
+
+        Ok(())
+    }
+
+    /// Check if the flags are valid (same as validate but returns bool)
+    pub fn is_valid(&self) -> bool {
+        self.validate().is_ok()
+    }
 }
 
 impl Default for PostProcessSteps {
@@ -207,5 +233,29 @@ mod tests {
         let raw = steps.as_raw();
         let converted_back = PostProcessSteps::from_raw(raw);
         assert_eq!(steps, converted_back);
+    }
+
+    #[test]
+    fn test_flag_validation() {
+        // Valid combinations
+        let valid_steps = PostProcessSteps::TRIANGULATE | PostProcessSteps::JOIN_IDENTICAL_VERTICES;
+        assert!(valid_steps.is_valid());
+        assert!(valid_steps.validate().is_ok());
+
+        // Invalid combination: GEN_SMOOTH_NORMALS and GEN_NORMALS
+        let invalid_steps1 = PostProcessSteps::GEN_SMOOTH_NORMALS | PostProcessSteps::GEN_NORMALS;
+        assert!(!invalid_steps1.is_valid());
+        assert!(invalid_steps1.validate().is_err());
+
+        // Invalid combination: OPTIMIZE_GRAPH and PRE_TRANSFORM_VERTICES
+        let invalid_steps2 =
+            PostProcessSteps::OPTIMIZE_GRAPH | PostProcessSteps::PRE_TRANSFORM_VERTICES;
+        assert!(!invalid_steps2.is_valid());
+        assert!(invalid_steps2.validate().is_err());
+
+        // Test presets are valid
+        assert!(PostProcessSteps::FAST.is_valid());
+        assert!(PostProcessSteps::QUALITY.is_valid());
+        assert!(PostProcessSteps::REALTIME.is_valid());
     }
 }

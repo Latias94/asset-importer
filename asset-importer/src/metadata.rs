@@ -12,6 +12,34 @@ use crate::{
     types::Vector3D,
 };
 
+/// Common metadata keys used across different file formats
+pub mod common_metadata {
+    /// Scene metadata holding the name of the importer which loaded the source asset.
+    /// This is always present if the scene was created from an imported asset.
+    pub const SOURCE_FORMAT: &str = "SourceAsset_Format";
+
+    /// Scene metadata holding the version of the source asset as a string, if available.
+    /// Not all formats add this metadata.
+    pub const SOURCE_FORMAT_VERSION: &str = "SourceAsset_FormatVersion";
+
+    /// Scene metadata holding the name of the software which generated the source asset, if available.
+    /// Not all formats add this metadata.
+    pub const SOURCE_GENERATOR: &str = "SourceAsset_Generator";
+
+    /// Scene metadata holding the source asset copyright statement, if available.
+    /// Not all formats add this metadata.
+    pub const SOURCE_COPYRIGHT: &str = "SourceAsset_Copyright";
+}
+
+/// Collada-specific metadata keys
+pub mod collada_metadata {
+    /// Collada ID attribute
+    pub const ID: &str = "Collada_id";
+
+    /// Collada SID attribute
+    pub const SID: &str = "Collada_sid";
+}
+
 /// Metadata type enumeration
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MetadataType {
@@ -320,6 +348,66 @@ impl Metadata {
     /// Iterate over all key-value pairs
     pub fn iter(&self) -> impl Iterator<Item = (&String, &MetadataEntry)> {
         self.entries.iter()
+    }
+
+    /// Get a boolean value by key
+    pub fn get_bool(&self, key: &str) -> Option<bool> {
+        self.get(key)?.as_bool()
+    }
+
+    /// Get an i32 value by key
+    pub fn get_i32(&self, key: &str) -> Option<i32> {
+        self.get(key)?.as_i32()
+    }
+
+    /// Get a u64 value by key
+    pub fn get_u64(&self, key: &str) -> Option<u64> {
+        self.get(key)?.as_u64()
+    }
+
+    /// Get an f32 value by key
+    pub fn get_f32(&self, key: &str) -> Option<f32> {
+        self.get(key)?.as_f32()
+    }
+
+    /// Get an f64 value by key
+    pub fn get_f64(&self, key: &str) -> Option<f64> {
+        self.get(key)?.as_f64()
+    }
+
+    /// Get a string value by key
+    pub fn get_string(&self, key: &str) -> Option<&str> {
+        self.get(key)?.as_string()
+    }
+
+    /// Get a Vector3D value by key
+    pub fn get_vector3d(&self, key: &str) -> Option<&Vector3D> {
+        self.get(key)?.as_vector3d()
+    }
+
+    /// Get nested metadata by key
+    pub fn get_metadata(&self, key: &str) -> Option<&Metadata> {
+        self.get(key)?.as_metadata()
+    }
+
+    /// Get an i64 value by key
+    pub fn get_i64(&self, key: &str) -> Option<i64> {
+        self.get(key)?.as_i64()
+    }
+
+    /// Get a u32 value by key
+    pub fn get_u32(&self, key: &str) -> Option<u32> {
+        self.get(key)?.as_u32()
+    }
+
+    /// Insert a new metadata entry
+    pub fn insert<S: Into<String>>(&mut self, key: S, entry: MetadataEntry) {
+        self.entries.insert(key.into(), entry);
+    }
+
+    /// Remove a metadata entry by key
+    pub fn remove(&mut self, key: &str) -> Option<MetadataEntry> {
+        self.entries.remove(key)
     }
 }
 
