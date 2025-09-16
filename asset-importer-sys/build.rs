@@ -1,8 +1,4 @@
-use std::{env, path::PathBuf};
-
-#[cfg(feature = "prebuilt")]
-use std::fs;
-
+use std::{env, fs, path::PathBuf};
 #[cfg(feature = "prebuilt")]
 use flate2::read::GzDecoder;
 
