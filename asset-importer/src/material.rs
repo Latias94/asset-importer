@@ -391,11 +391,6 @@ impl Material {
             .map(|v| BlendMode::from_raw(v as u32))
     }
 
-    /// Check if the material is unlit (NoShading/Unlit)
-    pub fn is_unlit(&self) -> bool {
-        matches!(self.shading_model_enum(), Some(ShadingModel::NoShading))
-    }
-
     /// Get the number of textures for a specific type
     pub fn texture_count(&self, texture_type: TextureType) -> usize {
         unsafe { sys::aiGetMaterialTextureCount(self.material_ptr, texture_type as _) as usize }
@@ -441,9 +436,11 @@ impl Material {
 
                 // Try read UV transform
                 let mut uv_transform = std::mem::MaybeUninit::<sys::aiUVTransform>::uninit();
+                let uv_key = std::ffi::CString::new("$tex.uvtrafo").unwrap();
                 let uv_ok = sys::aiGetMaterialUVTransform(
                     self.material_ptr,
-                    texture_type as _,
+                    uv_key.as_ptr(),
+                    texture_type as u32,
                     index as u32,
                     uv_transform.as_mut_ptr(),
                 ) == sys::aiReturn::aiReturn_SUCCESS;
@@ -601,11 +598,8 @@ impl ShadingModel {
             }
             x if x == aiShadingMode::aiShadingMode_NoShading as u32 => ShadingModel::NoShading,
             x if x == aiShadingMode::aiShadingMode_Fresnel as u32 => ShadingModel::Fresnel,
-            x if x == aiShadingMode::aiShadingMode_PBR_Specular_Glossiness as u32 => {
+            x if x == aiShadingMode::aiShadingMode_PBR_BRDF as u32 => {
                 ShadingModel::PbrSpecularGlossiness
-            }
-            x if x == aiShadingMode::aiShadingMode_PBR_Metallic_Roughness as u32 => {
-                ShadingModel::PbrMetallicRoughness
             }
             other => ShadingModel::Unknown(other),
         }

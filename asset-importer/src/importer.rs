@@ -309,7 +309,7 @@ impl ImportBuilder {
                     return true;
                 }
                 let handler: &mut dyn ProgressHandler =
-                    unsafe { &mut *(user as *mut Box<dyn ProgressHandler>) };
+                    unsafe { &mut **(user as *mut Box<dyn ProgressHandler>) };
                 let msg_opt = if message.is_null() {
                     None
                 } else {
@@ -426,7 +426,7 @@ impl ImportBuilder {
                     return true;
                 }
                 let handler: &mut dyn ProgressHandler =
-                    unsafe { &mut *(user as *mut Box<dyn ProgressHandler>) };
+                    unsafe { &mut **(user as *mut Box<dyn ProgressHandler>) };
                 let msg_opt = if message.is_null() {
                     None
                 } else {
@@ -597,7 +597,7 @@ fn build_rust_properties(
             int_value: 0,
             float_value: 0.0,
             string_value: std::ptr::null(),
-            matrix_value: sys::aiMatrix4x4::default(),
+            matrix_value: std::ptr::null_mut(),
         };
 
         match value {
@@ -622,7 +622,8 @@ fn build_rust_properties(
             }
             PropertyValue::Matrix(m) => {
                 p.kind = sys::aiRustPropertyKind::aiRustPropertyKind_Matrix4x4;
-                p.matrix_value = to_ai_matrix4x4(*m);
+                let matrix = Box::new(to_ai_matrix4x4(*m));
+                p.matrix_value = Box::into_raw(matrix) as *mut std::ffi::c_void;
             }
         }
 

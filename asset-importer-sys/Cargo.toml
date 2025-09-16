@@ -72,7 +72,8 @@ static = []
 # Use system-installed assimp instead of bundled
 system = ["pkg-config"]
 # Build assimp from source
-build-assimp = []
-# Prebuilt binaries are the default path in build.rs (no feature required)
+build-assimp = ["tar", "flate2"]
+# Use prebuilt binaries (explicit feature for conditional compilation)
+prebuilt = ["tar", "flate2"]
 # Control zlib linking
 nozlib = []

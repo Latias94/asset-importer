@@ -142,14 +142,14 @@ pub mod version {
 
     /// Version string reported by Assimp
     pub fn assimp_version_string() -> String {
-        unsafe {
-            let p = crate::sys::aiGetVersionString();
-            if p.is_null() {
-                String::new()
-            } else {
-                std::ffi::CStr::from_ptr(p).to_string_lossy().into_owned()
-            }
-        }
+        // Note: aiGetVersionString is not available in the current bindings
+        // Use the version components to construct a version string
+        format!(
+            "{}.{}.{}",
+            assimp_version_major(),
+            assimp_version_minor(),
+            assimp_version_revision()
+        )
     }
 
     /// Compile flags used to build Assimp

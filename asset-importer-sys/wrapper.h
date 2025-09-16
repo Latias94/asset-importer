@@ -7,11 +7,14 @@
 
 #pragma once
 
+#include <stdbool.h>
+
 // Core Assimp headers for complete API coverage
 #include <assimp/cimport.h>
 #include <assimp/scene.h>
 #include <assimp/postprocess.h>
 #include <assimp/types.h>
+#include <assimp/matrix4x4.h>
 #include <assimp/cexport.h>
 #include <assimp/cfileio.h>
 #include <assimp/material.h>
@@ -41,15 +44,19 @@ typedef struct aiRustProperty {
     int          int_value;           // also used for bool (0/1)
     float        float_value;
     const char*  string_value;        // UTF-8, null-terminated
-    struct aiMatrix4x4 matrix_value;  // row-major, as in Assimp
+    void*        matrix_value;        // pointer to aiMatrix4x4, row-major, as in Assimp
 } aiRustProperty;
 
 // Progress callback signature used by the bridge. Return false to cancel.
 typedef bool (*aiRustProgressCallback)(float percentage, const char* message, void* user);
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 // Import a file with optional custom IO, properties and a progress callback.
 // Returns a deep-copied aiScene which can be freed with aiFreeScene.
-ASSIMP_API const struct aiScene* aiImportFileExWithProgressRust(
+const struct aiScene* aiImportFileExWithProgressRust(
     const char* path,
     unsigned int flags,
     const struct aiFileIO* file_io, // nullable
@@ -60,7 +67,7 @@ ASSIMP_API const struct aiScene* aiImportFileExWithProgressRust(
 );
 
 // Import from memory with properties + progress callback support.
-ASSIMP_API const struct aiScene* aiImportFileFromMemoryWithProgressRust(
+const struct aiScene* aiImportFileFromMemoryWithProgressRust(
     const char* data,
     unsigned int length,
     unsigned int flags,
@@ -72,4 +79,8 @@ ASSIMP_API const struct aiScene* aiImportFileFromMemoryWithProgressRust(
 );
 
 // Get the last error message produced by the Rust C++ bridge (thread-local).
-ASSIMP_API const char* aiGetLastErrorStringRust(void);
+const char* aiGetLastErrorStringRust(void);
+
+#ifdef __cplusplus
+}
+#endif

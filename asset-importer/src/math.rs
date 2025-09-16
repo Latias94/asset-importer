@@ -289,8 +289,8 @@ pub fn vector3_div_scalar(v: Vector3D, s: f32) -> Vector3D {
 
 pub fn vector3_div_vector(a: Vector3D, b: Vector3D) -> Vector3D {
     let mut dst = to_ai_vector3d(a);
-    let other = to_ai_vector3d(b);
-    unsafe { sys::aiVector3DivideByVector(&mut dst, &other) };
+    let mut other = to_ai_vector3d(b);
+    unsafe { sys::aiVector3DivideByVector(&mut dst, &mut other) };
     from_ai_vector3d(dst)
 }
 

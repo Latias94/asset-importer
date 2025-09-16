@@ -12,6 +12,7 @@
 #include <assimp/Importer.hpp>
 #include <assimp/IOSystem.hpp>
 #include <assimp/IOStream.hpp>
+#include <assimp/ProgressHandler.hpp>
 #include <assimp/cexport.h> // aiCopyScene
 #include <cstring>
 #include <string>
@@ -154,7 +155,9 @@ static void apply_properties(Assimp::Importer& importer, const aiRustProperty* p
                 importer.SetPropertyString(p.name, p.string_value ? std::string(p.string_value) : std::string());
                 break;
             case aiRustPropertyKind_Matrix4x4:
-                importer.SetPropertyMatrix(p.name, p.matrix_value);
+                if (p.matrix_value) {
+                    importer.SetPropertyMatrix(p.name, *static_cast<const aiMatrix4x4*>(p.matrix_value));
+                }
                 break;
             default:
                 break;
@@ -219,6 +222,7 @@ static const aiScene* import_with_bridge(
 
 extern "C" {
 
+// Implementation of functions declared in wrapper.h
 const struct aiScene* aiImportFileExWithProgressRust(
     const char* path,
     unsigned int flags,

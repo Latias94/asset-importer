@@ -1,6 +1,5 @@
-use std::{env, fs, path::PathBuf};
-#[cfg(feature = "prebuilt")]
 use flate2::read::GzDecoder;
+use std::{env, fs, path::PathBuf};
 
 fn main() {
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());

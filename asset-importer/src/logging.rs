@@ -129,6 +129,11 @@ struct OwnedLogStream {
     stream: Arc<Mutex<dyn LogStream>>,
 }
 
+// SAFETY: OwnedLogStream is only used within the Logger which is protected by a Mutex
+// The wrapper_ptr is only accessed from the main thread and is properly cleaned up
+unsafe impl Send for OwnedLogStream {}
+unsafe impl Sync for OwnedLogStream {}
+
 impl Logger {
     /// Create a new logger
     pub fn new() -> Self {

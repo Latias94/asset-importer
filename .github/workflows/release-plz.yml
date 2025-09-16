@@ -42,59 +42,59 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  release-plz-release:
-    name: Release-plz release
-    runs-on: ubuntu-latest
-    if: github.repository_owner == 'Latias94'
-    permissions:
-      contents: write
-      id-token: write # Required for trusted publishing
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
+  # release-plz-release:
+  #   name: Release-plz release
+  #   runs-on: ubuntu-latest
+  #   if: github.repository_owner == 'Latias94'
+  #   permissions:
+  #     contents: write
+  #     id-token: write # Required for trusted publishing
+  #   steps:
+  #     - name: Checkout repository
+  #       uses: actions/checkout@v4
+  #       with:
+  #         fetch-depth: 0
+  #         token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+  #     - name: Install Rust toolchain
+  #       uses: dtolnay/rust-toolchain@stable
 
-      - name: Cache Rust dependencies
-        uses: Swatinem/rust-cache@v2
+  #     - name: Cache Rust dependencies
+  #       uses: Swatinem/rust-cache@v2
 
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y cmake build-essential
+  #     - name: Install dependencies
+  #       run: |
+  #         sudo apt-get update
+  #         sudo apt-get install -y cmake build-essential
 
-      - name: Run release-plz
-        id: release-plz
-        uses: release-plz/action@v0.5
-        with:
-          command: release
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+  #     - name: Run release-plz
+  #       id: release-plz
+  #       uses: release-plz/action@v0.5
+  #       with:
+  #         command: release
+  #       env:
+  #         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  #         CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
-      # Trigger prebuilt binaries workflow if releases were created
-      - name: Trigger prebuilt binaries build
-        if: steps.release-plz.outputs.releases_created == 'true'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const releases = JSON.parse('${{ steps.release-plz.outputs.releases }}');
-            for (const release of releases) {
-              if (release.package_name === 'asset-importer-sys') {
-                await github.rest.actions.createWorkflowDispatch({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  workflow_id: 'prebuilt-binaries.yml',
-                  ref: 'main',
-                  inputs: {
-                    tag: release.tag,
-                    version: release.version
-                  }
-                });
-                break;
-              }
-            }
+  #     # Trigger prebuilt binaries workflow if releases were created
+  #     - name: Trigger prebuilt binaries build
+  #       if: steps.release-plz.outputs.releases_created == 'true'
+  #       uses: actions/github-script@v7
+  #       with:
+  #         script: |
+  #           const releases = JSON.parse('${{ steps.release-plz.outputs.releases }}');
+  #           for (const release of releases) {
+  #             if (release.package_name === 'asset-importer-sys') {
+  #               await github.rest.actions.createWorkflowDispatch({
+  #                 owner: context.repo.owner,
+  #                 repo: context.repo.repo,
+  #                 workflow_id: 'prebuilt-binaries.yml',
+  #                 ref: 'main',
+  #                 inputs: {
+  #                   tag: release.tag,
+  #                   version: release.version
+  #                 }
+  #               });
+  #               break;
+  #             }
+  #           }
