@@ -193,7 +193,7 @@ fn test_material_property_access() {
             let _two_sided = material.is_two_sided();
 
             // Test texture counts
-            let diffuse_count = material.texture_count(asset_importer::TextureType::Diffuse);
+            let _diffuse_count = material.texture_count(asset_importer::TextureType::Diffuse);
             // diffuse_count is u32, so it's always >= 0
         }
     }
@@ -241,11 +241,11 @@ fn test_enhanced_metadata_access() {
 #[test]
 fn test_property_value_variants() {
     // Test all PropertyValue variants
-    let int_prop = PropertyValue::Integer(42);
-    let float_prop = PropertyValue::Float(std::f32::consts::PI);
-    let string_prop = PropertyValue::String("test".to_string());
-    let bool_prop = PropertyValue::Boolean(true);
-    let matrix_prop = PropertyValue::Matrix(asset_importer::types::Matrix4x4::IDENTITY);
+    let _int_prop = PropertyValue::Integer(42);
+    let _float_prop = PropertyValue::Float(std::f32::consts::PI);
+    let _string_prop = PropertyValue::String("test".to_string());
+    let _bool_prop = PropertyValue::Boolean(true);
+    let _matrix_prop = PropertyValue::Matrix(asset_importer::types::Matrix4x4::IDENTITY);
 
     // Verify they can be created and stored
     let mut store = PropertyStore::new();

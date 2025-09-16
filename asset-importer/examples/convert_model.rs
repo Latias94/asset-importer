@@ -9,8 +9,7 @@
 use asset_importer::{postprocess::PostProcessSteps, ExportBuilder, Importer};
 
 #[cfg(not(feature = "export"))]
-use asset_importer::{postprocess::PostProcessSteps, Importer};
-use std::env;
+// Note: Importer import removed as it's not used in this example
 use std::path::Path;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -114,14 +113,18 @@ fn convert_main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+// Utility functions for demonstration purposes
+#[allow(dead_code)]
 fn count_total_vertices(scene: &asset_importer::Scene) -> u32 {
     scene.meshes().map(|mesh| mesh.num_vertices() as u32).sum()
 }
 
+#[allow(dead_code)]
 fn count_total_faces(scene: &asset_importer::Scene) -> u32 {
     scene.meshes().map(|mesh| mesh.num_faces() as u32).sum()
 }
 
+#[allow(dead_code)]
 fn get_file_extension(filename: &str) -> &str {
     Path::new(filename)
         .extension()

@@ -3,7 +3,6 @@
 
 use asset_importer::{
     enable_verbose_logging, get_import_extensions,
-    importer::{ImportBuilder, PropertyValue},
     io::{FileStream, MemoryFileStream},
     postprocess::PostProcessSteps,
     version, Importer,

@@ -26,7 +26,7 @@ impl Light {
     pub fn name(&self) -> String {
         unsafe {
             let light = &*self.light_ptr;
-            c_str_to_string_or_empty(light.mName.data.as_ptr() as *const i8)
+            c_str_to_string_or_empty(light.mName.data.as_ptr())
         }
     }
 
@@ -139,13 +139,13 @@ pub enum LightType {
 
 impl LightType {
     fn from_raw(value: u32) -> Self {
-        match value as i32 {
-            sys::aiLightSourceType_aiLightSource_UNDEFINED => Self::Undefined,
-            sys::aiLightSourceType_aiLightSource_DIRECTIONAL => Self::Directional,
-            sys::aiLightSourceType_aiLightSource_POINT => Self::Point,
-            sys::aiLightSourceType_aiLightSource_SPOT => Self::Spot,
-            sys::aiLightSourceType_aiLightSource_AMBIENT => Self::Ambient,
-            sys::aiLightSourceType_aiLightSource_AREA => Self::Area,
+        match value {
+            v if v == sys::aiLightSourceType::aiLightSource_UNDEFINED as u32 => Self::Undefined,
+            v if v == sys::aiLightSourceType::aiLightSource_DIRECTIONAL as u32 => Self::Directional,
+            v if v == sys::aiLightSourceType::aiLightSource_POINT as u32 => Self::Point,
+            v if v == sys::aiLightSourceType::aiLightSource_SPOT as u32 => Self::Spot,
+            v if v == sys::aiLightSourceType::aiLightSource_AMBIENT as u32 => Self::Ambient,
+            v if v == sys::aiLightSourceType::aiLightSource_AREA as u32 => Self::Area,
             _ => Self::Undefined,
         }
     }
@@ -153,9 +153,7 @@ impl LightType {
 
 impl Clone for Light {
     fn clone(&self) -> Self {
-        Self {
-            light_ptr: self.light_ptr,
-        }
+        *self
     }
 }
 

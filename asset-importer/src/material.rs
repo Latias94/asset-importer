@@ -3,7 +3,6 @@
 use std::ffi::CString;
 
 use crate::{
-    error::{c_str_to_string_or_empty, Error, Result},
     sys,
     types::{Color3D, Color4D},
 };
@@ -83,7 +82,7 @@ impl Material {
             )
         };
 
-        if result == sys::aiReturn_aiReturn_SUCCESS {
+        if result == sys::aiReturn::aiReturn_SUCCESS {
             // Convert aiString to Rust String
             let len = ai_string.length as usize;
             if len > 0 && len < ai_string.data.len() {
@@ -116,7 +115,7 @@ impl Material {
             )
         };
 
-        if result == sys::aiReturn_aiReturn_SUCCESS && max > 0 {
+        if result == sys::aiReturn::aiReturn_SUCCESS && max > 0 {
             Some(value)
         } else {
             None
@@ -140,7 +139,7 @@ impl Material {
             )
         };
 
-        if result == sys::aiReturn_aiReturn_SUCCESS && max > 0 {
+        if result == sys::aiReturn::aiReturn_SUCCESS && max > 0 {
             Some(value)
         } else {
             None
@@ -167,7 +166,7 @@ impl Material {
             )
         };
 
-        if result == sys::aiReturn_aiReturn_SUCCESS {
+        if result == sys::aiReturn::aiReturn_SUCCESS {
             Some(Color4D::new(color.r, color.g, color.b, color.a))
         } else {
             None
@@ -259,7 +258,7 @@ impl Material {
 
     /// Get the number of textures for a specific type
     pub fn texture_count(&self, texture_type: TextureType) -> usize {
-        unsafe { sys::aiGetMaterialTextureCount(self.material_ptr, texture_type as i32) as usize }
+        unsafe { sys::aiGetMaterialTextureCount(self.material_ptr, texture_type as _) as usize }
     }
 
     /// Get texture information for a specific type and index
@@ -270,40 +269,45 @@ impl Material {
 
         unsafe {
             let mut path = sys::aiString::default();
-            let mut mapping = 0i32;
-            let mut uv_index = 0u32;
-            let mut blend = 0.0f32;
-            let mut op = 0i32;
-            let mut map_mode = [0i32; 3];
+            let mut mapping = std::mem::MaybeUninit::uninit();
+            let mut uv_index = std::mem::MaybeUninit::uninit();
+            let mut blend = std::mem::MaybeUninit::uninit();
+            let mut op = std::mem::MaybeUninit::uninit();
+            let mut map_mode = [0u32; 3];
 
             let result = sys::aiGetMaterialTexture(
                 self.material_ptr,
-                texture_type as i32,
+                texture_type as _,
                 index as u32,
                 &mut path,
-                &mut mapping,
-                &mut uv_index,
-                &mut blend,
-                &mut op,
-                map_mode.as_mut_ptr(),
+                mapping.as_mut_ptr(),
+                uv_index.as_mut_ptr(),
+                blend.as_mut_ptr(),
+                op.as_mut_ptr(),
+                map_mode.as_mut_ptr() as *mut _,
                 std::ptr::null_mut(),
             );
 
-            if result == sys::aiReturn_aiReturn_SUCCESS {
-                let path_str = std::ffi::CStr::from_ptr(path.data.as_ptr() as *const i8)
+            if result == sys::aiReturn::aiReturn_SUCCESS {
+                let path_str = std::ffi::CStr::from_ptr(path.data.as_ptr())
                     .to_string_lossy()
                     .into_owned();
 
+                let mapping_val = mapping.assume_init();
+                let uv_index_val = uv_index.assume_init();
+                let blend_val = blend.assume_init();
+                let op_val = op.assume_init();
+
                 Some(TextureInfo {
                     path: path_str,
-                    mapping: TextureMapping::from_raw(mapping),
-                    uv_index: uv_index,
-                    blend_factor: blend,
-                    operation: TextureOperation::from_raw(op),
+                    mapping: TextureMapping::from_raw(mapping_val),
+                    uv_index: uv_index_val,
+                    blend_factor: blend_val,
+                    operation: TextureOperation::from_raw(op_val),
                     map_modes: [
-                        TextureMapMode::from_raw(map_mode[0]),
-                        TextureMapMode::from_raw(map_mode[1]),
-                        TextureMapMode::from_raw(map_mode[2]),
+                        TextureMapMode::from_raw(map_mode[0] as i32),
+                        TextureMapMode::from_raw(map_mode[1] as i32),
+                        TextureMapMode::from_raw(map_mode[2] as i32),
                     ],
                 })
             } else {
@@ -317,45 +321,69 @@ impl Material {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u32)]
 pub enum TextureType {
-    Diffuse = sys::aiTextureType_aiTextureType_DIFFUSE as u32,
-    Specular = sys::aiTextureType_aiTextureType_SPECULAR as u32,
-    Ambient = sys::aiTextureType_aiTextureType_AMBIENT as u32,
-    Emissive = sys::aiTextureType_aiTextureType_EMISSIVE as u32,
-    Height = sys::aiTextureType_aiTextureType_HEIGHT as u32,
-    Normals = sys::aiTextureType_aiTextureType_NORMALS as u32,
-    Shininess = sys::aiTextureType_aiTextureType_SHININESS as u32,
-    Opacity = sys::aiTextureType_aiTextureType_OPACITY as u32,
-    Displacement = sys::aiTextureType_aiTextureType_DISPLACEMENT as u32,
-    Lightmap = sys::aiTextureType_aiTextureType_LIGHTMAP as u32,
-    Reflection = sys::aiTextureType_aiTextureType_REFLECTION as u32,
-    BaseColor = sys::aiTextureType_aiTextureType_BASE_COLOR as u32,
-    NormalCamera = sys::aiTextureType_aiTextureType_NORMAL_CAMERA as u32,
-    EmissionColor = sys::aiTextureType_aiTextureType_EMISSION_COLOR as u32,
-    Metalness = sys::aiTextureType_aiTextureType_METALNESS as u32,
-    DiffuseRoughness = sys::aiTextureType_aiTextureType_DIFFUSE_ROUGHNESS as u32,
-    AmbientOcclusion = sys::aiTextureType_aiTextureType_AMBIENT_OCCLUSION as u32,
+    /// Diffuse texture (base color)
+    Diffuse = sys::aiTextureType::aiTextureType_DIFFUSE as u32,
+    /// Specular texture (reflectivity)
+    Specular = sys::aiTextureType::aiTextureType_SPECULAR as u32,
+    /// Ambient texture (ambient lighting)
+    Ambient = sys::aiTextureType::aiTextureType_AMBIENT as u32,
+    /// Emissive texture (self-illumination)
+    Emissive = sys::aiTextureType::aiTextureType_EMISSIVE as u32,
+    /// Height texture (displacement mapping)
+    Height = sys::aiTextureType::aiTextureType_HEIGHT as u32,
+    /// Normal texture (surface detail)
+    Normals = sys::aiTextureType::aiTextureType_NORMALS as u32,
+    /// Shininess texture (specular power)
+    Shininess = sys::aiTextureType::aiTextureType_SHININESS as u32,
+    /// Opacity texture (transparency)
+    Opacity = sys::aiTextureType::aiTextureType_OPACITY as u32,
+    /// Displacement texture (geometry displacement)
+    Displacement = sys::aiTextureType::aiTextureType_DISPLACEMENT as u32,
+    /// Lightmap texture (pre-computed lighting)
+    Lightmap = sys::aiTextureType::aiTextureType_LIGHTMAP as u32,
+    /// Reflection texture (environment mapping)
+    Reflection = sys::aiTextureType::aiTextureType_REFLECTION as u32,
+    /// Base color texture (PBR albedo)
+    BaseColor = sys::aiTextureType::aiTextureType_BASE_COLOR as u32,
+    /// Normal camera texture (camera-space normals)
+    NormalCamera = sys::aiTextureType::aiTextureType_NORMAL_CAMERA as u32,
+    /// Emission color texture (PBR emission)
+    EmissionColor = sys::aiTextureType::aiTextureType_EMISSION_COLOR as u32,
+    /// Metalness texture (PBR metallic)
+    Metalness = sys::aiTextureType::aiTextureType_METALNESS as u32,
+    /// Diffuse roughness texture (PBR roughness)
+    DiffuseRoughness = sys::aiTextureType::aiTextureType_DIFFUSE_ROUGHNESS as u32,
+    /// Ambient occlusion texture (shadowing)
+    AmbientOcclusion = sys::aiTextureType::aiTextureType_AMBIENT_OCCLUSION as u32,
 }
 
 /// Texture mapping modes
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TextureMapping {
+    /// UV coordinate mapping
     UV,
+    /// Spherical mapping
     Sphere,
+    /// Cylindrical mapping
     Cylinder,
+    /// Box mapping
     Box,
+    /// Planar mapping
     Plane,
+    /// Other mapping mode
     Other(u32),
 }
 
 impl TextureMapping {
     fn from_raw(value: i32) -> Self {
-        match value {
-            sys::aiTextureMapping_aiTextureMapping_UV => Self::UV,
-            sys::aiTextureMapping_aiTextureMapping_SPHERE => Self::Sphere,
-            sys::aiTextureMapping_aiTextureMapping_CYLINDER => Self::Cylinder,
-            sys::aiTextureMapping_aiTextureMapping_BOX => Self::Box,
-            sys::aiTextureMapping_aiTextureMapping_PLANE => Self::Plane,
-            other => Self::Other(other as u32),
+        let value_u32 = value as u32;
+        match value_u32 {
+            v if v == sys::aiTextureMapping::aiTextureMapping_UV as u32 => Self::UV,
+            v if v == sys::aiTextureMapping::aiTextureMapping_SPHERE as u32 => Self::Sphere,
+            v if v == sys::aiTextureMapping::aiTextureMapping_CYLINDER as u32 => Self::Cylinder,
+            v if v == sys::aiTextureMapping::aiTextureMapping_BOX as u32 => Self::Box,
+            v if v == sys::aiTextureMapping::aiTextureMapping_PLANE as u32 => Self::Plane,
+            other => Self::Other(other),
         }
     }
 }
@@ -363,25 +391,33 @@ impl TextureMapping {
 /// Texture operations
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TextureOperation {
+    /// Multiply operation
     Multiply,
+    /// Add operation
     Add,
+    /// Subtract operation
     Subtract,
+    /// Divide operation
     Divide,
+    /// Smooth add operation
     SmoothAdd,
+    /// Signed add operation
     SignedAdd,
+    /// Other operation
     Other(u32),
 }
 
 impl TextureOperation {
     fn from_raw(value: i32) -> Self {
-        match value {
-            sys::aiTextureOp_aiTextureOp_Multiply => Self::Multiply,
-            sys::aiTextureOp_aiTextureOp_Add => Self::Add,
-            sys::aiTextureOp_aiTextureOp_Subtract => Self::Subtract,
-            sys::aiTextureOp_aiTextureOp_Divide => Self::Divide,
-            sys::aiTextureOp_aiTextureOp_SmoothAdd => Self::SmoothAdd,
-            sys::aiTextureOp_aiTextureOp_SignedAdd => Self::SignedAdd,
-            other => Self::Other(other as u32),
+        let value_u32 = value as u32;
+        match value_u32 {
+            v if v == sys::aiTextureOp::aiTextureOp_Multiply as u32 => Self::Multiply,
+            v if v == sys::aiTextureOp::aiTextureOp_Add as u32 => Self::Add,
+            v if v == sys::aiTextureOp::aiTextureOp_Subtract as u32 => Self::Subtract,
+            v if v == sys::aiTextureOp::aiTextureOp_Divide as u32 => Self::Divide,
+            v if v == sys::aiTextureOp::aiTextureOp_SmoothAdd as u32 => Self::SmoothAdd,
+            v if v == sys::aiTextureOp::aiTextureOp_SignedAdd as u32 => Self::SignedAdd,
+            other => Self::Other(other),
         }
     }
 }
@@ -389,21 +425,27 @@ impl TextureOperation {
 /// Texture mapping modes for UV coordinates
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TextureMapMode {
+    /// Wrap texture coordinates
     Wrap,
+    /// Clamp texture coordinates to edge
     Clamp,
+    /// Mirror texture coordinates
     Mirror,
+    /// Decal texture mode
     Decal,
+    /// Other texture map mode
     Other(u32),
 }
 
 impl TextureMapMode {
     fn from_raw(value: i32) -> Self {
-        match value {
-            sys::aiTextureMapMode_aiTextureMapMode_Wrap => Self::Wrap,
-            sys::aiTextureMapMode_aiTextureMapMode_Clamp => Self::Clamp,
-            sys::aiTextureMapMode_aiTextureMapMode_Mirror => Self::Mirror,
-            sys::aiTextureMapMode_aiTextureMapMode_Decal => Self::Decal,
-            other => Self::Other(other as u32),
+        let value_u32 = value as u32;
+        match value_u32 {
+            v if v == sys::aiTextureMapMode::aiTextureMapMode_Wrap as u32 => Self::Wrap,
+            v if v == sys::aiTextureMapMode::aiTextureMapMode_Clamp as u32 => Self::Clamp,
+            v if v == sys::aiTextureMapMode::aiTextureMapMode_Mirror as u32 => Self::Mirror,
+            v if v == sys::aiTextureMapMode::aiTextureMapMode_Decal as u32 => Self::Decal,
+            other => Self::Other(other),
         }
     }
 }

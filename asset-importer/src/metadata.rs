@@ -3,11 +3,8 @@
 //! This module provides safe Rust wrappers around Assimp's metadata functionality,
 //! allowing you to access additional information stored in 3D models.
 
-use std::ffi::CStr;
-use std::ptr::NonNull;
-
 use crate::{
-    error::{Error, Result},
+    error::Result,
     sys,
     types::Vector3D,
 };
@@ -65,19 +62,19 @@ pub enum MetadataType {
     UInt32,
 }
 
-impl From<sys::aiMetadataType> for MetadataType {
-    fn from(value: sys::aiMetadataType) -> Self {
+impl From<sys::aiMetadataType::Type> for MetadataType {
+    fn from(value: sys::aiMetadataType::Type) -> Self {
         match value {
-            sys::aiMetadataType_AI_BOOL => MetadataType::Bool,
-            sys::aiMetadataType_AI_INT32 => MetadataType::Int32,
-            sys::aiMetadataType_AI_UINT64 => MetadataType::UInt64,
-            sys::aiMetadataType_AI_FLOAT => MetadataType::Float,
-            sys::aiMetadataType_AI_DOUBLE => MetadataType::Double,
-            sys::aiMetadataType_AI_AISTRING => MetadataType::String,
-            sys::aiMetadataType_AI_AIVECTOR3D => MetadataType::Vector3D,
-            sys::aiMetadataType_AI_AIMETADATA => MetadataType::Metadata,
-            sys::aiMetadataType_AI_INT64 => MetadataType::Int64,
-            sys::aiMetadataType_AI_UINT32 => MetadataType::UInt32,
+            sys::aiMetadataType::AI_BOOL => MetadataType::Bool,
+            sys::aiMetadataType::AI_INT32 => MetadataType::Int32,
+            sys::aiMetadataType::AI_UINT64 => MetadataType::UInt64,
+            sys::aiMetadataType::AI_FLOAT => MetadataType::Float,
+            sys::aiMetadataType::AI_DOUBLE => MetadataType::Double,
+            sys::aiMetadataType::AI_AISTRING => MetadataType::String,
+            sys::aiMetadataType::AI_AIVECTOR3D => MetadataType::Vector3D,
+            sys::aiMetadataType::AI_AIMETADATA => MetadataType::Metadata,
+            sys::aiMetadataType::AI_INT64 => MetadataType::Int64,
+            sys::aiMetadataType::AI_UINT32 => MetadataType::UInt32,
             _ => MetadataType::String, // Default fallback
         }
     }
@@ -260,27 +257,27 @@ impl Metadata {
         }
 
         match entry.mType {
-            sys::aiMetadataType_AI_BOOL => {
+            sys::aiMetadataType::AI_BOOL => {
                 let value = unsafe { *(entry.mData as *const bool) };
                 Ok(MetadataEntry::Bool(value))
             }
-            sys::aiMetadataType_AI_INT32 => {
+            sys::aiMetadataType::AI_INT32 => {
                 let value = unsafe { *(entry.mData as *const i32) };
                 Ok(MetadataEntry::Int32(value))
             }
-            sys::aiMetadataType_AI_UINT64 => {
+            sys::aiMetadataType::AI_UINT64 => {
                 let value = unsafe { *(entry.mData as *const u64) };
                 Ok(MetadataEntry::UInt64(value))
             }
-            sys::aiMetadataType_AI_FLOAT => {
+            sys::aiMetadataType::AI_FLOAT => {
                 let value = unsafe { *(entry.mData as *const f32) };
                 Ok(MetadataEntry::Float(value))
             }
-            sys::aiMetadataType_AI_DOUBLE => {
+            sys::aiMetadataType::AI_DOUBLE => {
                 let value = unsafe { *(entry.mData as *const f64) };
                 Ok(MetadataEntry::Double(value))
             }
-            sys::aiMetadataType_AI_AISTRING => {
+            sys::aiMetadataType::AI_AISTRING => {
                 let ai_string = unsafe { &*(entry.mData as *const sys::aiString) };
                 let c_str = unsafe { std::ffi::CStr::from_ptr(ai_string.data.as_ptr()) };
                 let string = c_str.to_str().map_err(|_| {
@@ -290,22 +287,22 @@ impl Metadata {
                 })?;
                 Ok(MetadataEntry::String(string.to_string()))
             }
-            sys::aiMetadataType_AI_AIVECTOR3D => {
+            sys::aiMetadataType::AI_AIVECTOR3D => {
                 let vector = unsafe { &*(entry.mData as *const sys::aiVector3D) };
                 Ok(MetadataEntry::Vector3D(crate::types::Vector3D::new(
                     vector.x, vector.y, vector.z,
                 )))
             }
-            sys::aiMetadataType_AI_AIMETADATA => {
+            sys::aiMetadataType::AI_AIMETADATA => {
                 let nested_metadata =
                     unsafe { Self::from_raw(entry.mData as *const sys::aiMetadata)? };
                 Ok(MetadataEntry::Metadata(nested_metadata))
             }
-            sys::aiMetadataType_AI_INT64 => {
+            sys::aiMetadataType::AI_INT64 => {
                 let value = unsafe { *(entry.mData as *const i64) };
                 Ok(MetadataEntry::Int64(value))
             }
-            sys::aiMetadataType_AI_UINT32 => {
+            sys::aiMetadataType::AI_UINT32 => {
                 let value = unsafe { *(entry.mData as *const u32) };
                 Ok(MetadataEntry::UInt32(value))
             }

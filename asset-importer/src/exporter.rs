@@ -48,7 +48,7 @@ impl ExportBuilder {
             )
         };
 
-        if result == sys::aiReturn_aiReturn_SUCCESS {
+        if result == sys::aiReturn::Type::aiReturn_SUCCESS {
             Ok(())
         } else {
             Err(Error::from_assimp())

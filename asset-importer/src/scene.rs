@@ -306,7 +306,7 @@ impl Scene {
     }
 
     /// Get an iterator over all meshes
-    pub fn meshes(&self) -> MeshIterator {
+    pub fn meshes(&self) -> MeshIterator<'_> {
         MeshIterator {
             scene: self,
             index: 0,
@@ -336,7 +336,7 @@ impl Scene {
     }
 
     /// Get an iterator over all materials
-    pub fn materials(&self) -> MaterialIterator {
+    pub fn materials(&self) -> MaterialIterator<'_> {
         MaterialIterator {
             scene: self,
             index: 0,
@@ -366,7 +366,7 @@ impl Scene {
     }
 
     /// Get an iterator over all animations
-    pub fn animations(&self) -> AnimationIterator {
+    pub fn animations(&self) -> AnimationIterator<'_> {
         AnimationIterator {
             scene: self,
             index: 0,
@@ -396,7 +396,7 @@ impl Scene {
     }
 
     /// Get an iterator over all cameras
-    pub fn cameras(&self) -> CameraIterator {
+    pub fn cameras(&self) -> CameraIterator<'_> {
         CameraIterator {
             scene: self,
             index: 0,
@@ -426,7 +426,7 @@ impl Scene {
     }
 
     /// Get an iterator over all lights
-    pub fn lights(&self) -> LightIterator {
+    pub fn lights(&self) -> LightIterator<'_> {
         LightIterator {
             scene: self,
             index: 0,

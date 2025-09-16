@@ -1,7 +1,7 @@
 use std::{env, path::PathBuf};
 
 #[cfg(feature = "prebuilt")]
-use std::{fs, io};
+use std::fs;
 
 #[cfg(feature = "prebuilt")]
 use flate2::read::GzDecoder;
@@ -29,14 +29,20 @@ fn main() {
         // Use prebuilt binaries
         link_prebuilt_assimp(&out_dir);
         None
+    } else if cfg!(feature = "system") {
+        // Explicitly use system assimp
+        link_system_assimp();
+        None
     } else if cfg!(feature = "build-assimp") || cfg!(feature = "static") {
+        // Explicitly build from source
         build_assimp_from_source(&manifest_dir, &out_dir);
         // Use the built include directory which has config.h
         Some(out_dir.join("build").join("include"))
     } else {
-        // Just link to system assimp but use submodule headers for bindings
-        link_system_assimp();
-        None
+        // Default: build from source (most reliable option)
+        build_assimp_from_source(&manifest_dir, &out_dir);
+        // Use the built include directory which has config.h
+        Some(out_dir.join("build").join("include"))
     };
 
     generate_bindings(&manifest_dir, &out_dir, built_include_dir.as_deref());
@@ -45,8 +51,31 @@ fn main() {
 fn link_system_assimp() {
     // Try to find and link system assimp
     if !try_system_assimp() {
-        println!("cargo:warning=System assimp not found. Consider using 'build-assimp' or 'static' feature.");
-        println!("cargo:rustc-link-lib=assimp");
+        panic!(
+            "System assimp library not found!\n\
+             \n\
+             To fix this issue, you have several options:\n\
+             \n\
+             1. Install assimp system-wide:\n\
+             \n\
+             Windows (vcpkg):\n\
+               vcpkg install assimp\n\
+             \n\
+             macOS (Homebrew):\n\
+               brew install assimp\n\
+             \n\
+             Ubuntu/Debian:\n\
+               sudo apt install libassimp-dev\n\
+             \n\
+             2. Or use a different build method:\n\
+             \n\
+             Build from source (recommended):\n\
+               cargo build  # (default behavior)\n\
+             \n\
+             Use prebuilt binaries (when available):\n\
+               cargo build --features prebuilt\n\
+             "
+        );
     }
 }
 
@@ -448,6 +477,17 @@ fn generate_bindings(
     let wrapper_h = manifest_dir.join("wrapper.h");
     let assimp_include = manifest_dir.join("assimp").join("include");
 
+    // Create empty config.h if it doesn't exist (needed for system builds)
+    let config_file = assimp_include.join("assimp").join("config.h");
+    let config_exists = config_file.exists();
+    if !config_exists {
+        if let Some(parent) = config_file.parent() {
+            std::fs::create_dir_all(parent).expect("Failed to create assimp include directory");
+        }
+        std::fs::write(&config_file, "")
+            .expect("Unable to write config.h to assimp/include/assimp/");
+    }
+
     let mut builder = bindgen::Builder::default()
         .header(wrapper_h.to_string_lossy())
         .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()));
@@ -472,11 +512,22 @@ fn generate_bindings(
         .derive_default(true)
         .derive_debug(true)
         .derive_copy(true)
-        .derive_eq(true)
-        .derive_partialeq(true)
-        .derive_hash(true)
+        // Don't derive PartialEq and Hash for types with function pointers
+        // to avoid clippy warnings about function pointer comparisons
+        .no_partialeq("aiLogStream")
+        .no_hash("aiLogStream")
+        .no_partialeq("aiFileIO")
+        .no_hash("aiFileIO")
+        .no_partialeq("aiFile")
+        .no_hash("aiFile")
         // Layout tests can be flaky across platforms
-        .layout_tests(false);
+        .layout_tests(false)
+        // Generate comments but disable doctests to avoid C-style code examples
+        .generate_comments(true)
+        .disable_untagged_union()
+        // Force enums to be i32 to ensure consistency across platforms
+        .default_enum_style(bindgen::EnumVariation::Rust { non_exhaustive: false })
+        .constified_enum_module(".*");
 
     // Add include paths from environment (for system builds)
     if let Ok(include_path) = env::var("DEP_ASSIMP_INCLUDE") {
@@ -498,4 +549,9 @@ fn generate_bindings(
     bindings
         .write_to_file(&out_file)
         .expect("Couldn't write bindings!");
+
+    // Clean up temporary config.h if we created it
+    if !config_exists {
+        let _ = std::fs::remove_file(config_file);
+    }
 }

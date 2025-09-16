@@ -7,7 +7,7 @@
 
 use asset_importer::{
     get_all_importer_descs, get_importer_desc, import_properties, postprocess::PostProcessSteps,
-    Importer, ImporterFlags, PropertyStore, Scene,
+    ImporterFlags,
 };
 use std::path::Path;
 
@@ -227,7 +227,7 @@ fn recommend_post_processing(desc: &asset_importer::ImporterDesc) -> String {
 /// Create an adaptive import configuration
 fn create_adaptive_import_config(
     desc: &asset_importer::ImporterDesc,
-    file_path: &str,
+    _file_path: &str,
 ) -> (PostProcessSteps, Vec<(String, String)>) {
     let mut post_process = PostProcessSteps::empty();
     let mut properties = Vec::new();
@@ -258,7 +258,7 @@ fn create_adaptive_import_config(
 }
 
 /// Create a format-optimized configuration
-fn create_format_optimized_config(desc: &asset_importer::ImporterDesc, format: &str) -> String {
+fn create_format_optimized_config(_desc: &asset_importer::ImporterDesc, format: &str) -> String {
     match format {
         "obj" => "Smooth normals + mesh optimization".to_string(),
         "fbx" => "Animation preservation + embedded texture handling".to_string(),
@@ -271,7 +271,7 @@ fn create_format_optimized_config(desc: &asset_importer::ImporterDesc, format: &
 /// Demonstrate the usage of optimized import
 fn demonstrate_optimized_import_usage(
     format: &str,
-    desc: &asset_importer::ImporterDesc,
+    _desc: &asset_importer::ImporterDesc,
 ) -> Result<(), Box<dyn std::error::Error>> {
     println!("   💻 Usage example:");
 

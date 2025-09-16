@@ -26,7 +26,7 @@ impl Animation {
     pub fn name(&self) -> String {
         unsafe {
             let animation = &*self.animation_ptr;
-            c_str_to_string_or_empty(animation.mName.data.as_ptr() as *const i8)
+            c_str_to_string_or_empty(animation.mName.data.as_ptr())
         }
     }
 
@@ -103,7 +103,7 @@ impl NodeAnimation {
     pub fn node_name(&self) -> String {
         unsafe {
             let channel = &*self.channel_ptr;
-            c_str_to_string_or_empty(channel.mNodeName.data.as_ptr() as *const i8)
+            c_str_to_string_or_empty(channel.mNodeName.data.as_ptr())
         }
     }
 

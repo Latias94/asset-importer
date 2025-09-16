@@ -11,20 +11,32 @@ pub type Result<T> = std::result::Result<T, Error>;
 pub enum Error {
     /// Import operation failed
     #[error("Import failed: {message}")]
-    ImportFailed { message: String },
+    ImportFailed {
+        /// Error message describing the import failure
+        message: String
+    },
 
     /// Export operation failed
     #[cfg(feature = "export")]
     #[error("Export failed: {message}")]
-    ExportFailed { message: String },
+    ExportFailed {
+        /// Error message describing the export failure
+        message: String
+    },
 
     /// Invalid file path or file not found
     #[error("File error: {message}")]
-    FileError { message: String },
+    FileError {
+        /// Error message describing the file error
+        message: String
+    },
 
     /// Invalid parameters or configuration
     #[error("Invalid parameter: {message}")]
-    InvalidParameter { message: String },
+    InvalidParameter {
+        /// Error message describing the invalid parameter
+        message: String
+    },
 
     /// Memory allocation failed
     #[error("Memory allocation failed")]
@@ -32,15 +44,24 @@ pub enum Error {
 
     /// Unsupported file format
     #[error("Unsupported format: {format}")]
-    UnsupportedFormat { format: String },
+    UnsupportedFormat {
+        /// The unsupported format name
+        format: String
+    },
 
     /// I/O operation failed
     #[error("I/O error: {message}")]
-    IoError { message: String },
+    IoError {
+        /// Error message describing the I/O error
+        message: String
+    },
 
     /// Invalid scene data
     #[error("Invalid scene: {message}")]
-    InvalidScene { message: String },
+    InvalidScene {
+        /// Error message describing the scene validation error
+        message: String
+    },
 
     /// String conversion error (UTF-8)
     #[error("String conversion error: {0}")]
@@ -52,7 +73,10 @@ pub enum Error {
 
     /// Generic error with custom message
     #[error("{message}")]
-    Other { message: String },
+    Other {
+        /// Custom error message
+        message: String
+    },
 }
 
 impl Error {
@@ -135,37 +159,7 @@ impl Error {
     }
 }
 
-/// Check if a pointer is null and return an error if it is
-pub(crate) fn check_null_ptr<T>(ptr: *const T, context: &str) -> Result<*const T> {
-    if ptr.is_null() {
-        Err(Error::NullPointer)
-    } else {
-        Ok(ptr)
-    }
-}
 
-/// Check if a mutable pointer is null and return an error if it is
-pub(crate) fn check_null_ptr_mut<T>(ptr: *mut T, context: &str) -> Result<*mut T> {
-    if ptr.is_null() {
-        Err(Error::NullPointer)
-    } else {
-        Ok(ptr)
-    }
-}
-
-/// Convert a C string to a Rust string, handling null pointers
-pub(crate) fn c_str_to_string(ptr: *const std::os::raw::c_char) -> Result<String> {
-    if ptr.is_null() {
-        return Err(Error::NullPointer);
-    }
-
-    unsafe {
-        CStr::from_ptr(ptr)
-            .to_str()
-            .map(|s| s.to_string())
-            .map_err(Error::from)
-    }
-}
 
 /// Convert a C string to a Rust string, returning empty string for null pointers
 pub(crate) fn c_str_to_string_or_empty(ptr: *const std::os::raw::c_char) -> String {
@@ -188,19 +182,15 @@ mod tests {
     }
 
     #[test]
-    fn test_null_pointer_check() {
-        let null_ptr: *const i32 = std::ptr::null();
-        let result = check_null_ptr(null_ptr, "test");
-        assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), Error::NullPointer));
-    }
+    fn test_c_str_to_string_or_empty() {
+        // Test with null pointer
+        let null_ptr: *const std::os::raw::c_char = std::ptr::null();
+        let result = c_str_to_string_or_empty(null_ptr);
+        assert_eq!(result, "");
 
-    #[test]
-    fn test_valid_pointer_check() {
-        let value = 42i32;
-        let ptr = &value as *const i32;
-        let result = check_null_ptr(ptr, "test");
-        assert!(result.is_ok());
-        assert_eq!(result.unwrap(), ptr);
+        // Test with valid C string
+        let c_string = std::ffi::CString::new("test string").unwrap();
+        let result = c_str_to_string_or_empty(c_string.as_ptr());
+        assert_eq!(result, "test string");
     }
 }

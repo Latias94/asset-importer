@@ -16,11 +16,14 @@ A comprehensive Rust binding for the latest [Assimp](https://github.com/assimp/a
 
 ## Quick Start
 
-Add to your `Cargo.toml` (choose a build method):
+Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-# Fastest option - prebuilt binaries
+# Default - builds from source (reliable, self-contained)
+asset-importer = "0.1"
+
+# Or use prebuilt binaries (fastest, when available)
 asset-importer = { version = "0.1", features = ["prebuilt"] }
 
 # Or use system-installed assimp
@@ -49,37 +52,46 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ## Build Options
 
-### Prebuilt Binaries (Recommended)
+### Build from Source (Default)
+
 ```toml
-asset-importer = { features = ["prebuilt"] }
+asset-importer = "0.1"
 ```
-- Fastest builds, no dependencies
-- Downloads from GitHub releases
-- Good for development and CI
+
+- **Reliable**: Works on all platforms with C++ compiler
+- **Self-contained**: No external dependencies needed
+- **Consistent**: Same Assimp version for all users
+- **Requires**: CMake, C++ compiler
+
+### Prebuilt Binaries (Coming Soon)
+
+```toml
+asset-importer = { version = "0.1", features = ["prebuilt"] }
+```
+
+- **Fastest**: No compilation time
+- **Convenient**: No build tools required
+- **Note**: Not yet available, will be added in future releases
 
 ### System Library
-```toml
-asset-importer = { features = ["system"] }
-```
-- Uses system-installed assimp
-- Install via: `brew install assimp` (macOS), `apt install libassimp-dev` (Ubuntu)
 
-### Build from Source
 ```toml
-asset-importer = { features = ["build-assimp"] }
+asset-importer = { version = "0.1", features = ["system"] }
 ```
-- Requires: CMake, C++ compiler
-- Full control over build configuration
+
+- **Lightweight**: Uses existing system installation
+- **Setup required**: Install via `brew install assimp` (macOS), `apt install libassimp-dev` (Ubuntu)
+- **Version dependent**: Behavior may vary based on system library version
 
 ### Additional Features
+
 ```toml
-asset-importer = { 
+asset-importer = {
     features = [
-        "build-assimp",
         "export",      # Enable export functionality
         "static",      # Static linking
         "nozlib"       # Disable zlib
-    ] 
+    ]
 }
 ```
 

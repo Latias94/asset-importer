@@ -14,11 +14,6 @@ keywords = ["assimp", "3d", "ffi", "bindings"]
 build = "build.rs"
 links = "assimp"
 
-[[bin]]
-name = "package"
-path = "bin/package/main.rs"
-required-features = ["build-assimp"]
-
 # Exclude unnecessary files to reduce package size
 exclude = [
     "assimp/test/",
@@ -39,6 +34,15 @@ exclude = [
     "target/",
 ]
 
+# Disable doctests for generated bindings to avoid C-style code examples
+[lib]
+doctest = false
+
+[[bin]]
+name = "package"
+path = "bin/package/main.rs"
+required-features = ["build-assimp"]
+
 [dependencies]
 mint = { version = "0.5", optional = true }
 # For package binary
@@ -51,7 +55,10 @@ cc = "1.0"
 cmake = "0.1"
 pkg-config = { version = "0.3", optional = true }
 # For prebuilt binary support
-reqwest = { version = "0.12", features = ["blocking", "rustls-tls"], optional = true }
+reqwest = { version = "0.12", features = [
+    "blocking",
+    "rustls-tls",
+], optional = true }
 tar = { version = "0.4", optional = true }
 flate2 = { version = "1.0", optional = true }
 

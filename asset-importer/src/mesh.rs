@@ -3,9 +3,8 @@
 use crate::{
     aabb::AABB,
     bone::{Bone, BoneIterator},
-    error::{Error, Result},
     sys,
-    types::{from_ai_color4d, from_ai_vector2d, from_ai_vector3d, Color4D, Vector2D, Vector3D},
+    types::{from_ai_color4d, from_ai_vector3d, Color4D, Vector3D},
 };
 
 /// A mesh containing vertices, faces, and other geometric data
@@ -28,7 +27,7 @@ impl Mesh {
     pub fn name(&self) -> String {
         unsafe {
             let mesh = &*self.mesh_ptr;
-            let name_ptr = mesh.mName.data.as_ptr() as *const i8;
+            let name_ptr = mesh.mName.data.as_ptr();
             std::ffi::CStr::from_ptr(name_ptr)
                 .to_string_lossy()
                 .into_owned()
@@ -158,22 +157,22 @@ impl Mesh {
 
     /// Check if the mesh contains points
     pub fn has_points(&self) -> bool {
-        self.primitive_types() & (sys::aiPrimitiveType_aiPrimitiveType_POINT as u32) != 0
+        self.primitive_types() & (sys::aiPrimitiveType::aiPrimitiveType_POINT as u32) != 0
     }
 
     /// Check if the mesh contains lines
     pub fn has_lines(&self) -> bool {
-        self.primitive_types() & (sys::aiPrimitiveType_aiPrimitiveType_LINE as u32) != 0
+        self.primitive_types() & (sys::aiPrimitiveType::aiPrimitiveType_LINE as u32) != 0
     }
 
     /// Check if the mesh contains triangles
     pub fn has_triangles(&self) -> bool {
-        self.primitive_types() & (sys::aiPrimitiveType_aiPrimitiveType_TRIANGLE as u32) != 0
+        self.primitive_types() & (sys::aiPrimitiveType::aiPrimitiveType_TRIANGLE as u32) != 0
     }
 
     /// Check if the mesh contains polygons
     pub fn has_polygons(&self) -> bool {
-        self.primitive_types() & (sys::aiPrimitiveType_aiPrimitiveType_POLYGON as u32) != 0
+        self.primitive_types() & (sys::aiPrimitiveType::aiPrimitiveType_POLYGON as u32) != 0
     }
 
     /// Get the axis-aligned bounding box of the mesh

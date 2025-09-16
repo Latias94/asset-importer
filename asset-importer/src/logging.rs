@@ -3,9 +3,8 @@
 //! This module provides safe Rust wrappers around Assimp's logging functionality,
 //! allowing you to capture and handle log messages from the Assimp library.
 
-use std::ffi::{CStr, CString};
-use std::os::raw::{c_char, c_void};
-use std::ptr;
+use std::ffi::CStr;
+use std::os::raw::c_char;
 use std::sync::{Arc, Mutex};
 
 use crate::{error::Result, sys};
@@ -216,43 +215,37 @@ extern "C" fn log_callback(message: *const c_char, user: *mut c_char) {
 }
 
 /// Global logger instance
-static mut GLOBAL_LOGGER: Option<Logger> = None;
-static LOGGER_INIT: std::sync::Once = std::sync::Once::new();
+static GLOBAL_LOGGER: std::sync::OnceLock<std::sync::Mutex<Logger>> = std::sync::OnceLock::new();
 
 /// Get the global logger instance
-pub fn global_logger() -> &'static mut Logger {
-    unsafe {
-        LOGGER_INIT.call_once(|| {
-            GLOBAL_LOGGER = Some(Logger::new());
-        });
-        GLOBAL_LOGGER.as_mut().unwrap()
-    }
+pub fn global_logger() -> &'static std::sync::Mutex<Logger> {
+    GLOBAL_LOGGER.get_or_init(|| std::sync::Mutex::new(Logger::new()))
 }
 
 /// Convenience function to attach a stdout log stream
 pub fn attach_stdout_stream() -> Result<()> {
     let stream = Arc::new(Mutex::new(StdoutLogStream));
-    global_logger().attach_stream(stream)
+    global_logger().lock().unwrap().attach_stream(stream)
 }
 
 /// Convenience function to attach a stderr log stream
 pub fn attach_stderr_stream() -> Result<()> {
     let stream = Arc::new(Mutex::new(StderrLogStream));
-    global_logger().attach_stream(stream)
+    global_logger().lock().unwrap().attach_stream(stream)
 }
 
 /// Convenience function to attach a file log stream
 pub fn attach_file_stream<P: AsRef<std::path::Path>>(path: P) -> Result<()> {
     let stream = Arc::new(Mutex::new(FileLogStream::new(path)?));
-    global_logger().attach_stream(stream)
+    global_logger().lock().unwrap().attach_stream(stream)
 }
 
 /// Convenience function to enable verbose logging
 pub fn enable_verbose_logging(enable: bool) {
-    global_logger().enable_verbose_logging(enable);
+    global_logger().lock().unwrap().enable_verbose_logging(enable);
 }
 
 /// Convenience function to detach all log streams
 pub fn detach_all_streams() {
-    global_logger().detach_all_streams();
+    global_logger().lock().unwrap().detach_all_streams();
 }

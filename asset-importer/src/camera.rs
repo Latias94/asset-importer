@@ -26,7 +26,7 @@ impl Camera {
     pub fn name(&self) -> String {
         unsafe {
             let camera = &*self.camera_ptr;
-            c_str_to_string_or_empty(camera.mName.data.as_ptr() as *const i8)
+            c_str_to_string_or_empty(camera.mName.data.as_ptr())
         }
     }
 
@@ -82,9 +82,7 @@ impl Camera {
 
 impl Clone for Camera {
     fn clone(&self) -> Self {
-        Self {
-            camera_ptr: self.camera_ptr,
-        }
+        *self
     }
 }
 

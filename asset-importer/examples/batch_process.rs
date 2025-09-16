@@ -110,9 +110,11 @@ fn process_single_file(
         )
         .import_file(file_path.to_str().unwrap())?;
 
-    let mut stats = FileStats::default();
-    stats.meshes = scene.num_meshes() as u32;
-    stats.materials = scene.num_materials() as u32;
+    let mut stats = FileStats {
+        meshes: scene.num_meshes() as u32,
+        materials: scene.num_materials() as u32,
+        ..Default::default()
+    };
 
     for mesh in scene.meshes() {
         stats.vertices += mesh.num_vertices() as u32;

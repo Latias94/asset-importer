@@ -27,7 +27,7 @@ impl Node {
     pub fn name(&self) -> String {
         unsafe {
             let node = &*self.node_ptr;
-            c_str_to_string_or_empty(node.mName.data.as_ptr() as *const i8)
+            c_str_to_string_or_empty(node.mName.data.as_ptr())
         }
     }
 
@@ -124,9 +124,7 @@ impl Node {
 
 impl Clone for Node {
     fn clone(&self) -> Self {
-        Self {
-            node_ptr: self.node_ptr,
-        }
+        *self
     }
 }
 

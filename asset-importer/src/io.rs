@@ -4,8 +4,8 @@
 //! allowing you to implement custom file systems for loading assets from
 //! memory, archives, or other sources.
 
-use std::ffi::{CStr, CString};
-use std::os::raw::{c_char, c_void};
+use std::ffi::CStr;
+use std::os::raw::c_char;
 use std::ptr;
 use std::sync::{Arc, Mutex};
 
@@ -231,28 +231,7 @@ impl FileStream for MemoryFileStream {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
 
-    #[test]
-    fn test_memory_file_system() {
-        let mut fs = MemoryFileSystem::new();
-        let test_data = b"Hello, World!".to_vec();
-        fs.add_file("test.txt", test_data.clone());
-
-        assert!(fs.exists("test.txt"));
-        assert!(!fs.exists("nonexistent.txt"));
-
-        let mut stream = fs.open("test.txt").unwrap();
-        assert_eq!(stream.size().unwrap(), test_data.len() as u64);
-
-        let mut buffer = vec![0u8; test_data.len()];
-        let bytes_read = stream.read(&mut buffer).unwrap();
-        assert_eq!(bytes_read, test_data.len());
-        assert_eq!(buffer, test_data);
-    }
-}
 
 /// Wrapper for integrating Rust FileSystem with Assimp's aiFileIO
 pub struct AssimpFileIO {
@@ -316,7 +295,7 @@ extern "C" fn file_open_proc(
 
         // Open the file
         let stream = match file_system.lock() {
-            Ok(mut fs) => match fs.open(filename_str) {
+            Ok(fs) => match fs.open(filename_str) {
                 Ok(stream) => stream,
                 Err(_) => return ptr::null_mut(),
             },
@@ -457,36 +436,36 @@ extern "C" fn file_size_proc(file: *mut sys::aiFile) -> usize {
 extern "C" fn file_seek_proc(
     file: *mut sys::aiFile,
     offset: usize,
-    origin: sys::aiOrigin,
-) -> sys::aiReturn {
+    origin: sys::aiOrigin::Type,
+) -> sys::aiReturn::Type {
     if file.is_null() {
-        return sys::aiReturn_aiReturn_FAILURE;
+        return sys::aiReturn::aiReturn_FAILURE;
     }
 
     unsafe {
         let wrapper_ptr = (*file).UserData as *mut FileWrapper;
         if wrapper_ptr.is_null() {
-            return sys::aiReturn_aiReturn_FAILURE;
+            return sys::aiReturn::aiReturn_FAILURE;
         }
 
         let wrapper = &mut *wrapper_ptr;
 
         let new_position = match origin {
-            sys::aiOrigin_aiOrigin_SET => offset as u64,
-            sys::aiOrigin_aiOrigin_CUR => match wrapper.stream.tell() {
+            sys::aiOrigin::aiOrigin_SET => offset as u64,
+            sys::aiOrigin::aiOrigin_CUR => match wrapper.stream.tell() {
                 Ok(current) => current + offset as u64,
-                Err(_) => return sys::aiReturn_aiReturn_FAILURE,
+                Err(_) => return sys::aiReturn::aiReturn_FAILURE,
             },
-            sys::aiOrigin_aiOrigin_END => match wrapper.stream.size() {
+            sys::aiOrigin::aiOrigin_END => match wrapper.stream.size() {
                 Ok(size) => size.saturating_sub(offset as u64),
-                Err(_) => return sys::aiReturn_aiReturn_FAILURE,
+                Err(_) => return sys::aiReturn::aiReturn_FAILURE,
             },
-            _ => return sys::aiReturn_aiReturn_FAILURE,
+            _ => return sys::aiReturn::aiReturn_FAILURE,
         };
 
         match wrapper.stream.seek(new_position) {
-            Ok(_) => sys::aiReturn_aiReturn_SUCCESS,
-            Err(_) => sys::aiReturn_aiReturn_FAILURE,
+            Ok(_) => sys::aiReturn::aiReturn_SUCCESS,
+            Err(_) => sys::aiReturn::aiReturn_FAILURE,
         }
     }
 }
@@ -494,4 +473,27 @@ extern "C" fn file_seek_proc(
 /// C callback for flushing files (no-op for read-only streams)
 extern "C" fn file_flush_proc(_file: *mut sys::aiFile) {
     // No-op for read-only file streams
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_memory_file_system() {
+        let mut fs = MemoryFileSystem::new();
+        let test_data = b"Hello, World!".to_vec();
+        fs.add_file("test.txt", test_data.clone());
+
+        assert!(fs.exists("test.txt"));
+        assert!(!fs.exists("nonexistent.txt"));
+
+        let mut stream = fs.open("test.txt").unwrap();
+        assert_eq!(stream.size().unwrap(), test_data.len() as u64);
+
+        let mut buffer = vec![0u8; test_data.len()];
+        let bytes_read = stream.read(&mut buffer).unwrap();
+        assert_eq!(bytes_read, test_data.len());
+        assert_eq!(buffer, test_data);
+    }
 }

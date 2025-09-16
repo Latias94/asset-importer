@@ -22,7 +22,7 @@ use glutin::{
     config::{ConfigTemplateBuilder, GlConfig},
     context::{ContextApi, ContextAttributesBuilder, NotCurrentGlContext, PossiblyCurrentContext},
     display::{GetGlDisplay, GlDisplay},
-    surface::{GlSurface, Surface, SwapInterval, WindowSurface},
+    surface::{GlSurface, Surface, WindowSurface},
 };
 use glutin_winit::{DisplayBuilder, GlWindow};
 use winit::{
@@ -276,6 +276,8 @@ impl Model {
         Ok(model)
     }
 
+    /// Alternative constructor for loading models without OpenGL context (for demonstration)
+    #[allow(dead_code)]
     fn new_without_gl(path: &str) -> Result<Self, Box<dyn Error>> {
         let mut model = Self {
             meshes: Vec::new(),
@@ -321,6 +323,8 @@ impl Model {
         Ok(())
     }
 
+    /// Load model without OpenGL context (for demonstration)
+    #[allow(dead_code)]
     fn load_model_without_gl(&mut self, path: &str) -> Result<(), Box<dyn Error>> {
         println!("Loading model: {}", path);
 
@@ -373,6 +377,8 @@ impl Model {
         Ok(())
     }
 
+    /// Process scene node without OpenGL context (for demonstration)
+    #[allow(dead_code)]
     fn process_node_without_gl(
         &mut self,
         node: &asset_importer::node::Node,
@@ -457,6 +463,8 @@ impl Model {
         Mesh::new(gl, vertices, indices, textures)
     }
 
+    /// Process mesh without OpenGL context (for demonstration)
+    #[allow(dead_code)]
     fn process_mesh_without_gl(
         &mut self,
         mesh: &asset_importer::mesh::Mesh,
@@ -674,12 +682,7 @@ impl Camera {
         self.pitch += yoffset;
 
         if constrain_pitch {
-            if self.pitch > 89.0 {
-                self.pitch = 89.0;
-            }
-            if self.pitch < -89.0 {
-                self.pitch = -89.0;
-            }
+            self.pitch = self.pitch.clamp(-89.0, 89.0);
         }
 
         self.update_camera_vectors();
@@ -687,12 +690,7 @@ impl Camera {
 
     pub fn process_mouse_scroll(&mut self, yoffset: f32) {
         self.zoom -= yoffset;
-        if self.zoom < 1.0 {
-            self.zoom = 1.0;
-        }
-        if self.zoom > 45.0 {
-            self.zoom = 45.0;
-        }
+        self.zoom = self.zoom.clamp(1.0, 45.0);
     }
 
     fn update_camera_vectors(&mut self) {
@@ -786,6 +784,8 @@ impl Shader {
         }
     }
 
+    /// Set float uniform (for demonstration)
+    #[allow(dead_code)]
     fn set_float(&self, gl: &glow::Context, name: &str, value: f32) {
         unsafe {
             let location = gl.get_uniform_location(self.program.unwrap(), name);
@@ -805,7 +805,8 @@ impl Shader {
     }
 }
 
-/// OpenGL context and surface
+/// OpenGL context and surface (for demonstration)
+#[allow(dead_code)]
 struct GlContext {
     gl: glow::Context,
     surface: Surface<WindowSurface>,
@@ -934,10 +935,8 @@ impl ApplicationHandler for App {
 
                 self.camera.process_mouse_movement(xoffset, yoffset, true);
             }
-            WindowEvent::MouseWheel { delta, .. } => {
-                if let winit::event::MouseScrollDelta::LineDelta(_, y) = delta {
-                    self.camera.process_mouse_scroll(y);
-                }
+            WindowEvent::MouseWheel { delta: winit::event::MouseScrollDelta::LineDelta(_, y), .. } => {
+                self.camera.process_mouse_scroll(y);
             }
             _ => {}
         }

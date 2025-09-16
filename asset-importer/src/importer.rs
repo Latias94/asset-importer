@@ -476,12 +476,12 @@ impl Importer {
     }
 
     /// Start building an import operation
-    pub fn read_file<P: AsRef<Path>>(&self, path: P) -> ImportBuilder {
+    pub fn read_file<P: AsRef<Path>>(&self, _path: P) -> ImportBuilder {
         ImportBuilder::new()
     }
 
     /// Start building an import operation from memory
-    pub fn read_from_memory(&self, data: &[u8]) -> ImportBuilder {
+    pub fn read_from_memory(&self, _data: &[u8]) -> ImportBuilder {
         ImportBuilder::new()
     }
 

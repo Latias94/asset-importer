@@ -108,30 +108,28 @@ pub struct ImporterDesc {
 impl ImporterDesc {
     /// Create from raw Assimp importer description
     pub(crate) fn from_raw(desc: &sys::aiImporterDesc) -> Self {
-        unsafe {
-            let name = c_str_to_string_or_empty(desc.mName);
-            let author = c_str_to_string_or_empty(desc.mAuthor);
-            let maintainer = c_str_to_string_or_empty(desc.mMaintainer);
-            let comments = c_str_to_string_or_empty(desc.mComments);
+        let name = c_str_to_string_or_empty(desc.mName);
+        let author = c_str_to_string_or_empty(desc.mAuthor);
+        let maintainer = c_str_to_string_or_empty(desc.mMaintainer);
+        let comments = c_str_to_string_or_empty(desc.mComments);
 
-            let extensions_str = c_str_to_string_or_empty(desc.mFileExtensions);
-            let file_extensions = extensions_str
-                .split_whitespace()
-                .map(|s| s.to_string())
-                .collect();
+        let extensions_str = c_str_to_string_or_empty(desc.mFileExtensions);
+        let file_extensions = extensions_str
+            .split_whitespace()
+            .map(|s| s.to_string())
+            .collect();
 
-            Self {
-                name,
-                author,
-                maintainer,
-                comments,
-                flags: ImporterFlags::from_bits(desc.mFlags),
-                min_major: desc.mMinMajor,
-                max_major: desc.mMaxMajor,
-                min_minor: desc.mMinMinor,
-                max_minor: desc.mMaxMinor,
-                file_extensions,
-            }
+        Self {
+            name,
+            author,
+            maintainer,
+            comments,
+            flags: ImporterFlags::from_bits(desc.mFlags),
+            min_major: desc.mMinMajor,
+            max_major: desc.mMaxMajor,
+            min_minor: desc.mMinMinor,
+            max_minor: desc.mMaxMinor,
+            file_extensions,
         }
     }
 }
