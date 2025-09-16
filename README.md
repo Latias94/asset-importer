@@ -20,14 +20,14 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-# Default – Prebuilt binaries (fastest, friction‑free)
+# Default – Build from source (best compatibility)
 asset-importer = "0.1"
 
 # Or use system-installed assimp
 asset-importer = { version = "0.1", features = ["system"] }
 
-# Or build from the bundled source (full control)
-asset-importer = { version = "0.1", features = ["build-assimp"] }
+# Or use prebuilt binaries (fastest, requires release)
+asset-importer = { version = "0.1", features = ["prebuilt"] }
 ```
 
 Basic usage:
@@ -52,15 +52,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ## Build Options
 
-### Default: Prebuilt Binaries
+### Default: Build from Source
 
 ```toml
 asset-importer = "0.1"
 ```
 
-- **Fastest**: No compilation time
-- **Convenient**: No native toolchain required
-- **Cross‑platform**: Provided for common targets
+- **Best compatibility**: Works on all platforms
+- **Full control**: Latest Assimp version with all features
+- **Requires**: CMake, C++ compiler (automatically handled by Cargo)
 
 ### System Library
 
@@ -71,6 +71,16 @@ asset-importer = { version = "0.1", features = ["system"] }
 - **Lightweight**: Uses existing system installation
 - **Setup required**: Install via `brew install assimp` (macOS), `apt install libassimp-dev` (Ubuntu)
 - **Version dependent**: Behavior may vary based on system library version
+
+### Prebuilt Binaries
+
+```toml
+asset-importer = { version = "0.1", features = ["prebuilt"] }
+```
+
+- **Fastest**: No compilation time
+- **Convenient**: No native toolchain required
+- **Requires**: Available release artifacts
 
 ### Additional Features
 
@@ -84,16 +94,17 @@ asset-importer = {
 }
 ```
 
-## Why prebuilt by default?
+## Why build from source by default?
 
-- Great first‑time experience: avoids heavy native toolchains and long CMake builds
-- Mirrors the ergonomics of projects like russimp‑sys (see `repo-ref/russimp-sys/build.rs`)
-- You can still opt into `system` or `build-assimp` for full control
+- **Best compatibility**: Works reliably across all platforms and environments
+- **Latest features**: Always uses the most recent Assimp version
+- **No external dependencies**: Self-contained build process
+- **CI/CD friendly**: No need for prebuilt artifacts during development
 
-If your environment blocks network access or you prefer hermetic builds, use:
+If you prefer faster builds or have constraints, use:
 
+- `--features prebuilt` to use prebuilt binaries (when available)
 - `--features system` to link an existing installation
-- `--features build-assimp` to compile the submodule with CMake
 
 ## Architecture
 
@@ -124,23 +135,6 @@ Contributions welcome! Areas needing help:
 - Performance benchmarking
 - Documentation improvements
 - Platform-specific testing
-
-### Development Workflow
-
-We use manual changelog management with automated releases:
-
-1. **Make changes** to code
-2. **Update CHANGELOG.md** under `[Unreleased]` section:
-   - `asset-importer-sys/CHANGELOG.md` for FFI changes
-   - `asset-importer/CHANGELOG.md` for API changes
-3. **Commit with conventional commits**:
-   ```bash
-   git commit -m "feat: add new animation API"
-   git commit -m "fix: resolve memory leak in parsing"
-   ```
-4. **Push to main** - automated CI will handle versioning and releases
-
-See [MANUAL_CHANGELOG_GUIDE.md](MANUAL_CHANGELOG_GUIDE.md) for detailed instructions.
 
 ## License
 

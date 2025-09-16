@@ -12,7 +12,7 @@ This crate provides unsafe Rust bindings to the Assimp C API. For a safe, high-l
 
 ## Build Features
 
-⚠️ **No default features** - you must choose a build method.
+**Default**: Builds from source for best compatibility.
 
 ### System Library
 ```toml
@@ -24,6 +24,14 @@ Uses system-installed assimp. Install via package manager:
 - **Ubuntu/Debian**: `sudo apt install libassimp-dev`
 - **Windows**: Use vcpkg or manual installation
 
+### Build from Source (Explicit)
+```toml
+asset-importer-sys = { features = ["build-assimp"] }
+```
+- Explicitly builds assimp from bundled source
+- Requires: CMake, C++ compiler, Git
+- Full control over build configuration
+
 ### Prebuilt Binaries
 ```toml
 asset-importer-sys = { features = ["prebuilt"] }
@@ -31,14 +39,6 @@ asset-importer-sys = { features = ["prebuilt"] }
 - Downloads prebuilt libraries from GitHub releases
 - No build dependencies required
 - Fastest option for development
-
-### Build from Source
-```toml
-asset-importer-sys = { features = ["build-assimp"] }
-```
-- Builds assimp from bundled source
-- Requires: CMake, C++ compiler, Git
-- Full control over build configuration
 
 ### Static Linking
 ```toml

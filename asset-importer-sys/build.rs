@@ -19,20 +19,27 @@ fn main() {
         );
     }
 
+    // Check for force build environment variable (used in CI)
+    let force_build = env::var("ASSET_IMPORTER_FORCE_BUILD").is_ok();
+
     // Determine build strategy and generate bindings
     let built_include_dir = if cfg!(feature = "system") {
         // Explicitly use system assimp
         link_system_assimp();
         None
-    } else if cfg!(feature = "build-assimp") || cfg!(feature = "static") {
+    } else if cfg!(feature = "build-assimp") || cfg!(feature = "static") || force_build {
         // Explicitly build from source
         build_assimp_from_source(&manifest_dir, &out_dir);
         // Use the built include directory which has config.h
         Some(out_dir.join("build").join("include"))
-    } else {
-        // Default: use prebuilt binaries for fast, friction-free builds
+    } else if cfg!(feature = "prebuilt") {
+        // Explicitly use prebuilt binaries
         link_prebuilt_assimp(&out_dir);
         None
+    } else {
+        // Default: build from source for better compatibility
+        build_assimp_from_source(&manifest_dir, &out_dir);
+        Some(out_dir.join("build").join("include"))
     };
 
     generate_bindings(&manifest_dir, &out_dir, built_include_dir.as_deref());

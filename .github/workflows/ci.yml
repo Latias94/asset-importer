@@ -17,10 +17,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-        features: ['', 'build-assimp', 'static', 'prebuilt']
-        exclude:
-          # Skip prebuilt on CI since we don't have releases yet
-          - features: 'prebuilt'
+        features: ['', 'build-assimp', 'static']
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4

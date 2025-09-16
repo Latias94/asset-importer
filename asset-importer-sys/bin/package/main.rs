@@ -2,7 +2,8 @@ use std::{env, fs, path::PathBuf};
 
 use flate2::{write::GzEncoder, Compression};
 
-const LICENSE_FILEPATH: &str = "LICENSE";
+const LICENSE_APACHE_FILEPATH: &str = "LICENSE-APACHE";
+const LICENSE_MIT_FILEPATH: &str = "LICENSE-MIT";
 
 const fn static_lib() -> &'static str {
     if cfg!(feature = "static") {
@@ -38,10 +39,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Err("Package tool requires build-assimp or static feature".into());
     };
 
-    // Find license file in workspace root
-    let license_path = workspace_root.join("LICENSE");
-    if !license_path.exists() {
-        return Err(format!("License file not found at {}", license_path.display()).into());
+    // Find license files in workspace root
+    let license_apache_path = workspace_root.join("LICENSE-APACHE");
+    let license_mit_path = workspace_root.join("LICENSE-MIT");
+
+    if !license_apache_path.exists() {
+        return Err(format!(
+            "Apache license file not found at {}",
+            license_apache_path.display()
+        )
+        .into());
+    }
+    if !license_mit_path.exists() {
+        return Err(format!(
+            "MIT license file not found at {}",
+            license_mit_path.display()
+        )
+        .into());
     }
 
     fs::create_dir_all(&ar_dst_dir)?;
@@ -82,10 +96,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("Added lib64 directory: {}", lib64_dir.display());
     }
 
-    // Add license file
-    let mut license_file = fs::File::open(&license_path)?;
-    archive.append_file(LICENSE_FILEPATH, &mut license_file)?;
-    println!("Added license file: {}", license_path.display());
+    // Add license files
+    let mut license_apache_file = fs::File::open(&license_apache_path)?;
+    archive.append_file(LICENSE_APACHE_FILEPATH, &mut license_apache_file)?;
+    println!(
+        "Added Apache license file: {}",
+        license_apache_path.display()
+    );
+
+    let mut license_mit_file = fs::File::open(&license_mit_path)?;
+    archive.append_file(LICENSE_MIT_FILEPATH, &mut license_mit_file)?;
+    println!("Added MIT license file: {}", license_mit_path.display());
 
     archive.finish()?;
 

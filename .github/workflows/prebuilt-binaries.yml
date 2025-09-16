@@ -108,6 +108,9 @@ jobs:
             cargo build --release --target ${{ matrix.target }} --features "build-assimp"
           fi
         shell: bash
+        env:
+          # Force source build in CI
+          ASSET_IMPORTER_FORCE_BUILD: "1"
 
       # Run the package tool to create archives
       - name: Package binaries
@@ -121,6 +124,8 @@ jobs:
         shell: bash
         env:
           ASSET_IMPORTER_PACKAGE_DIR: ${{ github.workspace }}/packages
+          # Force source build in CI
+          ASSET_IMPORTER_FORCE_BUILD: "1"
 
       # Upload artifacts for release
       - name: Upload to release

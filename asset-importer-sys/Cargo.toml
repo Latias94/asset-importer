@@ -71,9 +71,9 @@ export = []
 static = []
 # Use system-installed assimp instead of bundled
 system = ["pkg-config"]
-# Build assimp from source
+# Build assimp from source (explicit feature)
 build-assimp = ["tar", "flate2"]
-# Use prebuilt binaries (explicit feature for conditional compilation)
+# Use prebuilt binaries (requires release artifacts)
 prebuilt = ["tar", "flate2"]
 # Control zlib linking
 nozlib = []
