@@ -126,7 +126,7 @@ fn test_property_store_functionality() {
     let _builder = importer
         .read_from_memory(SIMPLE_OBJ_CUBE.as_bytes())
         .with_property_int("AI_CONFIG_PP_RVC_FLAGS", 42)
-        .with_property_float("AI_CONFIG_PP_CT_MAX_SMOOTHING_ANGLE", 3.14159)
+        .with_property_float("AI_CONFIG_PP_CT_MAX_SMOOTHING_ANGLE", std::f32::consts::PI)
         .with_property_string("AI_CONFIG_IMPORT_FBX_READ_ALL_GEOMETRY_LAYERS", "true")
         .with_property_bool("AI_CONFIG_PP_FD_REMOVE", true);
 

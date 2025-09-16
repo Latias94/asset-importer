@@ -61,10 +61,9 @@ fn test_file_import_obj_box() {
 
             if let Some(root) = scene.root_node() {
                 println!("Root node name: {:?}", root.name());
-                assert!(
-                    root.num_children() >= 0,
-                    "Root node should have valid children count"
-                );
+                // root.num_children() is u32, so it's always >= 0
+                // Just verify we can call the method without panicking
+                let _children_count = root.num_children();
             }
         }
         Err(e) => {

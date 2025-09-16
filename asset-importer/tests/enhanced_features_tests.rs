@@ -32,7 +32,7 @@ fn test_property_store_creation() {
     assert_eq!(store.len(), 0);
 
     store.set_int("test_int", 42);
-    store.set_float("test_float", 3.14);
+    store.set_float("test_float", std::f32::consts::PI);
     store.set_string("test_string", "hello");
     store.set_bool("test_bool", true);
 
@@ -50,7 +50,7 @@ fn test_property_store_methods() {
     // Test method chaining
     store
         .set_int("int_prop", 100)
-        .set_float("float_prop", 2.718)
+        .set_float("float_prop", std::f32::consts::E)
         .set_string("string_prop", "world")
         .set_bool("bool_prop", false);
 
@@ -194,7 +194,7 @@ fn test_material_property_access() {
 
             // Test texture counts
             let diffuse_count = material.texture_count(asset_importer::TextureType::Diffuse);
-            assert!(diffuse_count >= 0);
+            // diffuse_count is u32, so it's always >= 0
         }
     }
 }
@@ -242,7 +242,7 @@ fn test_enhanced_metadata_access() {
 fn test_property_value_variants() {
     // Test all PropertyValue variants
     let int_prop = PropertyValue::Integer(42);
-    let float_prop = PropertyValue::Float(3.14);
+    let float_prop = PropertyValue::Float(std::f32::consts::PI);
     let string_prop = PropertyValue::String("test".to_string());
     let bool_prop = PropertyValue::Boolean(true);
     let matrix_prop = PropertyValue::Matrix(asset_importer::types::Matrix4x4::IDENTITY);
@@ -250,7 +250,7 @@ fn test_property_value_variants() {
     // Verify they can be created and stored
     let mut store = PropertyStore::new();
     store.set_int("int", 42);
-    store.set_float("float", 3.14);
+    store.set_float("float", std::f32::consts::PI);
     store.set_string("string", "test");
     store.set_bool("bool", true);
     store.set_matrix("matrix", asset_importer::types::Matrix4x4::IDENTITY);

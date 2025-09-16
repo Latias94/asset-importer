@@ -55,7 +55,7 @@ fn try_system_assimp() -> bool {
     #[cfg(target_os = "windows")]
     {
         // Try vcpkg
-        if let Ok(_) = env::var("VCPKG_ROOT") {
+        if env::var("VCPKG_ROOT").is_ok() {
             println!("cargo:rustc-link-lib=assimp");
             return true;
         }
@@ -236,6 +236,7 @@ fn link_prebuilt_assimp(_out_dir: &std::path::Path) {
     panic!("Prebuilt feature is not enabled. Use --features prebuilt to enable prebuilt binary support.");
 }
 
+#[allow(dead_code)]
 fn link_system_dependencies() {
     let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap();
     let target_env = env::var("CARGO_CFG_TARGET_ENV").unwrap_or_default();
@@ -273,6 +274,7 @@ fn link_system_dependencies() {
     }
 }
 
+#[allow(dead_code)]
 fn generate_bindings_from_system(manifest_dir: &std::path::Path, out_dir: &std::path::Path) {
     let wrapper_h = manifest_dir.join("wrapper.h");
 
@@ -316,8 +318,9 @@ fn build_assimp_from_source(manifest_dir: &std::path::Path, _out_path: &std::pat
         .define("ASSIMP_BUILD_TESTS", "OFF")
         .define("ASSIMP_BUILD_SAMPLES", "OFF")
         .define("ASSIMP_BUILD_ASSIMP_TOOLS", "OFF")
-        .define("ASSIMP_INSTALL", "OFF")
-        .define("BUILD_SHARED_LIBS", "OFF");
+        .define("BUILD_SHARED_LIBS", "OFF")
+        // Disable being overly strict with warnings, which can cause build issues
+        .define("ASSIMP_WARNINGS_AS_ERRORS", "OFF");
 
     // Configure zlib based on nozlib feature
     if cfg!(feature = "nozlib") {
@@ -359,6 +362,13 @@ fn build_assimp_from_source(manifest_dir: &std::path::Path, _out_path: &std::pat
     // Link the built library
     println!("cargo:rustc-link-search=native={}/lib", dst.display());
     println!("cargo:rustc-link-search=native={}/lib64", dst.display());
+
+    // Also search in the build directory structure
+    println!("cargo:rustc-link-search=native={}/build/lib", dst.display());
+    println!(
+        "cargo:rustc-link-search=native={}/build/lib64",
+        dst.display()
+    );
 
     // Add the Release subdirectory for MSVC builds (we force Release mode)
     let target_env = env::var("CARGO_CFG_TARGET_ENV").unwrap_or_default();
