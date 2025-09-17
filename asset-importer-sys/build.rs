@@ -162,11 +162,49 @@ fn link_prebuilt_assimp(out_dir: &std::path::Path) {
 
 fn download_prebuilt_package(out_dir: &std::path::Path, archive_name: &str) {
     let crate_version = env::var("CARGO_PKG_VERSION").unwrap();
-    let download_url = format!(
-        "https://github.com/Latias94/asset-importer/releases/download/v{}/{}",
-        crate_version, archive_name
-    );
 
+    // Try different tag formats for downloading prebuilt packages
+    // 1. First try sys-specific tag: asset-importer-sys-v{version}
+    // 2. Fallback to unified tag: v{version}
+    let tag_formats = [
+        format!("asset-importer-sys-v{}", crate_version),
+        format!("v{}", crate_version),
+    ];
+
+    let mut last_error = String::new();
+
+    for tag in &tag_formats {
+        let download_url = format!(
+            "https://github.com/Latias94/asset-importer/releases/download/{}/{}",
+            tag, archive_name
+        );
+
+        if env::var("ASSET_IMPORTER_VERBOSE").is_ok() {
+            println!("cargo:warning=Trying download URL: {}", download_url);
+        }
+
+        // Try to download with this tag format
+        if try_download(&download_url, out_dir, archive_name).is_ok() {
+            return;
+        } else {
+            last_error = format!("Failed to download from tag: {}", tag);
+        }
+    }
+
+    // If all attempts failed, panic with helpful message
+    panic!(
+        "Failed to download prebuilt package from any tag format. \
+         Tried tags: {:?}. Last error: {}. \
+         Consider using 'build-assimp' feature to build from source instead.",
+        tag_formats, last_error
+    );
+}
+
+fn try_download(
+    download_url: &str,
+    out_dir: &std::path::Path,
+    archive_name: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
     let archive_path = out_dir.join(archive_name);
 
     // Skip download if file already exists
@@ -177,7 +215,7 @@ fn download_prebuilt_package(out_dir: &std::path::Path, archive_name: &str) {
                 archive_path.display()
             );
         }
-        return;
+        return Ok(());
     }
 
     // This is important info for users to know download is happening
@@ -189,24 +227,28 @@ fn download_prebuilt_package(out_dir: &std::path::Path, archive_name: &str) {
     let client = reqwest::blocking::Client::builder()
         .timeout(std::time::Duration::from_secs(300))
         .build()
-        .expect("Failed to create HTTP client");
+        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
 
     let response = client
-        .get(&download_url)
+        .get(download_url)
         .send()
-        .expect("Failed to download prebuilt package");
+        .map_err(|e| format!("Failed to send request: {}", e))?;
 
     if !response.status().is_success() {
-        panic!(
-            "Failed to download prebuilt package from {}. Status: {}. \
-             Consider using 'build-assimp' feature to build from source instead.",
-            download_url,
-            response.status()
-        );
+        return Err(format!(
+            "HTTP error {}: Failed to download from {}",
+            response.status(),
+            download_url
+        )
+        .into());
     }
 
-    let bytes = response.bytes().expect("Failed to read response bytes");
-    fs::write(&archive_path, &bytes).expect("Failed to write downloaded package");
+    let bytes = response
+        .bytes()
+        .map_err(|e| format!("Failed to read response bytes: {}", e))?;
+
+    fs::write(&archive_path, &bytes)
+        .map_err(|e| format!("Failed to write downloaded package: {}", e))?;
 
     if env::var("ASSET_IMPORTER_VERBOSE").is_ok() {
         println!(
@@ -214,6 +256,8 @@ fn download_prebuilt_package(out_dir: &std::path::Path, archive_name: &str) {
             archive_path.display()
         );
     }
+
+    Ok(())
 }
 
 fn extract_prebuilt_package(

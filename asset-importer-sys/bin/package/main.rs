@@ -21,9 +21,29 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         env::var("ASSET_IMPORTER_PACKAGE_DIR").unwrap_or_else(|_| env::var("OUT_DIR").unwrap()),
     );
 
-    let target = env::var("TARGET").unwrap();
+    // Get target from environment variable or use built-in target
+    let target = env::var("TARGET").unwrap_or_else(|_| {
+        // Fallback to built-in target if TARGET env var is not set
+        env::var("CARGO_CFG_TARGET_TRIPLE").unwrap_or_else(|_| {
+            // Last resort: construct a reasonable default target
+            let arch = std::env::consts::ARCH;
+            let os = std::env::consts::OS;
+            match os {
+                "windows" => format!("{}-pc-windows-msvc", arch),
+                "macos" => format!("{}-apple-darwin", arch),
+                "linux" => format!("{}-unknown-linux-gnu", arch),
+                _ => format!("{}-unknown-{}", arch, os),
+            }
+        })
+    });
     let crate_version = env::var("CARGO_PKG_VERSION").unwrap();
     let link_type = static_lib();
+
+    println!("Package configuration:");
+    println!("  Target: {}", target);
+    println!("  Version: {}", crate_version);
+    println!("  Link type: {}", link_type);
+    println!("  Package dir: {}", ar_dst_dir.display());
 
     let ar_filename = format!(
         "asset-importer-{}-{}-{}.tar.gz",

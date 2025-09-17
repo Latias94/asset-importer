@@ -105,6 +105,24 @@ asset-importer = {
 }
 ```
 
+## Build Requirements
+
+### Source Build Dependencies
+
+When building from source (default), you'll need:
+
+- **CMake** (3.10 or later)
+- **C++ Compiler** (MSVC on Windows, GCC/Clang on Linux/macOS)
+- **Git** (for submodules)
+
+### Platform-Specific Setup
+
+- **Windows**: Install Visual Studio Build Tools or Visual Studio
+- **macOS**: Install Xcode Command Line Tools (`xcode-select --install`)
+- **Linux**: Install build essentials (`sudo apt install build-essential cmake` on Ubuntu)
+
+For detailed platform-specific instructions and troubleshooting, see the [asset-importer-sys README](https://github.com/Latias94/asset-importer/blob/main/asset-importer-sys/README.md#build-requirements).
+
 ## Why build from source by default?
 
 - **Best compatibility**: Works reliably across all platforms and environments
@@ -131,6 +149,15 @@ This crate provides a high-level safe API. For low-level FFI bindings, see [`ass
 
 This project aims to provide the most comprehensive and up-to-date Rust binding for Assimp, supporting both import and export functionality with modern Rust practices.
 
+## Versioning
+
+This workspace uses independent versioning for each crate:
+
+- **`asset-importer-sys`**: Tracks Assimp versions and FFI binding changes
+- **`asset-importer`**: Tracks high-level API changes and features
+
+See [VERSIONING.md](VERSIONING.md) for detailed versioning strategy and release process.
+
 ## Limitations
 
 - **Limited Testing**: Needs more real-world usage validation
@@ -155,6 +182,12 @@ Licensed under either of:
 - MIT License ([LICENSE-MIT](LICENSE-MIT))
 
 at your option.
+
+## Related Projects
+
+If you're working with graphics and UI in Rust, you might also be interested in:
+
+- **[dear-imgui](https://github.com/Latias94/dear-imgui)** - Comprehensive Dear ImGui bindings for Rust using C++ bindgen, providing immediate mode GUI capabilities for graphics applications
 
 ## Acknowledgments
 

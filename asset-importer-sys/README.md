@@ -91,7 +91,47 @@ asset-importer-sys = {
 |---------|-------------|
 | `prebuilt` | None |
 | `system` | System assimp installation |
-| `build-assimp` | CMake, C++ compiler |
+| `build-assimp` | CMake (≥3.10), C++ compiler, Git |
+
+#### Detailed Requirements for Source Build
+
+**Essential Tools:**
+- **CMake 3.10+**: Build system generator
+- **C++ Compiler**:
+  - Windows: MSVC 2019+ (Visual Studio Build Tools)
+  - macOS: Clang (Xcode Command Line Tools)
+  - Linux: GCC 7+ or Clang 6+
+- **Git**: For submodule management
+
+**Platform Setup:**
+
+**Windows:**
+```cmd
+# Install Visual Studio Build Tools or Visual Studio Community
+# Or use chocolatey:
+choco install cmake visualstudio2022buildtools
+```
+
+**macOS:**
+```bash
+# Install Xcode Command Line Tools
+xcode-select --install
+
+# Install CMake via Homebrew (recommended)
+brew install cmake
+```
+
+**Linux (Ubuntu/Debian):**
+```bash
+sudo apt update
+sudo apt install build-essential cmake git
+```
+
+**Linux (CentOS/RHEL):**
+```bash
+sudo yum groupinstall "Development Tools"
+sudo yum install cmake3 git
+```
 
 ## Usage
 

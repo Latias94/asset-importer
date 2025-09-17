@@ -4,11 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Git tag to build'
-        required: true
-        type: string
-      version:
-        description: 'Version to build'
+        description: 'Git tag to build (e.g., asset-importer-sys-v0.1.0 or v0.1.0)'
         required: true
         type: string
   release:
@@ -63,6 +59,23 @@ jobs:
         with:
           submodules: recursive
           ref: ${{ inputs.tag || github.ref }}
+
+      - name: Parse version from tag
+        id: parse_version
+        run: |
+          chmod +x .github/scripts/parse-version.sh
+          .github/scripts/parse-version.sh "${{ inputs.tag || github.ref_name }}"
+        shell: bash
+
+      - name: Check if this is a sys crate release
+        run: |
+          if [ "${{ steps.parse_version.outputs.crate }}" != "asset-importer-sys" ]; then
+            echo "This workflow only builds prebuilt binaries for asset-importer-sys releases"
+            echo "Detected crate: ${{ steps.parse_version.outputs.crate }}"
+            echo "Skipping build..."
+            exit 0
+          fi
+          echo "✅ Building prebuilt binaries for asset-importer-sys v${{ steps.parse_version.outputs.version }}"
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -119,6 +132,8 @@ jobs:
         env:
           # Force source build in CI
           ASSET_IMPORTER_FORCE_BUILD: "1"
+          # Set TARGET environment variable for package binary
+          TARGET: ${{ matrix.target }}
 
       # Run the package tool to create archives
       - name: Package binaries
@@ -134,6 +149,8 @@ jobs:
           ASSET_IMPORTER_PACKAGE_DIR: ${{ github.workspace }}/packages
           # Force source build in CI
           ASSET_IMPORTER_FORCE_BUILD: "1"
+          # Set TARGET environment variable for package binary
+          TARGET: ${{ matrix.target }}
 
       # Upload artifacts for release
       - name: Upload to release
