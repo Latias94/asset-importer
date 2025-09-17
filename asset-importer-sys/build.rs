@@ -379,15 +379,21 @@ fn build_assimp_from_source(manifest_dir: &std::path::Path, _out_path: &std::pat
         // Use bundled zlib on Windows (assimp default)
         config.define("ASSIMP_BUILD_ZLIB", "ON");
     } else {
-        // On Unix:
-        // - For shared assimp builds, force bundled zlib to avoid picking static libz.a without PIC.
-        // - For static assimp builds, prefer system zlib if available.
-        let building_shared = build_shared == "ON";
-        if building_shared {
-            config.define("ASSIMP_BUILD_ZLIB", "ON");
+        // Unix (Linux/macOS):
+        // - macOS: always use system zlib (shared), system libz.dylib is universally available and avoids
+        //   issues in contrib zlib headers conflicting with SDK headers.
+        // - Linux: for shared builds, bundle zlib to avoid picking up non-PIC libz.a; for static builds,
+        //   prefer system zlib if available.
+        if target_os == "macos" {
+            config.define("ASSIMP_BUILD_ZLIB", "OFF");
         } else {
-            let use_system = has_system_zlib_any();
-            config.define("ASSIMP_BUILD_ZLIB", if use_system { "OFF" } else { "ON" });
+            let building_shared = build_shared == "ON";
+            if building_shared {
+                config.define("ASSIMP_BUILD_ZLIB", "ON");
+            } else {
+                let use_system = has_system_zlib_any();
+                config.define("ASSIMP_BUILD_ZLIB", if use_system { "OFF" } else { "ON" });
+            }
         }
     }
 
