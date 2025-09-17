@@ -204,15 +204,6 @@ Contributions welcome! Areas needing help:
 - Documentation improvements
 - Platform-specific testing
 
-## License
-
-Licensed under either of:
-
-- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE))
-- MIT License ([LICENSE-MIT](LICENSE-MIT))
-
-at your option.
-
 ## Related Projects
 
 If you're working with graphics and UI in Rust, you might also be interested in:

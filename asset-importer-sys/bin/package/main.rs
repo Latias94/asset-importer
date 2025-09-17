@@ -14,7 +14,7 @@ const fn static_lib() -> &'static str {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
+    // let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
     let workspace_root = manifest_dir.parent().unwrap();
     let ar_dst_dir = PathBuf::from(
@@ -74,8 +74,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Determine the source directory based on build type
     let from_dir = if cfg!(feature = "build-assimp") {
-        // Built from source - use the cmake output directory
-        out_dir.join("build")
+        // We need the CMake install prefix produced by build.rs (cmake::Config::build())
+        // That path is target/<triple>/<profile>/build/asset-importer-sys-*/out
+        // Prefer environment override if set (useful in CI)
+        if let Ok(dir) = env::var("ASSET_IMPORTER_BUILD_OUT_DIR") {
+            PathBuf::from(dir)
+        } else {
+            locate_build_out_dir(workspace_root, &target)?
+        }
     } else {
         // This shouldn't happen in package mode, but fallback
         return Err("Package tool requires build-assimp feature".into());
@@ -122,20 +128,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("Added lib directory: {}", lib_dir.display());
     }
 
-    // On Windows, also check for lib64 and bin directories
-    if cfg!(target_os = "windows") {
-        let bin_dir = from_dir.join("bin");
-        if bin_dir.exists() {
-            archive.append_dir_all("bin", &bin_dir)?;
-            println!("Added bin directory: {}", bin_dir.display());
+    // Also include lib64 (Linux) and bin (Windows/macOS install sometimes uses bin for dylibs)
+    for (name, dir) in [
+        ("lib64", from_dir.join("lib64")),
+        ("bin", from_dir.join("bin")),
+    ] {
+        if dir.exists() {
+            archive.append_dir_all(name, &dir)?;
+            println!("Added {} directory: {}", name, dir.display());
         }
-    }
-
-    // Check for lib64 directory (common on Linux)
-    let lib64_dir = from_dir.join("lib64");
-    if lib64_dir.exists() {
-        archive.append_dir_all("lib64", &lib64_dir)?;
-        println!("Added lib64 directory: {}", lib64_dir.display());
     }
 
     // Add license files
@@ -160,4 +161,52 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     Ok(())
+}
+
+fn locate_build_out_dir(
+    workspace_root: &std::path::Path,
+    target: &str,
+) -> Result<PathBuf, Box<dyn std::error::Error>> {
+    // Determine profile used for this run
+    let profile = env::var("PROFILE").unwrap_or_else(|_| "release".into());
+    // Prefer CARGO_TARGET_DIR, else workspace_root/target
+    let target_dir = env::var("CARGO_TARGET_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| workspace_root.join("target"));
+    let build_root = target_dir.join(target).join(&profile).join("build");
+    if !build_root.exists() {
+        return Err(format!("Build root not found at {}", build_root.display()).into());
+    }
+    let mut candidates: Vec<PathBuf> = match std::fs::read_dir(&build_root) {
+        Ok(rd) => rd
+            .filter_map(|e| e.ok())
+            .filter_map(|e| {
+                let p = e.path();
+                let name = p.file_name()?.to_string_lossy().to_string();
+                if name.starts_with("asset-importer-sys-") {
+                    let out = p.join("out");
+                    if out.join("include").exists() {
+                        Some(out)
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            })
+            .collect(),
+        Err(_) => Vec::new(),
+    };
+    if candidates.is_empty() {
+        return Err(format!(
+            "No asset-importer-sys build out directories found under {}",
+            build_root.display()
+        )
+        .into());
+    }
+    // Choose the most recently modified
+    candidates.sort_by_key(|p| std::fs::metadata(p).and_then(|m| m.modified()).ok());
+    let from_dir = candidates.pop().unwrap();
+    println!("Using build out dir: {}", from_dir.display());
+    Ok(from_dir)
 }

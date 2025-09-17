@@ -17,7 +17,8 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-        features: ['', 'build-assimp', 'build-assimp,static-link']
+        # Always build from source in CI to avoid prebuilt/version skew
+        features: ['build-assimp', 'build-assimp,static-link']
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -55,11 +56,15 @@ jobs:
         run: |
           choco install cmake
 
-      - name: Build workspace
+      - name: Build workspace (from source)
         run: cargo build --workspace --features "${{ matrix.features }}"
+        env:
+          ASSET_IMPORTER_FORCE_BUILD: "1"
 
       - name: Run tests
         run: cargo test --workspace --features "${{ matrix.features }}"
+        env:
+          ASSET_IMPORTER_FORCE_BUILD: "1"
 
   clippy:
     name: Clippy
