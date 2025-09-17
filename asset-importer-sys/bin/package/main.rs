@@ -1,6 +1,6 @@
 use std::{env, fs, path::PathBuf};
 
-use flate2::{write::GzEncoder, Compression};
+use flate2::{Compression, write::GzEncoder};
 
 const LICENSE_APACHE_FILEPATH: &str = "LICENSE-APACHE";
 const LICENSE_MIT_FILEPATH: &str = "LICENSE-MIT";

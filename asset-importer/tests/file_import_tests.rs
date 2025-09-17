@@ -1,7 +1,7 @@
 //! File import tests using real model files
 //! These tests verify file-based import functionality
 
-use asset_importer::{postprocess::PostProcessSteps, Importer};
+use asset_importer::{Importer, postprocess::PostProcessSteps};
 use std::path::Path;
 
 #[test]

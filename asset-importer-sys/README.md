@@ -2,13 +2,25 @@
 
 Low-level FFI bindings for the [Assimp](https://github.com/assimp/assimp) 3D asset import library.
 
+This crate provides unsafe Rust FFI bindings for **Assimp v6.0.2**, implementing the vast majority of the C API functions, types, and constants.
+
 ## Status
 
 ⚠️ **Early Development**: These bindings are functional but need more testing across different platforms and use cases.
 
 ## Overview
 
-This crate provides unsafe Rust bindings to the Assimp C API. For a safe, high-level API, use the [`asset-importer`](../asset-importer/) crate instead.
+This crate provides unsafe Rust bindings to the [Assimp v6.0.2](https://github.com/assimp/assimp/releases/tag/v6.0.2) C API, implementing the vast majority of functions, types, and constants. For a safe, high-level API, use the [`asset-importer`](../asset-importer/) crate instead.
+
+### API Coverage
+
+The bindings include:
+- **Core Import/Export Functions**: All major scene loading and saving functions
+- **Data Structures**: Complete type definitions for scenes, meshes, materials, animations, etc.
+- **Post-Processing**: All available post-processing steps and configurations
+- **Metadata Access**: Scene and node metadata querying
+- **Memory Management**: Proper resource cleanup and memory handling
+- **Logging System**: Integration with Assimp's logging infrastructure
 
 ## Build Features
 

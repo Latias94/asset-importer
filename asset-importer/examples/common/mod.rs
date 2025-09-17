@@ -5,9 +5,9 @@
 use std::path::{Path, PathBuf};
 
 use asset_importer::{
-    logging::{attach_default_streams, detach_all_streams, DefaultLogStreams},
-    postprocess::PostProcessSteps,
     ImportBuilder, Importer, Scene,
+    logging::{DefaultLogStreams, attach_default_streams, detach_all_streams},
+    postprocess::PostProcessSteps,
 };
 
 /// How to pick a model path for examples

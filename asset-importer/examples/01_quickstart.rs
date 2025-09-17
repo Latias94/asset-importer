@@ -5,7 +5,7 @@ mod common;
 
 use std::error::Error;
 
-use asset_importer::{postprocess::PostProcessSteps, Scene};
+use asset_importer::{Scene, postprocess::PostProcessSteps};
 
 fn main() -> Result<(), Box<dyn Error>> {
     common::init_logging_from_env();

@@ -14,7 +14,7 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::path::Path;
 
-use asset_importer::{material::TextureType, postprocess::PostProcessSteps, Importer};
+use asset_importer::{Importer, material::TextureType, postprocess::PostProcessSteps};
 use bytemuck::{Pod, Zeroable};
 use glam::{Mat4, Vec3};
 use glow::*;

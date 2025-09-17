@@ -6,7 +6,7 @@ use crate::{
     aabb::AABB,
     bone::{Bone, BoneIterator},
     sys,
-    types::{from_ai_color4d, from_ai_vector3d, Color4D, Vector3D},
+    types::{Color4D, Vector3D, from_ai_color4d, from_ai_vector3d},
 };
 
 /// A mesh containing vertices, faces, and other geometric data

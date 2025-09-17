@@ -1,6 +1,15 @@
 # asset-importer
 
+[![Crates.io](https://img.shields.io/crates/v/asset-importer.svg)](https://crates.io/crates/asset-importer)
+[![Documentation](https://docs.rs/asset-importer/badge.svg)](https://docs.rs/asset-importer)
+[![License](https://img.shields.io/crates/l/asset-importer.svg)](https://github.com/Latias94/asset-importer#license)
+[![Rust Version](https://img.shields.io/badge/rust-1.85+-blue.svg)](https://www.rust-lang.org)
+[![Downloads](https://img.shields.io/crates/d/asset-importer.svg)](https://crates.io/crates/asset-importer)
+[![Made with Rust](https://img.shields.io/badge/made%20with-Rust-orange.svg)](https://www.rust-lang.org)
+
 A comprehensive Rust binding for the latest [Assimp](https://github.com/assimp/assimp) 3D asset import library.
+
+This crate provides safe, high-level Rust bindings for **Assimp v6.0.2**, implementing the vast majority of the C API with idiomatic Rust interfaces.
 
 ## Status
 
@@ -8,11 +17,13 @@ A comprehensive Rust binding for the latest [Assimp](https://github.com/assimp/a
 
 ## Features
 
+- **Comprehensive API Coverage**: Implements the vast majority of [Assimp v6.0.2](https://github.com/assimp/assimp/releases/tag/v6.0.2) C API
 - **Import Support**: 71+ 3D file formats (OBJ, FBX, glTF, DAE, etc.)
 - **Export Support**: 22+ output formats (optional)
 - **Memory Safe**: Safe Rust API over unsafe FFI bindings
 - **Modern Math**: Integration with glam for vectors and matrices
 - **Flexible Building**: Multiple build options for different use cases
+- **Cross-Platform**: Supports Windows, macOS, and Linux
 
 ## Quick Start
 

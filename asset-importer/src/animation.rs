@@ -39,11 +39,7 @@ impl Animation {
     pub fn ticks_per_second(&self) -> f64 {
         unsafe {
             let tps = (*self.animation_ptr).mTicksPerSecond;
-            if tps != 0.0 {
-                tps
-            } else {
-                25.0
-            } // Default to 25 FPS
+            if tps != 0.0 { tps } else { 25.0 } // Default to 25 FPS
         }
     }
 

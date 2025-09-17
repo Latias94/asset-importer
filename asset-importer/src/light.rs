@@ -3,7 +3,7 @@
 use crate::{
     error::c_str_to_string_or_empty,
     sys,
-    types::{from_ai_color3d, from_ai_vector2d, from_ai_vector3d, Color3D, Vector2D, Vector3D},
+    types::{Color3D, Vector2D, Vector3D, from_ai_color3d, from_ai_vector2d, from_ai_vector3d},
 };
 
 /// A light source in the scene

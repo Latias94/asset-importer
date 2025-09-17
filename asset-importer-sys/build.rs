@@ -25,7 +25,9 @@ fn main() {
     // Determine build strategy and generate bindings
     let built_include_dir = if cfg!(feature = "system") {
         if cfg!(feature = "static-link") {
-            println!("cargo:warning=feature 'static-link' is ignored with 'system' linking; using dynamic system lib");
+            println!(
+                "cargo:warning=feature 'static-link' is ignored with 'system' linking; using dynamic system lib"
+            );
         }
         // Explicitly use system assimp
         link_system_assimp();

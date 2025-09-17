@@ -1,10 +1,10 @@
 //! Scene node representation and hierarchy
 
 use crate::{
-    error::{c_str_to_string_or_empty, Result},
+    error::{Result, c_str_to_string_or_empty},
     metadata::Metadata,
     sys,
-    types::{from_ai_matrix4x4, Matrix4x4},
+    types::{Matrix4x4, from_ai_matrix4x4},
 };
 
 /// A node in the scene hierarchy

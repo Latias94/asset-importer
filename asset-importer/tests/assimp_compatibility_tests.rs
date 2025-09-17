@@ -2,10 +2,10 @@
 //! These tests verify compatibility with the original Assimp library
 
 use asset_importer::{
-    enable_verbose_logging, get_import_extensions,
+    Importer, enable_verbose_logging, get_import_extensions,
     io::{FileStream, MemoryFileStream},
     postprocess::PostProcessSteps,
-    version, Importer,
+    version,
 };
 
 /// Simple OBJ cube model for testing (based on assimp/test/models/OBJ/box.obj)

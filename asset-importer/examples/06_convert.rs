@@ -6,7 +6,7 @@ mod common;
 use std::error::Error;
 
 #[cfg(feature = "export")]
-use asset_importer::{exporter::ExportBuilder, get_export_formats, Scene};
+use asset_importer::{Scene, exporter::ExportBuilder, get_export_formats};
 
 fn main() -> Result<(), Box<dyn Error>> {
     common::init_logging_from_env();

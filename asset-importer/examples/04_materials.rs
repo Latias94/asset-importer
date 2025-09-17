@@ -6,7 +6,7 @@ mod common;
 use std::error::Error;
 
 use asset_importer::{
-    material::{material_keys, PropertyTypeInfo},
+    material::{PropertyTypeInfo, material_keys},
     postprocess::PostProcessSteps,
 };
 

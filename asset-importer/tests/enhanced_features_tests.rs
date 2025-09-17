@@ -1,8 +1,8 @@
 //! Tests for enhanced material system and property store functionality
 
 use asset_importer::{
-    import_properties, material_keys, postprocess::PostProcessSteps, Importer, PropertyStore,
-    PropertyValue, Scene,
+    Importer, PropertyStore, PropertyValue, Scene, import_properties, material_keys,
+    postprocess::PostProcessSteps,
 };
 
 // Simple OBJ cube for testing
@@ -380,7 +380,7 @@ fn test_vertex_weight_operations() {
 #[test]
 #[cfg(feature = "build-assimp")]
 fn test_aabb_operations() {
-    use asset_importer::{types::Vector3D, AABB};
+    use asset_importer::{AABB, types::Vector3D};
 
     let min = Vector3D::new(-1.0, -2.0, -3.0);
     let max = Vector3D::new(1.0, 2.0, 3.0);
@@ -415,7 +415,7 @@ fn test_aabb_operations() {
 #[test]
 #[cfg(feature = "build-assimp")]
 fn test_importer_desc_functionality() -> Result<(), Box<dyn std::error::Error>> {
-    use asset_importer::{get_all_importer_descs, get_importer_desc, ImporterFlags};
+    use asset_importer::{ImporterFlags, get_all_importer_descs, get_importer_desc};
 
     // Test getting description for OBJ format
     let obj_desc = get_importer_desc("obj");
@@ -474,7 +474,7 @@ fn test_common_metadata_constants() {
 #[test]
 #[cfg(feature = "build-assimp")]
 fn test_memory_requirements() -> Result<(), Box<dyn std::error::Error>> {
-    use asset_importer::{postprocess::PostProcessSteps, MemoryInfo, Scene};
+    use asset_importer::{MemoryInfo, Scene, postprocess::PostProcessSteps};
 
     // Create a simple OBJ scene in memory
     let scene = Scene::from_memory_with_flags(

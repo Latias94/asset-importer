@@ -6,9 +6,9 @@
 use crate::{
     sys,
     types::{
-        from_ai_matrix3x3, from_ai_matrix4x4, from_ai_quaternion, from_ai_vector2d,
-        from_ai_vector3d, to_ai_matrix3x3, to_ai_matrix4x4, to_ai_vector2d, to_ai_vector3d,
-        Matrix3x3, Matrix4x4, Quaternion, Vector2D, Vector3D,
+        Matrix3x3, Matrix4x4, Quaternion, Vector2D, Vector3D, from_ai_matrix3x3, from_ai_matrix4x4,
+        from_ai_quaternion, from_ai_vector2d, from_ai_vector3d, to_ai_matrix3x3, to_ai_matrix4x4,
+        to_ai_vector2d, to_ai_vector3d,
     },
 };
 

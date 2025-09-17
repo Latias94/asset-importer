@@ -48,7 +48,7 @@ pub use asset_importer_sys as sys;
 // Re-export common types for convenience
 pub use crate::{
     error::{Error, Result},
-    importer::{import_properties, ImportBuilder, Importer, PropertyStore, PropertyValue},
+    importer::{ImportBuilder, Importer, PropertyStore, PropertyValue, import_properties},
     scene::{MemoryInfo, Scene},
     types::*,
 };
@@ -64,7 +64,7 @@ pub use crate::metadata::{Metadata, MetadataEntry, MetadataType};
 
 // Re-export material functionality
 pub use crate::material::{
-    material_keys, Material, MaterialPropertyInfo, PropertyTypeInfo, TextureInfo, TextureType,
+    Material, MaterialPropertyInfo, PropertyTypeInfo, TextureInfo, TextureType, material_keys,
 };
 
 // Re-export texture functionality
@@ -81,7 +81,7 @@ pub use crate::animation::Animation;
 
 // Re-export importer description functionality
 pub use crate::importer_desc::{
-    get_all_importer_descs, get_importer_desc, ImporterDesc, ImporterFlags,
+    ImporterDesc, ImporterFlags, get_all_importer_descs, get_importer_desc,
 };
 
 // Core modules

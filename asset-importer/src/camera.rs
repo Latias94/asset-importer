@@ -3,7 +3,7 @@
 use crate::{
     error::c_str_to_string_or_empty,
     sys,
-    types::{from_ai_vector3d, Vector3D},
+    types::{Vector3D, from_ai_vector3d},
 };
 
 /// A camera in the scene
