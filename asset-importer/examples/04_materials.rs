@@ -64,21 +64,21 @@ fn main() -> Result<(), Box<dyn Error>> {
                 }
                 PropertyTypeInfo::Integer => {
                     if let Some(v) = mat.get_property_i32_array(&p.key, p.semantic, p.index) {
-                        println!(" ints={:?}", preview(&v));
+                        println!(" ints={:?}", preview(&v[..]));
                     } else {
                         println!();
                     }
                 }
                 PropertyTypeInfo::Float => {
                     if let Some(v) = mat.get_property_f32_array(&p.key, p.semantic, p.index) {
-                        println!(" floats={:?}", preview(&v));
+                        println!(" floats={:?}", preview(&v[..]));
                     } else {
                         println!();
                     }
                 }
                 PropertyTypeInfo::Double => {
                     if let Some(v) = mat.get_property_f64_array(&p.key, p.semantic, p.index) {
-                        println!(" doubles={:?}", preview(&v));
+                        println!(" doubles={:?}", preview(&v[..]));
                     } else {
                         println!();
                     }

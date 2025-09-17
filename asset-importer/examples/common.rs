@@ -53,7 +53,7 @@ pub fn init_logging_from_env() {
     }
     // Optional FILE stream via AI_EX_LOGFILE
     let file_path = std::env::var("AI_EX_LOGFILE").ok().map(PathBuf::from);
-    let _ = attach_default_streams(streams, file_path.as_deref().map(|p| p.as_path()));
+    let _ = attach_default_streams(streams, file_path.as_deref());
     // verbose logging is global
     asset_importer::enable_verbose_logging(verbose);
 }
@@ -64,7 +64,7 @@ pub fn shutdown_logging() {
 }
 
 /// Import a scene using a set of default post-process steps. Accepts extra steps to combine.
-pub fn import_scene(path: &Path, extra: PostProcessSteps) -> anyhow::Result<Scene> {
+pub fn import_scene(path: &Path, extra: PostProcessSteps) -> Result<Scene, Box<dyn std::error::Error>> {
     let mut steps = PostProcessSteps::TRIANGULATE | PostProcessSteps::SORT_BY_PTYPE;
     steps |= extra;
     let scene = Importer::new()
