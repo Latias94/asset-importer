@@ -2,6 +2,19 @@
 members = ["asset-importer-sys", "asset-importer"]
 resolver = "2"
 
+# Exclude workspace-level development files from all packages
+exclude = [
+    "repo-ref/",
+    "tests/",
+    "target/",
+    "*.tmp",
+    "*.log",
+    "*.bak",
+    "*~",
+    ".DS_Store",
+    "Thumbs.db",
+]
+
 [workspace.package]
 version = "0.1.0"
 edition = "2024"

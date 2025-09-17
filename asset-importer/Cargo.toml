@@ -19,13 +19,26 @@ categories = [
 keywords = ["assimp", "3d", "mesh", "animation", "graphics"]
 readme = "../README.md"
 exclude = [
+    # Development and example files
     "examples/",
     "tests/models/",
+
+    # IDE configuration files
     ".vscode/",
     ".idea/",
+
+    # Build and temporary files
+    "target/",
     "*.tmp",
     "*.log",
-    "target/",
+    "*.bak",
+    "*~",
+
+    # System files
+    ".DS_Store",
+    "Thumbs.db",
+
+    # Documentation (except README which is included via readme field)
     "*.md",
 ]
 

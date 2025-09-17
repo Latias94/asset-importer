@@ -16,12 +16,15 @@ links = "assimp"
 
 # Exclude unnecessary files to reduce package size
 exclude = [
+    # Assimp test and development files
     "assimp/test/",
     "assimp/samples/",
     "assimp/tools/",
     "assimp/doc/",
     "assimp/contrib/",
     "assimp/build/",
+
+    # Git and CI files
     "assimp/.git/",
     "assimp/.github/",
     "assimp/.gitignore",
@@ -29,9 +32,32 @@ exclude = [
     "assimp/.clang-format",
     "assimp/.travis.yml",
     "assimp/appveyor.yml",
+
+    # Language ports (not needed for Rust bindings)
+    "assimp/port/",
+
+    # Scripts and utilities
+    "assimp/scripts/",
+    "assimp/packaging/",
+    "assimp/fuzz/",
+
+    # Development files
+    "assimp/Dockerfile",
+    "assimp/CMakePresets.json",
+    "assimp/BUILDBINARIES_EXAMPLE.bat",
+
+    # Our own development files
     "examples/",
     "*.md",
     "target/",
+
+    # Temporary and backup files
+    "*.tmp",
+    "*.log",
+    "*.bak",
+    "*~",
+    ".DS_Store",
+    "Thumbs.db",
 ]
 
 # Disable doctests for generated bindings to avoid C-style code examples
