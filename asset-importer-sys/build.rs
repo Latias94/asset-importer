@@ -38,9 +38,9 @@ fn main() {
         // Use the built include directory which has config.h
         Some(out_dir.join("include"))
     } else if cfg!(feature = "prebuilt") {
-        // Explicitly use prebuilt binaries
-        link_prebuilt_assimp(&out_dir);
-        None
+        // Explicitly use prebuilt binaries, and use their include directory for wrapper/bindgen
+        let include = link_prebuilt_assimp(&out_dir);
+        Some(include)
     } else {
         // Default: build from source for better compatibility
         build_assimp_from_source(&manifest_dir, &out_dir);
@@ -133,7 +133,7 @@ fn try_system_assimp() -> bool {
     false
 }
 
-fn link_prebuilt_assimp(out_dir: &std::path::Path) {
+fn link_prebuilt_assimp(out_dir: &std::path::Path) -> std::path::PathBuf {
     let target = env::var("TARGET").unwrap();
     let crate_version = env::var("CARGO_PKG_VERSION").unwrap();
 
@@ -182,6 +182,9 @@ fn link_prebuilt_assimp(out_dir: &std::path::Path) {
 
     // Extract the archive
     extract_prebuilt_package(&ar_src_dir, &archive_names, out_dir, link_type);
+
+    // Return the include directory inside the extracted package
+    out_dir.join(link_type).join("include")
 }
 
 fn download_prebuilt_packages(out_dir: &std::path::Path, archive_names: &[String]) {
@@ -563,11 +566,12 @@ fn build_assimp_from_source(manifest_dir: &std::path::Path, _out_path: &std::pat
     match target_os.as_str() {
         "windows" => {
             if target_env == "msvc" {
-                // Match MSVC runtime with `crt-static`: MultiThreaded vs MultiThreadedDLL
+                // Match MSVC runtime with `crt-static` and Debug/Release configuration
+                // Use generator expressions to select *Debug variants in Debug builds.
                 let msvc_rt = if use_static_crt {
-                    "MultiThreaded"
+                    "MultiThreaded$<$<CONFIG:Debug>:Debug>"
                 } else {
-                    "MultiThreadedDLL"
+                    "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL"
                 };
                 config.define("CMAKE_MSVC_RUNTIME_LIBRARY", msvc_rt);
                 // Enable C++ exception handling for MSVC
@@ -679,8 +683,37 @@ fn build_assimp_from_source(manifest_dir: &std::path::Path, _out_path: &std::pat
             println!("cargo:rustc-link-lib=static=zlibstatic");
         }
     } else {
+        // Non-MSVC: prefer debug-suffixed static lib if present (libassimpd.a)
+        let search_dirs = [
+            dst.join("lib"),
+            dst.join("lib64"),
+            dst.join("build").join("lib"),
+            dst.join("build").join("lib64"),
+        ];
+        let mut linked_static_debug = false;
         if cfg!(feature = "static-link") {
-            println!("cargo:rustc-link-lib=static=assimp");
+            'outer: for dir in &search_dirs {
+                if let Ok(read) = std::fs::read_dir(dir) {
+                    for entry in read.flatten() {
+                        let p = entry.path();
+                        if let (Some(name), Some(ext)) = (
+                            p.file_name().and_then(|s| s.to_str()),
+                            p.extension().and_then(|s| s.to_str()),
+                        ) {
+                            if ext.eq_ignore_ascii_case("a")
+                                && name.eq_ignore_ascii_case("libassimpd.a")
+                            {
+                                println!("cargo:rustc-link-lib=static=assimpd");
+                                linked_static_debug = true;
+                                break 'outer;
+                            }
+                        }
+                    }
+                }
+            }
+            if !linked_static_debug {
+                println!("cargo:rustc-link-lib=static=assimp");
+            }
         } else {
             println!("cargo:rustc-link-lib=assimp");
         }
@@ -803,16 +836,13 @@ fn generate_bindings(
     // Create empty config.h if it doesn't exist (needed for system builds) only when using submodule path
     let submodule_include = manifest_dir.join("assimp").join("include");
     let use_submodule = assimp_include == submodule_include;
-    let (config_file, mut config_exists) = (assimp_include.join("assimp").join("config.h"), false);
-    if use_submodule {
-        config_exists = config_file.exists();
-        if !config_exists {
-            if let Some(parent) = config_file.parent() {
-                std::fs::create_dir_all(parent).expect("Failed to create assimp include directory");
-            }
-            std::fs::write(&config_file, "")
-                .expect("Unable to write config.h to assimp/include/assimp/");
+    let config_file = assimp_include.join("assimp").join("config.h");
+    if use_submodule && !config_file.exists() {
+        if let Some(parent) = config_file.parent() {
+            std::fs::create_dir_all(parent).expect("Failed to create assimp include directory");
         }
+        std::fs::write(&config_file, "")
+            .expect("Unable to write config.h to assimp/include/assimp/");
     }
 
     let mut builder = bindgen::Builder::default()
