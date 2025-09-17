@@ -24,7 +24,7 @@ A clear and concise description of what you expected to happen.
  - OS: [e.g. Windows 10, macOS 12, Ubuntu 20.04]
  - Rust version: [e.g. 1.70.0]
  - Crate version: [e.g. 0.1.0]
- - Features used: [e.g. "build-assimp", "static", "prebuilt"]
+- Features used: [e.g. "build-assimp", "static-link", "prebuilt"]
 
 **Build configuration**
 If applicable, please provide:

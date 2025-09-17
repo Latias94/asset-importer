@@ -17,7 +17,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-        features: ['', 'build-assimp', 'static']
+        features: ['', 'build-assimp', 'build-assimp,static-link']
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -36,6 +36,14 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y cmake build-essential
+
+      - name: Install LLVM (libclang) for bindgen
+        if: runner.os == 'Linux'
+        uses: KyleMayes/install-llvm-action@v1
+        with:
+          directory: ${{ runner.temp }}/llvm
+          cached: true
+          version: '14.0'
 
       - name: Install macOS dependencies
         if: runner.os == 'macOS'
