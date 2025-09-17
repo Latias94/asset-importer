@@ -1,5 +1,7 @@
 //! Post-processing steps for imported scenes
 
+#![allow(clippy::unnecessary_cast)]
+
 use crate::sys;
 use bitflags::bitflags;
 

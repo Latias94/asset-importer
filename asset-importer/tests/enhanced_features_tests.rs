@@ -262,9 +262,8 @@ fn test_property_value_variants() {
 #[cfg(feature = "build-assimp")]
 fn test_texture_system() -> Result<(), Box<dyn std::error::Error>> {
     // Test with a simple OBJ that won't have embedded textures
-    let obj_data = create_simple_cube_obj();
     let scene = Scene::from_memory_with_flags(
-        obj_data.as_bytes(),
+        SIMPLE_OBJ_CUBE.as_bytes(),
         Some("obj"),
         PostProcessSteps::TRIANGULATE,
     )?;
@@ -285,9 +284,8 @@ fn test_texture_system() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 #[cfg(feature = "build-assimp")]
 fn test_aabb_system() -> Result<(), Box<dyn std::error::Error>> {
-    let obj_data = create_simple_cube_obj();
     let scene = Scene::from_memory_with_flags(
-        obj_data.as_bytes(),
+        SIMPLE_OBJ_CUBE.as_bytes(),
         Some("obj"),
         PostProcessSteps::TRIANGULATE | PostProcessSteps::GEN_BOUNDING_BOXES,
     )?;
@@ -332,9 +330,8 @@ fn test_aabb_system() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 #[cfg(feature = "build-assimp")]
 fn test_bone_system() -> Result<(), Box<dyn std::error::Error>> {
-    let obj_data = create_simple_cube_obj();
     let scene = Scene::from_memory_with_flags(
-        obj_data.as_bytes(),
+        SIMPLE_OBJ_CUBE.as_bytes(),
         Some("obj"),
         PostProcessSteps::TRIANGULATE,
     )?;
@@ -480,10 +477,8 @@ fn test_memory_requirements() -> Result<(), Box<dyn std::error::Error>> {
     use asset_importer::{postprocess::PostProcessSteps, MemoryInfo, Scene};
 
     // Create a simple OBJ scene in memory
-    let obj_data = create_simple_cube_obj();
-
     let scene = Scene::from_memory_with_flags(
-        obj_data.as_bytes(),
+        SIMPLE_OBJ_CUBE.as_bytes(),
         Some("obj"),
         PostProcessSteps::TRIANGULATE | PostProcessSteps::GEN_BOUNDING_BOXES,
     )?;

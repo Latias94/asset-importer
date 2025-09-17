@@ -3,6 +3,8 @@
 //! This module provides access to information about available importers,
 //! including their capabilities, supported file formats, and metadata.
 
+#![allow(clippy::unnecessary_cast)]
+
 use crate::{error::c_str_to_string_or_empty, sys};
 use std::ffi::CString;
 

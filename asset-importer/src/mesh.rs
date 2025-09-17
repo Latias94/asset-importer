@@ -1,5 +1,7 @@
 //! Mesh representation and utilities
 
+#![allow(clippy::unnecessary_cast)]
+
 use crate::{
     aabb::AABB,
     bone::{Bone, BoneIterator},

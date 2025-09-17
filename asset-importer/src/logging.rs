@@ -3,6 +3,8 @@
 //! This module provides safe Rust wrappers around Assimp's logging functionality,
 //! allowing you to capture and handle log messages from the Assimp library.
 
+#![allow(clippy::unnecessary_cast)]
+
 use std::ffi::CStr;
 use std::os::raw::c_char;
 use std::sync::{Arc, Mutex};
