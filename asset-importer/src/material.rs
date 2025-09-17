@@ -1,5 +1,7 @@
 //! Material representation and properties
 
+#![allow(clippy::unnecessary_cast)]
+
 use std::ffi::CString;
 
 use crate::{
