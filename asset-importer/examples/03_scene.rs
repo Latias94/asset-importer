@@ -13,9 +13,11 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     println!(
         "Root: {}",
-        scene.root().map(|n| n.name()).unwrap_or_default()
+        scene.root_node().map(|n| n.name()).unwrap_or_default()
     );
-    print_tree(scene.root().unwrap(), 0, 3);
+    if let Some(root) = scene.root_node() {
+        print_tree(root, 0, 3);
+    }
 
     println!("\nMeshes: {}", scene.num_meshes());
     for (i, mesh) in scene.meshes().enumerate().take(5) {
@@ -29,7 +31,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         );
     }
 
-    if let Some(mem) = scene.memory_info() {
+    if let Ok(mem) = scene.memory_requirements() {
         let MemoryInfo {
             textures,
             materials,
