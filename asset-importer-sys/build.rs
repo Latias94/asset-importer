@@ -36,7 +36,7 @@ fn main() {
         // Explicitly build from source
         build_assimp_from_source(&manifest_dir, &out_dir);
         // Use the built include directory which has config.h
-        Some(out_dir.join("build").join("include"))
+        Some(out_dir.join("include"))
     } else if cfg!(feature = "prebuilt") {
         // Explicitly use prebuilt binaries
         link_prebuilt_assimp(&out_dir);
@@ -44,7 +44,7 @@ fn main() {
     } else {
         // Default: build from source for better compatibility
         build_assimp_from_source(&manifest_dir, &out_dir);
-        Some(out_dir.join("build").join("include"))
+        Some(out_dir.join("include"))
     };
 
     generate_bindings(&manifest_dir, &out_dir, built_include_dir.as_deref());
@@ -899,10 +899,7 @@ fn generate_bindings(
         .write_to_file(&out_file)
         .expect("Couldn't write bindings!");
 
-    // Clean up temporary config.h if we created it
-    if use_submodule && !config_exists {
-        let _ = std::fs::remove_file(config_file);
-    }
+    // Keep a temporary config.h for wrapper.cpp compilation in prebuilt/system modes
 }
 
 fn compile_bridge_cpp(manifest_dir: &std::path::Path, built_include_dir: Option<&std::path::Path>) {
