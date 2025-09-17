@@ -76,6 +76,7 @@ jobs:
             exit 0
           fi
           echo "✅ Building prebuilt binaries for asset-importer-sys v${{ steps.parse_version.outputs.version }}"
+        shell: bash
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -93,6 +94,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y cmake build-essential
+        shell: bash
 
       - name: Install LLVM (libclang) for bindgen
         if: runner.os == 'Linux'
@@ -106,11 +108,13 @@ jobs:
         if: runner.os == 'macOS'
         run: |
           brew install cmake
+        shell: bash
 
       - name: Install Windows dependencies
         if: runner.os == 'Windows'
         run: |
           choco install cmake
+        shell: pwsh
 
       # Set up cross-compilation for different targets
       - name: Setup cross-compilation
