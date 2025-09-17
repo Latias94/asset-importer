@@ -21,8 +21,12 @@ exclude = [
     "assimp/samples/",
     "assimp/tools/",
     "assimp/doc/",
-    "assimp/contrib/",
     "assimp/build/",
+
+    # Exclude non-essential contrib libraries (keep zlib, pugixml, rapidjson, etc.)
+    "assimp/contrib/googletest/",
+    "assimp/contrib/android-cmake/",
+    "assimp/contrib/meshlab/",
 
     # Git and CI files
     "assimp/.git/",
