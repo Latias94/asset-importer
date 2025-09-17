@@ -473,6 +473,10 @@ fn build_assimp_from_source(manifest_dir: &std::path::Path, _out_path: &std::pat
     }
 
     // Platform-specific configurations
+    // Set C++ standard to C++17 (required by Assimp)
+    config.define("CMAKE_CXX_STANDARD", "17");
+    config.define("CMAKE_CXX_STANDARD_REQUIRED", "ON");
+
     match target_os.as_str() {
         "windows" => {
             if target_env == "msvc" {
@@ -486,8 +490,13 @@ fn build_assimp_from_source(manifest_dir: &std::path::Path, _out_path: &std::pat
         }
         "macos" => {
             config.define("CMAKE_OSX_DEPLOYMENT_TARGET", "10.12");
+            // Ensure C++17 standard for macOS
+            config.define("CMAKE_CXX_FLAGS", "-std=c++17");
         }
-        _ => {}
+        _ => {
+            // For other Unix-like systems, ensure C++17
+            config.define("CMAKE_CXX_FLAGS", "-std=c++17");
+        }
     }
 
     let dst = config.build();
@@ -779,6 +788,10 @@ fn generate_bindings(
 fn compile_bridge_cpp(manifest_dir: &std::path::Path, built_include_dir: Option<&std::path::Path>) {
     let mut build = cc::Build::new();
     build.cpp(true);
+
+    // Set C++17 standard (required by Assimp)
+    build.std("c++17");
+
     build.file(manifest_dir.join("wrapper.cpp"));
 
     // Include paths for Assimp headers: prefer built include (has config.h), then submodule include
@@ -791,13 +804,26 @@ fn compile_bridge_cpp(manifest_dir: &std::path::Path, built_include_dir: Option<
         build.include(manifest_dir.join("assimp").join("include"));
     }
 
-    // On Windows, ensure exceptions for MSVC (consistent with Assimp build)
-    #[cfg(target_env = "msvc")]
-    {
-        build.flag("/EHsc");
-        // Use static runtime library on Windows to match assimp's default
-        // This avoids runtime library conflicts (MT vs MD)
-        build.static_crt(true);
+    // Platform-specific compiler flags
+    let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
+    let target_env = env::var("CARGO_CFG_TARGET_ENV").unwrap_or_default();
+
+    match target_os.as_str() {
+        "windows" => {
+            if target_env == "msvc" {
+                build.flag("/EHsc");
+                // Use static runtime library on Windows to match assimp's default
+                // This avoids runtime library conflicts (MT vs MD)
+                build.static_crt(true);
+            }
+        }
+        "macos" => {
+            // Ensure compatibility with macOS deployment target
+            build.flag("-mmacosx-version-min=10.12");
+        }
+        _ => {
+            // For other Unix-like systems
+        }
     }
 
     build.compile("assimp_rust_bridge");

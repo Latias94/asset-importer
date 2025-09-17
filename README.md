@@ -2,7 +2,6 @@
 
 [![Crates.io](https://img.shields.io/crates/v/asset-importer.svg)](https://crates.io/crates/asset-importer)
 [![Documentation](https://docs.rs/asset-importer/badge.svg)](https://docs.rs/asset-importer)
-[![License](https://img.shields.io/crates/l/asset-importer.svg)](https://github.com/Latias94/asset-importer#license)
 [![Rust Version](https://img.shields.io/badge/rust-1.85+-blue.svg)](https://www.rust-lang.org)
 [![Downloads](https://img.shields.io/crates/d/asset-importer.svg)](https://crates.io/crates/asset-importer)
 [![Made with Rust](https://img.shields.io/badge/made%20with-Rust-orange.svg)](https://www.rust-lang.org)
