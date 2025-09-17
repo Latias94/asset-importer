@@ -604,6 +604,9 @@ fn build_assimp_from_source(manifest_dir: &std::path::Path, _out_path: &std::pat
         dst.display()
     );
 
+    // Add the out directory itself as a search path
+    println!("cargo:rustc-link-search=native={}", dst.display());
+
     // Add the CMake profile subdirectory for MSVC builds
     let target_env = env::var("CARGO_CFG_TARGET_ENV").unwrap_or_default();
     if target_env == "msvc" {
@@ -675,24 +678,14 @@ fn build_assimp_from_source(manifest_dir: &std::path::Path, _out_path: &std::pat
         } else {
             println!("cargo:rustc-link-lib={}", assimp_lib);
         }
-        // If building from source and zlib is enabled, link zlibstatic explicitly.
+        // If building from source and zlib is enabled, link zlib explicitly.
         // Prebuilt and system modes should not require explicit zlib linking here.
         if !cfg!(feature = "nozlib")
             && (cfg!(feature = "build-assimp") || env::var("ASSET_IMPORTER_FORCE_BUILD").is_ok())
         {
-            println!("cargo:rustc-link-lib=static=zlibstatic");
-        }
-    } else {
-        // Non-MSVC: prefer debug-suffixed static lib if present (libassimpd.a)
-        let search_dirs = [
-            dst.join("lib"),
-            dst.join("lib64"),
-            dst.join("build").join("lib"),
-            dst.join("build").join("lib64"),
-        ];
-        let mut linked_static_debug = false;
-        if cfg!(feature = "static-link") {
-            'outer: for dir in &search_dirs {
+            // Auto-detect the zlib library name produced by CMake
+            let mut zlib_lib: Option<String> = None;
+            for dir in &search_dirs {
                 if let Ok(read) = std::fs::read_dir(dir) {
                     for entry in read.flatten() {
                         let p = entry.path();
@@ -700,23 +693,109 @@ fn build_assimp_from_source(manifest_dir: &std::path::Path, _out_path: &std::pat
                             p.file_name().and_then(|s| s.to_str()),
                             p.extension().and_then(|s| s.to_str()),
                         ) {
-                            if ext.eq_ignore_ascii_case("a")
-                                && name.eq_ignore_ascii_case("libassimpd.a")
+                            if ext.eq_ignore_ascii_case("lib") {
+                                let lower = name.to_ascii_lowercase();
+                                if lower.contains("zlib") && !lower.contains("assimp") {
+                                    if let Some(stem) = p.file_stem().and_then(|s| s.to_str()) {
+                                        zlib_lib = Some(stem.to_string());
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                if zlib_lib.is_some() {
+                    break;
+                }
+            }
+
+            let zlib_lib = zlib_lib.unwrap_or_else(|| "zlibstatic".to_string());
+            println!("cargo:rustc-link-lib=static={}", zlib_lib);
+        }
+    } else {
+        // Non-MSVC: auto-detect the assimp library file
+        let search_dirs = [
+            dst.join("lib"),
+            dst.join("lib64"),
+            dst.join("build").join("lib"),
+            dst.join("build").join("lib64"),
+        ];
+
+        let mut assimp_lib: Option<String> = None;
+        let profile = env::var("PROFILE").unwrap_or_default();
+        let is_debug = profile == "debug";
+
+        // First try to find debug version if in debug mode
+        if is_debug {
+            'debug_search: for dir in &search_dirs {
+                if let Ok(read) = std::fs::read_dir(dir) {
+                    for entry in read.flatten() {
+                        let p = entry.path();
+                        if let (Some(name), Some(ext)) = (
+                            p.file_name().and_then(|s| s.to_str()),
+                            p.extension().and_then(|s| s.to_str()),
+                        ) {
+                            let lower_name = name.to_ascii_lowercase();
+                            if (ext.eq_ignore_ascii_case("a")
+                                || ext.eq_ignore_ascii_case("so")
+                                || ext.eq_ignore_ascii_case("dylib"))
+                                && lower_name.contains("assimp")
+                                && (lower_name.contains("assimpd") || lower_name.ends_with("d.a") || lower_name.ends_with("d.so") || lower_name.ends_with("d.dylib"))
                             {
-                                println!("cargo:rustc-link-lib=static=assimpd");
-                                linked_static_debug = true;
-                                break 'outer;
+                                if let Some(stem) = p.file_stem().and_then(|s| s.to_str()) {
+                                    // Remove lib prefix for Unix libraries
+                                    let lib_name = stem.strip_prefix("lib").unwrap_or(stem);
+                                    assimp_lib = Some(lib_name.to_string());
+                                    break 'debug_search;
+                                }
                             }
                         }
                     }
                 }
             }
-            if !linked_static_debug {
-                println!("cargo:rustc-link-lib=static=assimp");
-            }
-        } else {
-            println!("cargo:rustc-link-lib=assimp");
         }
+
+        // If no debug version found or not in debug mode, find regular version
+        if assimp_lib.is_none() {
+            'release_search: for dir in &search_dirs {
+                if let Ok(read) = std::fs::read_dir(dir) {
+                    for entry in read.flatten() {
+                        let p = entry.path();
+                        if let (Some(name), Some(ext)) = (
+                            p.file_name().and_then(|s| s.to_str()),
+                            p.extension().and_then(|s| s.to_str()),
+                        ) {
+                            let lower_name = name.to_ascii_lowercase();
+                            if (ext.eq_ignore_ascii_case("a")
+                                || ext.eq_ignore_ascii_case("so")
+                                || ext.eq_ignore_ascii_case("dylib"))
+                                && lower_name.contains("assimp")
+                                && !lower_name.contains("assimpd")
+                                && !lower_name.ends_with("d.a")
+                                && !lower_name.ends_with("d.so")
+                                && !lower_name.ends_with("d.dylib")
+                            {
+                                if let Some(stem) = p.file_stem().and_then(|s| s.to_str()) {
+                                    // Remove lib prefix for Unix libraries
+                                    let lib_name = stem.strip_prefix("lib").unwrap_or(stem);
+                                    assimp_lib = Some(lib_name.to_string());
+                                    break 'release_search;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        let assimp_lib = assimp_lib.unwrap_or_else(|| "assimp".to_string());
+        if cfg!(feature = "static-link") {
+            println!("cargo:rustc-link-lib=static={}", assimp_lib);
+        } else {
+            println!("cargo:rustc-link-lib={}", assimp_lib);
+        }
+
         // On non-Windows, when building from source and zlib is enabled, link against system zlib
         if !cfg!(feature = "nozlib")
             && (cfg!(feature = "build-assimp") || env::var("ASSET_IMPORTER_FORCE_BUILD").is_ok())
