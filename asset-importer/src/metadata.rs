@@ -58,8 +58,8 @@ pub enum MetadataType {
     UInt32,
 }
 
-impl From<sys::aiMetadataType::Type> for MetadataType {
-    fn from(value: sys::aiMetadataType::Type) -> Self {
+impl From<sys::aiMetadataType> for MetadataType {
+    fn from(value: sys::aiMetadataType) -> Self {
         match value {
             sys::aiMetadataType::AI_BOOL => MetadataType::Bool,
             sys::aiMetadataType::AI_INT32 => MetadataType::Int32,

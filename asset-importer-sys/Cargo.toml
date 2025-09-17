@@ -76,3 +76,4 @@ build-assimp = ["tar", "flate2"]
 prebuilt = ["tar", "flate2"]
 # Control zlib linking
 nozlib = []
+static-link = []

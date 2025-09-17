@@ -6,7 +6,7 @@ const LICENSE_APACHE_FILEPATH: &str = "LICENSE-APACHE";
 const LICENSE_MIT_FILEPATH: &str = "LICENSE-MIT";
 
 const fn static_lib() -> &'static str {
-    if cfg!(feature = "static") {
+    if cfg!(feature = "static-link") {
         "static"
     } else {
         "dylib"
@@ -31,12 +31,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     // Determine the source directory based on build type
-    let from_dir = if cfg!(feature = "build-assimp") || cfg!(feature = "static") {
+    let from_dir = if cfg!(feature = "build-assimp") {
         // Built from source - use the cmake output directory
         out_dir.join("build")
     } else {
         // This shouldn't happen in package mode, but fallback
-        return Err("Package tool requires build-assimp or static feature".into());
+        return Err("Package tool requires build-assimp feature".into());
     };
 
     // Find license files in workspace root

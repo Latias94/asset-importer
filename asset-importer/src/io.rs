@@ -476,8 +476,8 @@ extern "C" fn file_size_proc(file: *mut sys::aiFile) -> usize {
 extern "C" fn file_seek_proc(
     file: *mut sys::aiFile,
     offset: usize,
-    origin: sys::aiOrigin::Type,
-) -> sys::aiReturn::Type {
+    origin: sys::aiOrigin,
+) -> sys::aiReturn {
     if file.is_null() {
         return sys::aiReturn::aiReturn_FAILURE;
     }

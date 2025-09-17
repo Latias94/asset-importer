@@ -256,6 +256,14 @@ impl Mesh {
     pub fn bone_names(&self) -> Vec<String> {
         self.bones().map(|bone| bone.name()).collect()
     }
+
+    /// Get the mesh morphing method (if any)
+    pub fn morphing_method(&self) -> MorphingMethod {
+        unsafe {
+            let mesh = &*self.mesh_ptr;
+            MorphingMethod::from_sys(mesh.mMethod)
+        }
+    }
 }
 
 /// A face in a mesh
@@ -461,3 +469,26 @@ impl Iterator for AnimMeshIterator {
 }
 
 impl ExactSizeIterator for AnimMeshIterator {}
+
+/// Methods of mesh morphing supported by Assimp
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MorphingMethod {
+    Unknown,
+    VertexBlend,
+    MorphNormalized,
+    MorphRelative,
+}
+
+impl MorphingMethod {
+    fn from_sys(v: sys::aiMorphingMethod) -> Self {
+        match v {
+            sys::aiMorphingMethod::aiMorphingMethod_UNKNOWN => MorphingMethod::Unknown,
+            sys::aiMorphingMethod::aiMorphingMethod_VERTEX_BLEND => MorphingMethod::VertexBlend,
+            sys::aiMorphingMethod::aiMorphingMethod_MORPH_NORMALIZED => {
+                MorphingMethod::MorphNormalized
+            }
+            sys::aiMorphingMethod::aiMorphingMethod_MORPH_RELATIVE => MorphingMethod::MorphRelative,
+            _ => MorphingMethod::Unknown,
+        }
+    }
+}

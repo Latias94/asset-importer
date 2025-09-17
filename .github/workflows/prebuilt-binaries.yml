@@ -81,6 +81,14 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y cmake build-essential
 
+      - name: Install LLVM (libclang) for bindgen
+        if: runner.os == 'Linux'
+        uses: KyleMayes/install-llvm-action@v1
+        with:
+          directory: ${{ runner.temp }}/llvm
+          cached: true
+          version: '14.0'
+
       - name: Install macOS dependencies
         if: runner.os == 'macOS'
         run: |
@@ -103,7 +111,7 @@ jobs:
         working-directory: asset-importer-sys
         run: |
           if [ "${{ matrix.link_type }}" = "static" ]; then
-            cargo build --release --target ${{ matrix.target }} --features "build-assimp,static"
+            cargo build --release --target ${{ matrix.target }} --features "build-assimp,static-link"
           else
             cargo build --release --target ${{ matrix.target }} --features "build-assimp"
           fi
@@ -117,7 +125,7 @@ jobs:
         working-directory: asset-importer-sys
         run: |
           if [ "${{ matrix.link_type }}" = "static" ]; then
-            cargo run --bin package --release --target ${{ matrix.target }} --features "build-assimp,static"
+            cargo run --bin package --release --target ${{ matrix.target }} --features "build-assimp,static-link"
           else
             cargo run --bin package --release --target ${{ matrix.target }} --features "build-assimp"
           fi

@@ -42,9 +42,9 @@ asset-importer-sys = { features = ["prebuilt"] }
 
 ### Static Linking
 ```toml
-asset-importer-sys = { features = ["static", "build-assimp"] }
+asset-importer-sys = { features = ["static-link", "build-assimp"] }
 ```
-- Creates single executable with no external dependencies
+- Creates single executable with fewer external runtime dependencies
 - Larger binary size
 
 ### Additional Options

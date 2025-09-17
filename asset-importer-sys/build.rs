@@ -24,10 +24,13 @@ fn main() {
 
     // Determine build strategy and generate bindings
     let built_include_dir = if cfg!(feature = "system") {
+        if cfg!(feature = "static-link") {
+            println!("cargo:warning=feature 'static-link' is ignored with 'system' linking; using dynamic system lib");
+        }
         // Explicitly use system assimp
         link_system_assimp();
         None
-    } else if cfg!(feature = "build-assimp") || cfg!(feature = "static") || force_build {
+    } else if cfg!(feature = "build-assimp") || cfg!(feature = "static-link") || force_build {
         // Explicitly build from source
         build_assimp_from_source(&manifest_dir, &out_dir);
         // Use the built include directory which has config.h
@@ -131,7 +134,7 @@ fn link_prebuilt_assimp(out_dir: &std::path::Path) {
     let crate_version = env::var("CARGO_PKG_VERSION").unwrap();
 
     // Determine link type
-    let link_type = if cfg!(feature = "static") {
+    let link_type = if cfg!(feature = "static-link") {
         "static"
     } else {
         "dylib"
@@ -354,25 +357,38 @@ fn build_assimp_from_source(manifest_dir: &std::path::Path, _out_path: &std::pat
     let mut config = cmake::Config::new(&assimp_src);
 
     // Configure CMake options
+    // Shared vs static library build
+    let build_shared = if cfg!(feature = "static-link") {
+        "OFF"
+    } else {
+        "ON"
+    };
+
     config
         .define("ASSIMP_BUILD_TESTS", "OFF")
         .define("ASSIMP_BUILD_SAMPLES", "OFF")
         .define("ASSIMP_BUILD_ASSIMP_TOOLS", "OFF")
-        .define("BUILD_SHARED_LIBS", "OFF")
+        .define("BUILD_SHARED_LIBS", build_shared)
         // Disable being overly strict with warnings, which can cause build issues
         .define("ASSIMP_WARNINGS_AS_ERRORS", "OFF");
 
-    // Configure zlib based on nozlib feature and platform
-    // Follow assimp's default behavior: use system zlib on non-Windows platforms
+    // Configure zlib based on nozlib feature, platform, and shared/static build
     if cfg!(feature = "nozlib") {
         config.define("ASSIMP_BUILD_ZLIB", "OFF");
     } else if target_os == "windows" {
         // Use bundled zlib on Windows (assimp default)
         config.define("ASSIMP_BUILD_ZLIB", "ON");
     } else {
-        // Use system zlib on non-Windows platforms (assimp default since v5.3.1+)
-        // This avoids fdopen macro conflicts on macOS
-        config.define("ASSIMP_BUILD_ZLIB", "OFF");
+        // On Unix:
+        // - For shared assimp builds, force bundled zlib to avoid picking static libz.a without PIC.
+        // - For static assimp builds, prefer system zlib if available.
+        let building_shared = build_shared == "ON";
+        if building_shared {
+            config.define("ASSIMP_BUILD_ZLIB", "ON");
+        } else {
+            let use_system = has_system_zlib_any();
+            config.define("ASSIMP_BUILD_ZLIB", if use_system { "OFF" } else { "ON" });
+        }
     }
 
     // Enable export functionality if requested
@@ -440,10 +456,10 @@ fn build_assimp_from_source(manifest_dir: &std::path::Path, _out_path: &std::pat
     let target_env = env::var("CARGO_CFG_TARGET_ENV").unwrap_or_default();
     if target_env == "msvc" {
         // MSVC Release builds use "assimp-vc143-mt" (no 'd' suffix)
-        #[cfg(feature = "static")]
+        #[cfg(feature = "static-link")]
         println!("cargo:rustc-link-lib=static=assimp-vc143-mt");
 
-        #[cfg(not(feature = "static"))]
+        #[cfg(not(feature = "static-link"))]
         println!("cargo:rustc-link-lib=assimp-vc143-mt");
 
         // Link to zlib (built by assimp) unless disabled
@@ -451,10 +467,10 @@ fn build_assimp_from_source(manifest_dir: &std::path::Path, _out_path: &std::pat
             println!("cargo:rustc-link-lib=static=zlibstatic");
         }
     } else {
-        #[cfg(feature = "static")]
+        #[cfg(feature = "static-link")]
         println!("cargo:rustc-link-lib=static=assimp");
 
-        #[cfg(not(feature = "static"))]
+        #[cfg(not(feature = "static-link"))]
         println!("cargo:rustc-link-lib=assimp");
 
         // Link to zlib unless disabled
@@ -490,6 +506,57 @@ fn build_assimp_from_source(manifest_dir: &std::path::Path, _out_path: &std::pat
     // Export include path for bindgen
     let include_path = dst.join("include");
     println!("cargo:include={}", include_path.display());
+}
+
+fn has_system_zlib_any() -> bool {
+    // Quick checks for pkg-config and common headers/libs
+    // Return true if zlib seems available on the system
+    use std::process::Command;
+    // Try pkg-config first
+    if let Ok(status) = Command::new("pkg-config")
+        .arg("--exists")
+        .arg("zlib")
+        .status()
+    {
+        if status.success() {
+            return true;
+        }
+    }
+    // Fallback: check for common library/header locations
+    let header_paths = [
+        "/usr/include/zlib.h",
+        "/usr/local/include/zlib.h",
+        "/opt/homebrew/include/zlib.h",
+    ];
+    if header_paths
+        .iter()
+        .any(|p| std::path::Path::new(p).exists())
+    {
+        return true;
+    }
+    let lib_paths = [
+        "/usr/lib/libz.so",
+        "/usr/local/lib/libz.so",
+        "/usr/lib/x86_64-linux-gnu/libz.so",
+        "/usr/lib/aarch64-linux-gnu/libz.so",
+        "/opt/homebrew/lib/libz.dylib",
+        "/usr/lib/libz.a",
+        "/usr/local/lib/libz.a",
+        "/usr/lib/x86_64-linux-gnu/libz.a",
+        "/usr/lib/aarch64-linux-gnu/libz.a",
+    ];
+    lib_paths.iter().any(|p| std::path::Path::new(p).exists())
+}
+
+fn has_system_zlib_shared() -> bool {
+    let shared = [
+        "/usr/lib/libz.so",
+        "/usr/local/lib/libz.so",
+        "/usr/lib/x86_64-linux-gnu/libz.so",
+        "/usr/lib/aarch64-linux-gnu/libz.so",
+        "/opt/homebrew/lib/libz.dylib",
+    ];
+    shared.iter().any(|p| std::path::Path::new(p).exists())
 }
 
 fn generate_bindings(
@@ -548,11 +615,31 @@ fn generate_bindings(
         // Generate comments but disable doctests to avoid C-style code examples
         .generate_comments(true)
         .disable_untagged_union()
-        // Force enums to be i32 to ensure consistency across platforms
+        // Use Rust enums by default (non-exhaustive off for stable pattern matching)
         .default_enum_style(bindgen::EnumVariation::Rust {
             non_exhaustive: false,
         })
-        .constified_enum_module(".*");
+        // Prefer rustified enums for specific API enums we read/write directly
+        .rustified_enum("aiTextureMapping")
+        .rustified_enum("aiTextureOp")
+        .rustified_enum("aiTextureMapMode")
+        .rustified_enum("aiLightSourceType")
+        .rustified_enum("aiReturn")
+        .rustified_enum("aiOrigin")
+        .rustified_enum("aiMetadataType")
+        .rustified_enum("aiShadingMode")
+        .rustified_enum("aiBlendMode")
+        .rustified_enum("aiTextureType")
+        .rustified_enum("aiMorphingMethod")
+        .rustified_enum("aiAnimInterpolation")
+        .rustified_enum("aiAnimBehaviour")
+        .rustified_enum("aiPropertyTypeInfo")
+        // Constify only known bitmask/flags enums
+        .constified_enum_module("aiPostProcessSteps")
+        .constified_enum_module("aiPrimitiveType")
+        .constified_enum_module("aiTextureFlags")
+        .constified_enum_module("aiImporterFlags")
+        .constified_enum_module("aiDefaultLogStream");
 
     // Add include paths from environment (for system builds)
     if let Ok(include_path) = env::var("DEP_ASSIMP_INCLUDE") {
@@ -586,11 +673,11 @@ fn compile_bridge_cpp(manifest_dir: &std::path::Path, built_include_dir: Option<
     build.cpp(true);
     build.file(manifest_dir.join("wrapper.cpp"));
 
-    // Include paths for Assimp headers
-    build.include(manifest_dir.join("assimp").join("include"));
+    // Include paths for Assimp headers: prefer built include (has config.h), then submodule include
     if let Some(dir) = built_include_dir {
         build.include(dir);
     }
+    build.include(manifest_dir.join("assimp").join("include"));
 
     // On Windows, ensure exceptions for MSVC (consistent with Assimp build)
     #[cfg(target_env = "msvc")]

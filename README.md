@@ -87,9 +87,9 @@ asset-importer = { version = "0.1", features = ["prebuilt"] }
 ```toml
 asset-importer = {
     features = [
-        "export",      # Enable export functionality
-        "static",      # Static linking
-        "nozlib"       # Disable zlib
+        "export",        # Enable export functionality
+        "static-link",   # Prefer static linking (source/prebuilt)
+        "nozlib"         # Disable zlib
     ]
 }
 ```

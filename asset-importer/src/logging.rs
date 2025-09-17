@@ -8,6 +8,7 @@ use std::os::raw::c_char;
 use std::sync::{Arc, Mutex};
 
 use crate::{error::Result, sys};
+use bitflags::bitflags;
 
 /// Log levels supported by Assimp
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -263,6 +264,101 @@ pub fn attach_stderr_stream() -> Result<()> {
     global_logger().lock().unwrap().attach_stream(stream)
 }
 
+// === Default log streams (Assimp-provided) ===
+
+bitflags! {
+    /// Predefined log stream destinations in Assimp
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+    pub struct DefaultLogStreams: u32 {
+        const FILE     = sys::aiDefaultLogStream::aiDefaultLogStream_FILE as u32;
+        const STDOUT   = sys::aiDefaultLogStream::aiDefaultLogStream_STDOUT as u32;
+        const STDERR   = sys::aiDefaultLogStream::aiDefaultLogStream_STDERR as u32;
+        const DEBUGGER = sys::aiDefaultLogStream::aiDefaultLogStream_DEBUGGER as u32;
+    }
+}
+
+/// Attach predefined log streams provided by Assimp.
+/// For `FILE`, provide a file path; for others, `file_path` is ignored.
+pub fn attach_default_streams(
+    streams: DefaultLogStreams,
+    file_path: Option<&std::path::Path>,
+) -> Result<()> {
+    unsafe {
+        if streams.contains(DefaultLogStreams::FILE) {
+            let path = file_path.ok_or_else(|| {
+                crate::error::Error::invalid_parameter("file path required for FILE log stream")
+            })?;
+            let c_path = std::ffi::CString::new(path.to_string_lossy().as_ref())
+                .map_err(|_| crate::error::Error::invalid_parameter("invalid file path"))?;
+            let s = sys::aiGetPredefinedLogStream(
+                sys::aiDefaultLogStream::aiDefaultLogStream_FILE,
+                c_path.as_ptr(),
+            );
+            sys::aiAttachLogStream(&s);
+        }
+        if streams.contains(DefaultLogStreams::STDOUT) {
+            let s = sys::aiGetPredefinedLogStream(
+                sys::aiDefaultLogStream::aiDefaultLogStream_STDOUT,
+                std::ptr::null(),
+            );
+            sys::aiAttachLogStream(&s);
+        }
+        if streams.contains(DefaultLogStreams::STDERR) {
+            let s = sys::aiGetPredefinedLogStream(
+                sys::aiDefaultLogStream::aiDefaultLogStream_STDERR,
+                std::ptr::null(),
+            );
+            sys::aiAttachLogStream(&s);
+        }
+        if streams.contains(DefaultLogStreams::DEBUGGER) {
+            let s = sys::aiGetPredefinedLogStream(
+                sys::aiDefaultLogStream::aiDefaultLogStream_DEBUGGER,
+                std::ptr::null(),
+            );
+            sys::aiAttachLogStream(&s);
+        }
+    }
+    Ok(())
+}
+
+/// Detach predefined log streams. For `FILE`, provide the same path used when attaching.
+pub fn detach_default_streams(streams: DefaultLogStreams, file_path: Option<&std::path::Path>) {
+    unsafe {
+        if streams.contains(DefaultLogStreams::FILE) {
+            if let Some(path) = file_path {
+                if let Ok(c_path) = std::ffi::CString::new(path.to_string_lossy().as_ref()) {
+                    let s = sys::aiGetPredefinedLogStream(
+                        sys::aiDefaultLogStream::aiDefaultLogStream_FILE,
+                        c_path.as_ptr(),
+                    );
+                    let _ = sys::aiDetachLogStream(&s);
+                }
+            }
+        }
+        if streams.contains(DefaultLogStreams::STDOUT) {
+            let s = sys::aiGetPredefinedLogStream(
+                sys::aiDefaultLogStream::aiDefaultLogStream_STDOUT,
+                std::ptr::null(),
+            );
+            let _ = sys::aiDetachLogStream(&s);
+        }
+        if streams.contains(DefaultLogStreams::STDERR) {
+            let s = sys::aiGetPredefinedLogStream(
+                sys::aiDefaultLogStream::aiDefaultLogStream_STDERR,
+                std::ptr::null(),
+            );
+            let _ = sys::aiDetachLogStream(&s);
+        }
+        if streams.contains(DefaultLogStreams::DEBUGGER) {
+            let s = sys::aiGetPredefinedLogStream(
+                sys::aiDefaultLogStream::aiDefaultLogStream_DEBUGGER,
+                std::ptr::null(),
+            );
+            let _ = sys::aiDetachLogStream(&s);
+        }
+    }
+}
+
 /// Convenience function to attach a file log stream
 pub fn attach_file_stream<P: AsRef<std::path::Path>>(path: P) -> Result<()> {
     let stream = Arc::new(Mutex::new(FileLogStream::new(path)?));
@@ -277,7 +373,7 @@ pub fn enable_verbose_logging(enable: bool) {
         .enable_verbose_logging(enable);
 }
 
-/// Convenience function to detach all log streams
+/// Detach all log streams (both default and custom). This mirrors aiDetachAllLogStreams.
 pub fn detach_all_streams() {
     global_logger().lock().unwrap().detach_all_streams();
 }

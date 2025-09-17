@@ -169,13 +169,13 @@ impl NodeAnimation {
     }
 
     /// Get the position keyframes
-    pub fn position_keys(&self) -> &[VectorKey] {
+    pub fn position_keys(&self) -> Vec<VectorKey> {
         unsafe {
-            let channel = &*self.channel_ptr;
-            std::slice::from_raw_parts(
-                channel.mPositionKeys as *const VectorKey,
-                channel.mNumPositionKeys as usize,
-            )
+            let ch = &*self.channel_ptr;
+            std::slice::from_raw_parts(ch.mPositionKeys, ch.mNumPositionKeys as usize)
+                .iter()
+                .map(|k| VectorKey::from_sys(*k))
+                .collect()
         }
     }
 
@@ -185,13 +185,13 @@ impl NodeAnimation {
     }
 
     /// Get the rotation keyframes
-    pub fn rotation_keys(&self) -> &[QuaternionKey] {
+    pub fn rotation_keys(&self) -> Vec<QuaternionKey> {
         unsafe {
-            let channel = &*self.channel_ptr;
-            std::slice::from_raw_parts(
-                channel.mRotationKeys as *const QuaternionKey,
-                channel.mNumRotationKeys as usize,
-            )
+            let ch = &*self.channel_ptr;
+            std::slice::from_raw_parts(ch.mRotationKeys, ch.mNumRotationKeys as usize)
+                .iter()
+                .map(|k| QuaternionKey::from_sys(*k))
+                .collect()
         }
     }
 
@@ -201,33 +201,106 @@ impl NodeAnimation {
     }
 
     /// Get the scaling keyframes
-    pub fn scaling_keys(&self) -> &[VectorKey] {
+    pub fn scaling_keys(&self) -> Vec<VectorKey> {
         unsafe {
-            let channel = &*self.channel_ptr;
-            std::slice::from_raw_parts(
-                channel.mScalingKeys as *const VectorKey,
-                channel.mNumScalingKeys as usize,
-            )
+            let ch = &*self.channel_ptr;
+            std::slice::from_raw_parts(ch.mScalingKeys, ch.mNumScalingKeys as usize)
+                .iter()
+                .map(|k| VectorKey::from_sys(*k))
+                .collect()
+        }
+    }
+    /// Behaviour before the first key
+    pub fn pre_state(&self) -> AnimBehaviour {
+        unsafe { AnimBehaviour::from_sys((*self.channel_ptr).mPreState) }
+    }
+    /// Behaviour after the last key
+    pub fn post_state(&self) -> AnimBehaviour {
+        unsafe { AnimBehaviour::from_sys((*self.channel_ptr).mPostState) }
+    }
+}
+
+/// Interpolation method for animation keys
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AnimInterpolation {
+    Step,
+    Linear,
+    SphericalLinear,
+    CubicSpline,
+    Unknown(u32),
+}
+
+impl AnimInterpolation {
+    fn from_sys(v: sys::aiAnimInterpolation) -> Self {
+        match v {
+            sys::aiAnimInterpolation::aiAnimInterpolation_Step => Self::Step,
+            sys::aiAnimInterpolation::aiAnimInterpolation_Linear => Self::Linear,
+            sys::aiAnimInterpolation::aiAnimInterpolation_Spherical_Linear => Self::SphericalLinear,
+            sys::aiAnimInterpolation::aiAnimInterpolation_Cubic_Spline => Self::CubicSpline,
+            _ => Self::Unknown(v as u32),
+        }
+    }
+}
+
+/// Behaviour outside key range
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AnimBehaviour {
+    Default,
+    Constant,
+    Linear,
+    Repeat,
+}
+
+impl AnimBehaviour {
+    fn from_sys(v: sys::aiAnimBehaviour) -> Self {
+        match v {
+            sys::aiAnimBehaviour::aiAnimBehaviour_DEFAULT => Self::Default,
+            sys::aiAnimBehaviour::aiAnimBehaviour_CONSTANT => Self::Constant,
+            sys::aiAnimBehaviour::aiAnimBehaviour_LINEAR => Self::Linear,
+            sys::aiAnimBehaviour::aiAnimBehaviour_REPEAT => Self::Repeat,
+            _ => Self::Default,
         }
     }
 }
 
 /// A keyframe containing a time and a 3D vector value
-#[repr(C)]
 pub struct VectorKey {
     /// Time of the keyframe
     pub time: f64,
     /// Vector value at this time
     pub value: Vector3D,
+    /// Interpolation method
+    pub interpolation: AnimInterpolation,
+}
+
+impl VectorKey {
+    fn from_sys(k: sys::aiVectorKey) -> Self {
+        Self {
+            time: k.mTime,
+            value: Vector3D::new(k.mValue.x, k.mValue.y, k.mValue.z),
+            interpolation: AnimInterpolation::from_sys(k.mInterpolation),
+        }
+    }
 }
 
 /// A keyframe containing a time and a quaternion value
-#[repr(C)]
 pub struct QuaternionKey {
     /// Time of the keyframe
     pub time: f64,
     /// Quaternion value at this time
     pub value: Quaternion,
+    /// Interpolation method
+    pub interpolation: AnimInterpolation,
+}
+
+impl QuaternionKey {
+    fn from_sys(k: sys::aiQuatKey) -> Self {
+        Self {
+            time: k.mTime,
+            value: Quaternion::from_xyzw(k.mValue.x, k.mValue.y, k.mValue.z, k.mValue.w),
+            interpolation: AnimInterpolation::from_sys(k.mInterpolation),
+        }
+    }
 }
 
 /// Iterator over node animation channels

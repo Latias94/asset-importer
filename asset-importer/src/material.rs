@@ -370,6 +370,234 @@ impl Material {
             .map(|v| ShadingModel::from_raw(v as u32))
     }
 
+    /// Get raw information about a material property by key/semantic/index
+    ///
+    /// - `key`: material key string (e.g. "$mat.shininess")
+    /// - `semantic`: texture type semantic if the property is texture-dependent; use `None` for non-texture properties
+    /// - `index`: texture index for texture-dependent properties; 0 otherwise
+    pub fn property_info(
+        &self,
+        key: &str,
+        semantic: Option<TextureType>,
+        index: u32,
+    ) -> Option<MaterialPropertyInfo> {
+        let c_key = CString::new(key).ok()?;
+        let mut prop_ptr: *const sys::aiMaterialProperty = std::ptr::null();
+        let ok = unsafe {
+            sys::aiGetMaterialProperty(
+                self.material_ptr,
+                c_key.as_ptr(),
+                semantic.map(|t| t.to_sys() as u32).unwrap_or(0),
+                index,
+                &mut prop_ptr,
+            ) == sys::aiReturn::aiReturn_SUCCESS
+        };
+        if !ok || prop_ptr.is_null() {
+            return None;
+        }
+        unsafe { Some(MaterialPropertyInfo::from_raw(&*prop_ptr)) }
+    }
+
+    /// Get only the property type information (aiPropertyTypeInfo) for a given key/semantic/index
+    pub fn property_type(
+        &self,
+        key: &str,
+        semantic: Option<TextureType>,
+        index: u32,
+    ) -> Option<PropertyTypeInfo> {
+        self.property_info(key, semantic, index)
+            .map(|p| p.type_info)
+    }
+
+    /// Get the raw bytes of a property (as stored by Assimp)
+    pub fn get_property_raw(
+        &self,
+        key: &str,
+        semantic: Option<TextureType>,
+        index: u32,
+    ) -> Option<Vec<u8>> {
+        let info = self.property_info(key, semantic, index)?;
+        // Strings should be queried via get_string_property; here we just return raw bytes
+        let c_key = CString::new(key).ok()?;
+        let mut prop_ptr: *const sys::aiMaterialProperty = std::ptr::null();
+        let ok = unsafe {
+            sys::aiGetMaterialProperty(
+                self.material_ptr,
+                c_key.as_ptr(),
+                semantic.map(|t| t.to_sys() as u32).unwrap_or(0),
+                index,
+                &mut prop_ptr,
+            ) == sys::aiReturn::aiReturn_SUCCESS
+        };
+        if !ok || prop_ptr.is_null() {
+            return None;
+        }
+        unsafe {
+            let prop = &*prop_ptr;
+            if prop.mData.is_null() || info.data_length == 0 {
+                return Some(Vec::new());
+            }
+            let slice =
+                std::slice::from_raw_parts(prop.mData as *const u8, info.data_length as usize);
+            Some(slice.to_vec())
+        }
+    }
+
+    /// Get an integer array property (converts from floats if necessary)
+    pub fn get_property_i32_array(
+        &self,
+        key: &str,
+        semantic: Option<TextureType>,
+        index: u32,
+    ) -> Option<Vec<i32>> {
+        let info = self.property_info(key, semantic, index)?;
+        // Determine element count using the stored type size
+        let elem_size = match info.type_info {
+            PropertyTypeInfo::Integer => std::mem::size_of::<i32>(),
+            PropertyTypeInfo::Float => std::mem::size_of::<f32>(),
+            PropertyTypeInfo::Double => std::mem::size_of::<f64>(),
+            _ => return None,
+        };
+        if elem_size == 0 {
+            return None;
+        }
+        let count = (info.data_length as usize) / elem_size;
+        let mut out = vec![0i32; count];
+        let mut max = count as u32;
+        let c_key = CString::new(key).ok()?;
+        let result = unsafe {
+            sys::aiGetMaterialIntegerArray(
+                self.material_ptr,
+                c_key.as_ptr(),
+                semantic.map(|t| t.to_sys() as u32).unwrap_or(0),
+                index,
+                out.as_mut_ptr(),
+                &mut max,
+            )
+        };
+        if result == sys::aiReturn::aiReturn_SUCCESS {
+            out.truncate(max as usize);
+            Some(out)
+        } else {
+            None
+        }
+    }
+
+    /// Get a 32-bit float array property. If the property is stored as doubles, it is converted.
+    pub fn get_property_f32_array(
+        &self,
+        key: &str,
+        semantic: Option<TextureType>,
+        index: u32,
+    ) -> Option<Vec<f32>> {
+        let info = self.property_info(key, semantic, index)?;
+        match info.type_info {
+            PropertyTypeInfo::Float | PropertyTypeInfo::Double | PropertyTypeInfo::Integer => {
+                // Use Assimp conversion for Float/Integer; for Double, we can also do a manual conversion for more precision.
+                // First, try the API path using aiGetMaterialFloatArray.
+                let elem_size = match info.type_info {
+                    PropertyTypeInfo::Float => std::mem::size_of::<f32>(),
+                    PropertyTypeInfo::Double => std::mem::size_of::<f64>(),
+                    PropertyTypeInfo::Integer => std::mem::size_of::<i32>(),
+                    _ => unreachable!(),
+                };
+                let count = (info.data_length as usize) / elem_size;
+                let mut out = vec![0f32; count];
+                let mut max = count as u32;
+                let c_key = CString::new(key).ok()?;
+                let result = unsafe {
+                    sys::aiGetMaterialFloatArray(
+                        self.material_ptr,
+                        c_key.as_ptr(),
+                        semantic.map(|t| t.to_sys() as u32).unwrap_or(0),
+                        index,
+                        out.as_mut_ptr(),
+                        &mut max,
+                    )
+                };
+                if result == sys::aiReturn::aiReturn_SUCCESS {
+                    out.truncate(max as usize);
+                    return Some(out);
+                }
+                // Fallback: manual conversion from raw data
+                self.get_property_f64_array(key, semantic, index)
+                    .map(|v| v.into_iter().map(|x| x as f32).collect())
+            }
+            _ => None,
+        }
+    }
+
+    /// Get a 64-bit float array property by decoding raw bytes.
+    /// If stored as f32, it will be widened; if stored as i32, it will be cast.
+    pub fn get_property_f64_array(
+        &self,
+        key: &str,
+        semantic: Option<TextureType>,
+        index: u32,
+    ) -> Option<Vec<f64>> {
+        let info = self.property_info(key, semantic, index)?;
+        let raw = self.get_property_raw(key, semantic, index)?;
+        match info.type_info {
+            PropertyTypeInfo::Double => {
+                let sz = std::mem::size_of::<f64>();
+                if sz == 0 || raw.len() % sz != 0 {
+                    return None;
+                }
+                let mut out = Vec::with_capacity(raw.len() / sz);
+                for chunk in raw.chunks_exact(sz) {
+                    let mut arr = [0u8; 8];
+                    arr.copy_from_slice(chunk);
+                    out.push(f64::from_ne_bytes(arr));
+                }
+                Some(out)
+            }
+            PropertyTypeInfo::Float => {
+                let sz = std::mem::size_of::<f32>();
+                if sz == 0 || raw.len() % sz != 0 {
+                    return None;
+                }
+                let mut out = Vec::with_capacity(raw.len() / sz);
+                for chunk in raw.chunks_exact(sz) {
+                    let mut arr = [0u8; 4];
+                    arr.copy_from_slice(chunk);
+                    out.push(f32::from_ne_bytes(arr) as f64);
+                }
+                Some(out)
+            }
+            PropertyTypeInfo::Integer => {
+                let sz = std::mem::size_of::<i32>();
+                if sz == 0 || raw.len() % sz != 0 {
+                    return None;
+                }
+                let mut out = Vec::with_capacity(raw.len() / sz);
+                for chunk in raw.chunks_exact(sz) {
+                    let mut arr = [0u8; 4];
+                    arr.copy_from_slice(chunk);
+                    out.push(i32::from_ne_bytes(arr) as f64);
+                }
+                Some(out)
+            }
+            _ => None,
+        }
+    }
+
+    /// Enumerate all properties stored in this material (raw info only)
+    pub fn all_properties(&self) -> Vec<MaterialPropertyInfo> {
+        unsafe {
+            let m = &*self.material_ptr;
+            let count = m.mNumProperties as usize;
+            if m.mProperties.is_null() || count == 0 {
+                return Vec::new();
+            }
+            let props = std::slice::from_raw_parts(m.mProperties, count);
+            props
+                .iter()
+                .filter_map(|&p| p.as_ref())
+                .map(MaterialPropertyInfo::from_raw)
+                .collect()
+        }
+    }
+
     /// Check if the material is two-sided
     pub fn is_two_sided(&self) -> bool {
         self.get_integer_property(material_keys::TWOSIDED)
@@ -393,7 +621,7 @@ impl Material {
 
     /// Get the number of textures for a specific type
     pub fn texture_count(&self, texture_type: TextureType) -> usize {
-        unsafe { sys::aiGetMaterialTextureCount(self.material_ptr, texture_type as _) as usize }
+        unsafe { sys::aiGetMaterialTextureCount(self.material_ptr, texture_type.to_sys()) as usize }
     }
 
     /// Get texture information for a specific type and index
@@ -404,16 +632,18 @@ impl Material {
 
         unsafe {
             let mut path = sys::aiString::default();
-            let mut mapping = std::mem::MaybeUninit::<sys::aiTextureMapping::Type>::uninit();
+            let mut mapping = std::mem::MaybeUninit::<sys::aiTextureMapping>::uninit();
             let mut uv_index = std::mem::MaybeUninit::<u32>::uninit();
             let mut blend = std::mem::MaybeUninit::<f32>::uninit();
-            let mut op = std::mem::MaybeUninit::<sys::aiTextureOp::Type>::uninit();
-            let mut map_mode = [0u32; 3];
+            let mut op = std::mem::MaybeUninit::<sys::aiTextureOp>::uninit();
+            // Use the exact sys enum type to avoid platform-dependent
+            // signedness mismatches across compilers.
+            let mut map_mode: [sys::aiTextureMapMode; 3] = [unsafe { std::mem::zeroed() }; 3];
             let mut tex_flags: u32 = 0;
 
             let result = sys::aiGetMaterialTexture(
                 self.material_ptr,
-                texture_type as _,
+                texture_type.to_sys(),
                 index as u32,
                 &mut path,
                 mapping.as_mut_ptr(),
@@ -440,7 +670,7 @@ impl Material {
                 let uv_ok = sys::aiGetMaterialUVTransform(
                     self.material_ptr,
                     uv_key.as_ptr(),
-                    texture_type as u32,
+                    texture_type.to_sys() as u32,
                     index as u32,
                     uv_transform.as_mut_ptr(),
                 ) == sys::aiReturn::aiReturn_SUCCESS;
@@ -463,7 +693,7 @@ impl Material {
                     let ok = sys::aiGetMaterialProperty(
                         self.material_ptr,
                         key.as_ptr(),
-                        texture_type as u32,
+                        texture_type.to_sys() as u32,
                         index as u32,
                         &mut prop_ptr,
                     ) == sys::aiReturn::aiReturn_SUCCESS;
@@ -489,9 +719,9 @@ impl Material {
                     blend_factor: blend_val,
                     operation: TextureOperation::from_raw(op_val),
                     map_modes: [
-                        TextureMapMode::from_raw(map_mode[0] as i32),
-                        TextureMapMode::from_raw(map_mode[1] as i32),
-                        TextureMapMode::from_raw(map_mode[2] as i32),
+                        TextureMapMode::from_raw(map_mode[0]),
+                        TextureMapMode::from_raw(map_mode[1]),
+                        TextureMapMode::from_raw(map_mode[2]),
                     ],
                     flags: TextureFlags::from_bits_truncate(tex_flags),
                     uv_transform,
@@ -603,6 +833,127 @@ impl ShadingModel {
             }
             other => ShadingModel::Unknown(other),
         }
+    }
+}
+
+/// High-level classification of material property data types
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PropertyTypeInfo {
+    Float,
+    Double,
+    String,
+    Integer,
+    Buffer,
+    Unknown(u32),
+}
+
+impl PropertyTypeInfo {
+    fn from_sys(t: sys::aiPropertyTypeInfo) -> Self {
+        match t {
+            sys::aiPropertyTypeInfo::aiPTI_Float => Self::Float,
+            sys::aiPropertyTypeInfo::aiPTI_Double => Self::Double,
+            sys::aiPropertyTypeInfo::aiPTI_String => Self::String,
+            sys::aiPropertyTypeInfo::aiPTI_Integer => Self::Integer,
+            sys::aiPropertyTypeInfo::aiPTI_Buffer => Self::Buffer,
+            other => Self::Unknown(other as u32),
+        }
+    }
+}
+
+/// Raw information about a material property
+#[derive(Debug, Clone)]
+pub struct MaterialPropertyInfo {
+    /// Property key
+    pub key: String,
+    /// Semantic (texture type) if texture-related
+    pub semantic: Option<TextureType>,
+    /// Texture index (0 for non-texture)
+    pub index: u32,
+    /// Data length in bytes
+    pub data_length: u32,
+    /// Property type info
+    pub type_info: PropertyTypeInfo,
+}
+
+impl MaterialPropertyInfo {
+    fn from_raw(p: &sys::aiMaterialProperty) -> Self {
+        // Convert key
+        let key = unsafe {
+            if p.mKey.length == 0 {
+                String::new()
+            } else {
+                let bytes = std::slice::from_raw_parts(
+                    p.mKey.data.as_ptr() as *const u8,
+                    p.mKey.length as usize,
+                );
+                String::from_utf8_lossy(bytes).into_owned()
+            }
+        };
+        // Semantic: if non-zero / aiTextureType_NONE, treat as texture type via safe mapping
+        let semantic = TextureType::from_u32(p.mSemantic as u32);
+
+        Self {
+            key,
+            semantic,
+            index: p.mIndex,
+            data_length: p.mDataLength,
+            type_info: PropertyTypeInfo::from_sys(p.mType),
+        }
+    }
+}
+
+impl TextureType {
+    #[inline]
+    fn to_sys(self) -> sys::aiTextureType {
+        // Our discriminants are defined from sys::aiTextureType constants,
+        // so this cast is safe for all valid variants of TextureType.
+        unsafe { std::mem::transmute(self as u32) }
+    }
+
+    /// Try convert a raw u32 (aiTextureType) into TextureType safely
+    pub fn from_u32(v: u32) -> Option<Self> {
+        Some(match v {
+            x if x == sys::aiTextureType::aiTextureType_DIFFUSE as u32 => Self::Diffuse,
+            x if x == sys::aiTextureType::aiTextureType_SPECULAR as u32 => Self::Specular,
+            x if x == sys::aiTextureType::aiTextureType_AMBIENT as u32 => Self::Ambient,
+            x if x == sys::aiTextureType::aiTextureType_EMISSIVE as u32 => Self::Emissive,
+            x if x == sys::aiTextureType::aiTextureType_HEIGHT as u32 => Self::Height,
+            x if x == sys::aiTextureType::aiTextureType_NORMALS as u32 => Self::Normals,
+            x if x == sys::aiTextureType::aiTextureType_SHININESS as u32 => Self::Shininess,
+            x if x == sys::aiTextureType::aiTextureType_OPACITY as u32 => Self::Opacity,
+            x if x == sys::aiTextureType::aiTextureType_DISPLACEMENT as u32 => Self::Displacement,
+            x if x == sys::aiTextureType::aiTextureType_LIGHTMAP as u32 => Self::Lightmap,
+            x if x == sys::aiTextureType::aiTextureType_REFLECTION as u32 => Self::Reflection,
+            x if x == sys::aiTextureType::aiTextureType_BASE_COLOR as u32 => Self::BaseColor,
+            x if x == sys::aiTextureType::aiTextureType_NORMAL_CAMERA as u32 => Self::NormalCamera,
+            x if x == sys::aiTextureType::aiTextureType_EMISSION_COLOR as u32 => {
+                Self::EmissionColor
+            }
+            x if x == sys::aiTextureType::aiTextureType_METALNESS as u32 => Self::Metalness,
+            x if x == sys::aiTextureType::aiTextureType_DIFFUSE_ROUGHNESS as u32 => {
+                Self::DiffuseRoughness
+            }
+            x if x == sys::aiTextureType::aiTextureType_AMBIENT_OCCLUSION as u32 => {
+                Self::AmbientOcclusion
+            }
+            x if x == sys::aiTextureType::aiTextureType_UNKNOWN as u32 => Self::Unknown,
+            x if x == sys::aiTextureType::aiTextureType_SHEEN as u32 => Self::Sheen,
+            x if x == sys::aiTextureType::aiTextureType_CLEARCOAT as u32 => Self::Clearcoat,
+            x if x == sys::aiTextureType::aiTextureType_TRANSMISSION as u32 => Self::Transmission,
+            x if x == sys::aiTextureType::aiTextureType_MAYA_BASE as u32 => Self::MayaBase,
+            x if x == sys::aiTextureType::aiTextureType_MAYA_SPECULAR as u32 => Self::MayaSpecular,
+            x if x == sys::aiTextureType::aiTextureType_MAYA_SPECULAR_COLOR as u32 => {
+                Self::MayaSpecularColor
+            }
+            x if x == sys::aiTextureType::aiTextureType_MAYA_SPECULAR_ROUGHNESS as u32 => {
+                Self::MayaSpecularRoughness
+            }
+            x if x == sys::aiTextureType::aiTextureType_ANISOTROPY as u32 => Self::Anisotropy,
+            x if x == sys::aiTextureType::aiTextureType_GLTF_METALLIC_ROUGHNESS as u32 => {
+                Self::GltfMetallicRoughness
+            }
+            _ => return None,
+        })
     }
 }
 
@@ -776,7 +1127,7 @@ pub enum TextureMapping {
 }
 
 impl TextureMapping {
-    fn from_raw(value: i32) -> Self {
+    fn from_raw(value: sys::aiTextureMapping) -> Self {
         let value_u32 = value as u32;
         match value_u32 {
             v if v == sys::aiTextureMapping::aiTextureMapping_UV as u32 => Self::UV,
@@ -809,7 +1160,7 @@ pub enum TextureOperation {
 }
 
 impl TextureOperation {
-    fn from_raw(value: i32) -> Self {
+    fn from_raw(value: sys::aiTextureOp) -> Self {
         let value_u32 = value as u32;
         match value_u32 {
             v if v == sys::aiTextureOp::aiTextureOp_Multiply as u32 => Self::Multiply,
@@ -839,7 +1190,7 @@ pub enum TextureMapMode {
 }
 
 impl TextureMapMode {
-    fn from_raw(value: i32) -> Self {
+    fn from_raw(value: sys::aiTextureMapMode) -> Self {
         let value_u32 = value as u32;
         match value_u32 {
             v if v == sys::aiTextureMapMode::aiTextureMapMode_Wrap as u32 => Self::Wrap,

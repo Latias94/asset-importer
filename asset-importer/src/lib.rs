@@ -63,7 +63,9 @@ pub use crate::logging::{LogLevel, LogStream, Logger};
 pub use crate::metadata::{Metadata, MetadataEntry, MetadataType};
 
 // Re-export material functionality
-pub use crate::material::{material_keys, Material, TextureInfo, TextureType};
+pub use crate::material::{
+    material_keys, Material, MaterialPropertyInfo, PropertyTypeInfo, TextureInfo, TextureType,
+};
 
 // Re-export texture functionality
 pub use crate::texture::{Texel, Texture, TextureData, TextureIterator};
@@ -73,6 +75,9 @@ pub use crate::aabb::AABB;
 
 // Re-export bone functionality
 pub use crate::bone::{Bone, BoneIterator, VertexWeight};
+
+// Re-export animation type for convenience (used by examples)
+pub use crate::animation::Animation;
 
 // Re-export importer description functionality
 pub use crate::importer_desc::{

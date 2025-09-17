@@ -34,7 +34,7 @@ impl Light {
     pub fn light_type(&self) -> LightType {
         unsafe {
             let light = &*self.light_ptr;
-            LightType::from_raw(light.mType as u32)
+            LightType::from_raw(light.mType)
         }
     }
 
@@ -138,14 +138,15 @@ pub enum LightType {
 }
 
 impl LightType {
-    fn from_raw(value: u32) -> Self {
-        match value {
-            v if v == sys::aiLightSourceType::aiLightSource_UNDEFINED as u32 => Self::Undefined,
-            v if v == sys::aiLightSourceType::aiLightSource_DIRECTIONAL as u32 => Self::Directional,
-            v if v == sys::aiLightSourceType::aiLightSource_POINT as u32 => Self::Point,
-            v if v == sys::aiLightSourceType::aiLightSource_SPOT as u32 => Self::Spot,
-            v if v == sys::aiLightSourceType::aiLightSource_AMBIENT as u32 => Self::Ambient,
-            v if v == sys::aiLightSourceType::aiLightSource_AREA as u32 => Self::Area,
+    fn from_raw(value: sys::aiLightSourceType) -> Self {
+        let v = value as u32;
+        match v {
+            x if x == sys::aiLightSourceType::aiLightSource_UNDEFINED as u32 => Self::Undefined,
+            x if x == sys::aiLightSourceType::aiLightSource_DIRECTIONAL as u32 => Self::Directional,
+            x if x == sys::aiLightSourceType::aiLightSource_POINT as u32 => Self::Point,
+            x if x == sys::aiLightSourceType::aiLightSource_SPOT as u32 => Self::Spot,
+            x if x == sys::aiLightSourceType::aiLightSource_AMBIENT as u32 => Self::Ambient,
+            x if x == sys::aiLightSourceType::aiLightSource_AREA as u32 => Self::Area,
             _ => Self::Undefined,
         }
     }
