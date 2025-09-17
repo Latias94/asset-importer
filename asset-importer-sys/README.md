@@ -62,6 +62,7 @@ asset-importer-sys = {
 
 ## Environment Variables
 
+- `ASSIMP_DIR`: Path to an Assimp source tree to use when the `assimp` submodule is not present (builds from this directory).
 - `ASSET_IMPORTER_PACKAGE_DIR`: Use local prebuilt packages
 - `CMAKE_GENERATOR`: Override CMake generator (e.g., "Ninja")
 

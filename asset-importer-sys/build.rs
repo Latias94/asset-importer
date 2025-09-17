@@ -169,13 +169,16 @@ fn download_prebuilt_package(out_dir: &std::path::Path, archive_name: &str) {
 
     // Skip download if file already exists
     if archive_path.exists() {
-        println!(
-            "cargo:warning=Using existing prebuilt package: {}",
-            archive_path.display()
-        );
+        if env::var("ASSET_IMPORTER_VERBOSE").is_ok() {
+            println!(
+                "cargo:warning=Using existing prebuilt package: {}",
+                archive_path.display()
+            );
+        }
         return;
     }
 
+    // This is important info for users to know download is happening
     println!(
         "cargo:warning=Downloading prebuilt package from: {}",
         download_url
@@ -203,10 +206,12 @@ fn download_prebuilt_package(out_dir: &std::path::Path, archive_name: &str) {
     let bytes = response.bytes().expect("Failed to read response bytes");
     fs::write(&archive_path, &bytes).expect("Failed to write downloaded package");
 
-    println!(
-        "cargo:warning=Downloaded prebuilt package: {}",
-        archive_path.display()
-    );
+    if env::var("ASSET_IMPORTER_VERBOSE").is_ok() {
+        println!(
+            "cargo:warning=Downloaded prebuilt package: {}",
+            archive_path.display()
+        );
+    }
 }
 
 fn extract_prebuilt_package(
@@ -273,10 +278,12 @@ fn extract_prebuilt_package(
     // Link system dependencies
     link_system_dependencies();
 
-    println!(
-        "cargo:warning=Using prebuilt assimp from: {}",
-        extract_dir.display()
-    );
+    if env::var("ASSET_IMPORTER_VERBOSE").is_ok() {
+        println!(
+            "cargo:warning=Using prebuilt assimp from: {}",
+            extract_dir.display()
+        );
+    }
 }
 
 #[allow(dead_code)]
@@ -344,13 +351,19 @@ fn generate_bindings_from_system(manifest_dir: &std::path::Path, out_dir: &std::
 fn build_assimp_from_source(manifest_dir: &std::path::Path, _out_path: &std::path::Path) {
     let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap();
     let target_env = env::var("CARGO_CFG_TARGET_ENV").unwrap_or_default();
-    let assimp_src = manifest_dir.join("assimp");
+    let profile = env::var("PROFILE").unwrap_or_default();
+    let _is_debug = profile == "debug";
+
+    // Allow overriding the Assimp source directory via ASSIMP_DIR
+    let assimp_src = env::var("ASSIMP_DIR")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|_| manifest_dir.join("assimp"));
 
     // Check if assimp source exists
     if !assimp_src.exists() {
         panic!(
-            "Assimp source not found at {}. Please run: git submodule update --init --recursive",
-            assimp_src.display()
+            "Assimp source not found. Set ASSIMP_DIR to a valid Assimp source, or init submodule at {}.\nHint:\n  git submodule update --init --recursive\n  or set environment variable ASSIMP_DIR=/path/to/assimp",
+            manifest_dir.join("assimp").display()
         );
     }
 
@@ -462,27 +475,31 @@ fn build_assimp_from_source(manifest_dir: &std::path::Path, _out_path: &std::pat
     let target_env = env::var("CARGO_CFG_TARGET_ENV").unwrap_or_default();
     if target_env == "msvc" {
         // MSVC Release builds use "assimp-vc143-mt" (no 'd' suffix)
-        #[cfg(feature = "static-link")]
-        println!("cargo:rustc-link-lib=static=assimp-vc143-mt");
-
-        #[cfg(not(feature = "static-link"))]
-        println!("cargo:rustc-link-lib=assimp-vc143-mt");
-
+        if cfg!(feature = "static-link") {
+            println!("cargo:rustc-link-lib=static=assimp-vc143-mt");
+        } else {
+            println!("cargo:rustc-link-lib=assimp-vc143-mt");
+        }
         // Link to zlib (built by assimp) unless disabled
         if !cfg!(feature = "nozlib") {
             println!("cargo:rustc-link-lib=static=zlibstatic");
         }
     } else {
-        #[cfg(feature = "static-link")]
-        println!("cargo:rustc-link-lib=static=assimp");
-
-        #[cfg(not(feature = "static-link"))]
-        println!("cargo:rustc-link-lib=assimp");
-
+        if cfg!(feature = "static-link") {
+            println!("cargo:rustc-link-lib=static=assimp");
+        } else {
+            println!("cargo:rustc-link-lib=assimp");
+        }
         // Link to zlib unless disabled
         if !cfg!(feature = "nozlib") {
             println!("cargo:rustc-link-lib=z");
         }
+    }
+
+    // On Windows with shared build, copy assimp DLLs next to test/example executables to
+    // avoid PATH/DLL lookup issues during `cargo test` or running examples.
+    if target_os == "windows" && target_env == "msvc" && build_shared == "ON" {
+        copy_windows_dlls(&dst);
     }
 
     // Link system dependencies
@@ -554,15 +571,45 @@ fn has_system_zlib_any() -> bool {
     lib_paths.iter().any(|p| std::path::Path::new(p).exists())
 }
 
-fn has_system_zlib_shared() -> bool {
-    let shared = [
-        "/usr/lib/libz.so",
-        "/usr/local/lib/libz.so",
-        "/usr/lib/x86_64-linux-gnu/libz.so",
-        "/usr/lib/aarch64-linux-gnu/libz.so",
-        "/opt/homebrew/lib/libz.dylib",
-    ];
-    shared.iter().any(|p| std::path::Path::new(p).exists())
+fn copy_windows_dlls(dst: &std::path::Path) {
+    use std::fs;
+    let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap_or_default());
+    // OUT_DIR: target\<profile>\build\<crate-hash>\out
+    let profile_dir = out_dir
+        .ancestors()
+        .nth(3)
+        .map(|p| p.to_path_buf())
+        .unwrap_or_else(|| out_dir.clone());
+    let deps_dir = profile_dir.join("deps");
+
+    let candidates = [dst.join("bin"), dst.join("build").join("bin")];
+    for bin_dir in candidates.iter() {
+        if !bin_dir.exists() {
+            continue;
+        }
+        if let Ok(read) = fs::read_dir(bin_dir) {
+            for entry in read.flatten() {
+                let p = entry.path();
+                if let Some(ext) = p.extension().and_then(|s| s.to_str()) {
+                    if ext.eq_ignore_ascii_case("dll") {
+                        let fname = p.file_name().unwrap();
+                        let _ = fs::create_dir_all(&deps_dir);
+                        let _ = fs::copy(&p, deps_dir.join(fname));
+                        let _ = fs::copy(&p, profile_dir.join(fname));
+                        // Only show copy info if verbose build is requested
+                        if env::var("ASSET_IMPORTER_VERBOSE").is_ok() {
+                            println!(
+                                "cargo:warning=Copied {} to {} and {}",
+                                p.display(),
+                                deps_dir.display(),
+                                profile_dir.display()
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 fn generate_bindings(
@@ -571,17 +618,26 @@ fn generate_bindings(
     built_include_dir: Option<&std::path::Path>,
 ) {
     let wrapper_h = manifest_dir.join("wrapper.h");
-    let assimp_include = manifest_dir.join("assimp").join("include");
+    // Use ASSIMP_DIR/include if provided, else submodule include
+    let assimp_include = if let Ok(dir) = env::var("ASSIMP_DIR") {
+        std::path::PathBuf::from(dir).join("include")
+    } else {
+        manifest_dir.join("assimp").join("include")
+    };
 
-    // Create empty config.h if it doesn't exist (needed for system builds)
-    let config_file = assimp_include.join("assimp").join("config.h");
-    let config_exists = config_file.exists();
-    if !config_exists {
-        if let Some(parent) = config_file.parent() {
-            std::fs::create_dir_all(parent).expect("Failed to create assimp include directory");
+    // Create empty config.h if it doesn't exist (needed for system builds) only when using submodule path
+    let submodule_include = manifest_dir.join("assimp").join("include");
+    let use_submodule = assimp_include == submodule_include;
+    let (config_file, mut config_exists) = (assimp_include.join("assimp").join("config.h"), false);
+    if use_submodule {
+        config_exists = config_file.exists();
+        if !config_exists {
+            if let Some(parent) = config_file.parent() {
+                std::fs::create_dir_all(parent).expect("Failed to create assimp include directory");
+            }
+            std::fs::write(&config_file, "")
+                .expect("Unable to write config.h to assimp/include/assimp/");
         }
-        std::fs::write(&config_file, "")
-            .expect("Unable to write config.h to assimp/include/assimp/");
     }
 
     let mut builder = bindgen::Builder::default()
@@ -669,7 +725,7 @@ fn generate_bindings(
         .expect("Couldn't write bindings!");
 
     // Clean up temporary config.h if we created it
-    if !config_exists {
+    if use_submodule && !config_exists {
         let _ = std::fs::remove_file(config_file);
     }
 }
@@ -683,7 +739,11 @@ fn compile_bridge_cpp(manifest_dir: &std::path::Path, built_include_dir: Option<
     if let Some(dir) = built_include_dir {
         build.include(dir);
     }
-    build.include(manifest_dir.join("assimp").join("include"));
+    if let Ok(dir) = env::var("ASSIMP_DIR") {
+        build.include(std::path::PathBuf::from(dir).join("include"));
+    } else {
+        build.include(manifest_dir.join("assimp").join("include"));
+    }
 
     // On Windows, ensure exceptions for MSVC (consistent with Assimp build)
     #[cfg(target_env = "msvc")]

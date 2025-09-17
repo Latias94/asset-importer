@@ -1,5 +1,6 @@
 //! Quickstart: load a model and print a concise summary
 
+#[path = "common/mod.rs"]
 mod common;
 
 use std::error::Error;

@@ -223,10 +223,15 @@ impl NodeAnimation {
 /// Interpolation method for animation keys
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AnimInterpolation {
+    /// Step interpolation - no interpolation, use the value of the previous key
     Step,
+    /// Linear interpolation between keys
     Linear,
+    /// Spherical linear interpolation (for quaternions)
     SphericalLinear,
+    /// Cubic spline interpolation
     CubicSpline,
+    /// Unknown interpolation method with raw value
     Unknown(u32),
 }
 
@@ -245,9 +250,13 @@ impl AnimInterpolation {
 /// Behaviour outside key range
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AnimBehaviour {
+    /// Use the default behavior (usually constant)
     Default,
+    /// Keep the value constant at the boundary
     Constant,
+    /// Linear extrapolation beyond the key range
     Linear,
+    /// Repeat the animation cyclically
     Repeat,
 }
 
@@ -343,7 +352,9 @@ impl ExactSizeIterator for NodeAnimationIterator {}
 /// Mesh animation key
 #[repr(C)]
 pub struct MeshKey {
+    /// Time of this key in the animation
     pub time: f64,
+    /// Index into aiMesh::mAnimMeshes array
     pub value: u32, // index into aiMesh::mAnimMeshes
 }
 
@@ -353,6 +364,7 @@ pub struct MeshAnimation {
 }
 
 impl MeshAnimation {
+    /// Get the name of this mesh animation channel
     pub fn name(&self) -> String {
         unsafe {
             let ch = &*self.channel_ptr;
@@ -360,10 +372,12 @@ impl MeshAnimation {
         }
     }
 
+    /// Get the number of animation keys
     pub fn num_keys(&self) -> usize {
         unsafe { (*self.channel_ptr).mNumKeys as usize }
     }
 
+    /// Get the array of animation keys
     pub fn keys(&self) -> &[MeshKey] {
         unsafe {
             let ch = &*self.channel_ptr;
@@ -409,8 +423,11 @@ impl ExactSizeIterator for MeshAnimationIterator {}
 
 /// Morph mesh key (weights for multiple targets)
 pub struct MorphMeshKey<'a> {
+    /// Time of this key in the animation
     pub time: f64,
+    /// Indices of the morph targets
     pub values: &'a [u32],
+    /// Weights for each morph target
     pub weights: &'a [f64],
 }
 
@@ -420,13 +437,17 @@ pub struct MorphMeshAnimation {
 }
 
 impl MorphMeshAnimation {
+    /// Get the name of this morph mesh animation channel
     pub fn name(&self) -> String {
         unsafe { c_str_to_string_or_empty((*self.channel_ptr).mName.data.as_ptr()) }
     }
+
+    /// Get the number of animation keys
     pub fn num_keys(&self) -> usize {
         unsafe { (*self.channel_ptr).mNumKeys as usize }
     }
 
+    /// Get a specific animation key by index
     pub fn key(&self, index: usize) -> Option<MorphMeshKey<'_>> {
         if index >= self.num_keys() {
             return None;

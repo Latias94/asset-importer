@@ -473,9 +473,13 @@ impl ExactSizeIterator for AnimMeshIterator {}
 /// Methods of mesh morphing supported by Assimp
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MorphingMethod {
+    /// Unknown morphing method
     Unknown,
+    /// Vertex blending morphing
     VertexBlend,
+    /// Normalized morph targets (weights sum to 1.0)
     MorphNormalized,
+    /// Relative morph targets (additive)
     MorphRelative,
 }
 

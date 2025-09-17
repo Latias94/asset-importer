@@ -607,10 +607,7 @@ impl Material {
 
     /// Check if the material is unlit (NoShading/Unlit)
     pub fn is_unlit(&self) -> bool {
-        match self.shading_model_enum() {
-            Some(ShadingModel::NoShading) => true,
-            _ => false,
-        }
+        matches!(self.shading_model_enum(), Some(ShadingModel::NoShading))
     }
 
     /// Get the blend mode for the material
@@ -638,7 +635,7 @@ impl Material {
             let mut op = std::mem::MaybeUninit::<sys::aiTextureOp>::uninit();
             // Use the exact sys enum type to avoid platform-dependent
             // signedness mismatches across compilers.
-            let mut map_mode: [sys::aiTextureMapMode; 3] = [unsafe { std::mem::zeroed() }; 3];
+            let mut map_mode: [sys::aiTextureMapMode; 3] = [std::mem::zeroed(); 3];
             let mut tex_flags: u32 = 0;
 
             let result = sys::aiGetMaterialTexture(
@@ -797,18 +794,31 @@ pub enum TextureType {
 /// High-level shading model
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ShadingModel {
+    /// Flat shading - no interpolation between vertices
     Flat,
+    /// Gouraud shading - linear interpolation of vertex colors
     Gouraud,
+    /// Phong shading - per-pixel lighting calculation
     Phong,
+    /// Blinn-Phong shading - modified Phong with Blinn's halfway vector
     Blinn,
+    /// Toon/cel shading - cartoon-like rendering
     Toon,
+    /// Oren-Nayar reflectance model for rough surfaces
     OrenNayar,
+    /// Minnaert reflectance model
     Minnaert,
+    /// Cook-Torrance reflectance model for metals
     CookTorrance,
+    /// No shading - unlit material
     NoShading,
+    /// Fresnel reflectance model
     Fresnel,
+    /// PBR specular-glossiness workflow
     PbrSpecularGlossiness,
+    /// PBR metallic-roughness workflow
     PbrMetallicRoughness,
+    /// Unknown shading model with raw value
     Unknown(u32),
 }
 
@@ -839,11 +849,17 @@ impl ShadingModel {
 /// High-level classification of material property data types
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PropertyTypeInfo {
+    /// Single-precision floating point value
     Float,
+    /// Double-precision floating point value
     Double,
+    /// String value
     String,
+    /// Integer value
     Integer,
+    /// Binary buffer/blob data
     Buffer,
+    /// Unknown property type with raw value
     Unknown(u32),
 }
 
@@ -890,7 +906,7 @@ impl MaterialPropertyInfo {
             }
         };
         // Semantic: if non-zero / aiTextureType_NONE, treat as texture type via safe mapping
-        let semantic = TextureType::from_u32(p.mSemantic as u32);
+        let semantic = TextureType::from_u32(p.mSemantic);
 
         Self {
             key,
@@ -960,8 +976,11 @@ impl TextureType {
 /// Blend mode for material layers
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BlendMode {
+    /// Default blending mode (usually alpha blending)
     Default,
+    /// Additive blending mode
     Additive,
+    /// Unknown blend mode with raw value
     Unknown(u32),
 }
 
@@ -978,8 +997,11 @@ impl BlendMode {
 /// Which PBR workflow this material uses (heuristic from material.h docs)
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PbrWorkflow {
+    /// Metallic-roughness PBR workflow (glTF 2.0 standard)
     MetallicRoughness,
+    /// Specular-glossiness PBR workflow (legacy)
     SpecularGlossiness,
+    /// Unknown or undetected PBR workflow
     Unknown,
 }
 
@@ -996,54 +1018,66 @@ impl Material {
     }
 
     // ---------- Convenience texture getters ----------
+    /// Get base color texture at the specified index
     pub fn base_color_texture(&self, index: usize) -> Option<TextureInfo> {
         self.texture(TextureType::BaseColor, index)
     }
 
+    /// Get the metallic-roughness texture (glTF packed format)
     pub fn metallic_roughness_texture(&self) -> Option<TextureInfo> {
         // glTF packed metallic-roughness (one texture, index 0)
         self.texture(TextureType::GltfMetallicRoughness, 0)
     }
 
+    /// Get emission texture at the specified index
     pub fn emission_texture(&self, index: usize) -> Option<TextureInfo> {
         self.texture(TextureType::EmissionColor, index)
     }
 
+    /// Get normal map texture at the specified index
     pub fn normal_texture(&self, index: usize) -> Option<TextureInfo> {
         self.texture(TextureType::Normals, index)
     }
 
+    /// Get sheen color texture
     pub fn sheen_color_texture(&self) -> Option<TextureInfo> {
         // sheen color texture is TextureType::Sheen, index 0
         self.texture(TextureType::Sheen, 0)
     }
 
+    /// Get sheen roughness texture
     pub fn sheen_roughness_texture(&self) -> Option<TextureInfo> {
         // sheen roughness texture is TextureType::Sheen, index 1
         self.texture(TextureType::Sheen, 1)
     }
 
+    /// Get clearcoat texture
     pub fn clearcoat_texture(&self) -> Option<TextureInfo> {
         self.texture(TextureType::Clearcoat, 0)
     }
 
+    /// Get clearcoat roughness texture
     pub fn clearcoat_roughness_texture(&self) -> Option<TextureInfo> {
         self.texture(TextureType::Clearcoat, 1)
     }
 
+    /// Get clearcoat normal map texture
     pub fn clearcoat_normal_texture(&self) -> Option<TextureInfo> {
         self.texture(TextureType::Clearcoat, 2)
     }
 
+    /// Get transmission texture
     pub fn transmission_texture(&self) -> Option<TextureInfo> {
         self.texture(TextureType::Transmission, 0)
     }
 
+    /// Get volume thickness texture
     pub fn volume_thickness_texture(&self) -> Option<TextureInfo> {
         // Defined to use aiTextureType_TRANSMISSION, index 1
         self.texture(TextureType::Transmission, 1)
     }
 
+    /// Get anisotropy texture
     pub fn anisotropy_texture(&self) -> Option<TextureInfo> {
         self.texture(TextureType::Anisotropy, 0)
     }
@@ -1228,8 +1262,11 @@ pub struct TextureInfo {
 /// UV transform information
 #[derive(Debug, Clone, Copy)]
 pub struct UVTransform {
+    /// Translation offset for UV coordinates
     pub translation: Vector2D,
+    /// Scaling factor for UV coordinates
     pub scaling: Vector2D,
+    /// Rotation angle in radians
     pub rotation: f32,
 }
 
@@ -1237,8 +1274,11 @@ bitflags::bitflags! {
     /// Texture flags (material.h: aiTextureFlags)
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
     pub struct TextureFlags: u32 {
+        /// Invert the texture colors
         const INVERT        = sys::aiTextureFlags::aiTextureFlags_Invert as u32;
+        /// Use the alpha channel of the texture
         const USE_ALPHA     = sys::aiTextureFlags::aiTextureFlags_UseAlpha as u32;
+        /// Ignore the alpha channel of the texture
         const IGNORE_ALPHA  = sys::aiTextureFlags::aiTextureFlags_IgnoreAlpha as u32;
     }
 }

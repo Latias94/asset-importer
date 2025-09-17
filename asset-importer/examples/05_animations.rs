@@ -1,5 +1,6 @@
 //! Inspect animations: channels, interpolation, behaviours, and key previews
 
+#[path = "common/mod.rs"]
 mod common;
 
 use std::error::Error;
@@ -34,21 +35,21 @@ fn main() -> Result<(), Box<dyn Error>> {
                 ch.post_state()
             );
             let pk = ch.position_keys();
-            if let Some(k) = pk.get(0) {
+            if let Some(k) = pk.first() {
                 println!(
                     "    pos[0]: t={:.3} v=({:.3},{:.3},{:.3}) {:?}",
                     k.time, k.value.x, k.value.y, k.value.z, k.interpolation
                 );
             }
             let rk = ch.rotation_keys();
-            if let Some(k) = rk.get(0) {
+            if let Some(k) = rk.first() {
                 println!(
                     "    rot[0]: t={:.3} q=({:.3},{:.3},{:.3},{:.3}) {:?}",
                     k.time, k.value.x, k.value.y, k.value.z, k.value.w, k.interpolation
                 );
             }
             let sk = ch.scaling_keys();
-            if let Some(k) = sk.get(0) {
+            if let Some(k) = sk.first() {
                 println!(
                     "    scale[0]: t={:.3} v=({:.3},{:.3},{:.3}) {:?}",
                     k.time, k.value.x, k.value.y, k.value.z, k.interpolation

@@ -1,5 +1,6 @@
 //! Inspect scene graph, meshes and memory info
 
+#[path = "common/mod.rs"]
 mod common;
 
 use std::error::Error;

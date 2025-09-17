@@ -1,5 +1,6 @@
 //! List supported import/export formats and version info
 
+#[path = "common/mod.rs"]
 mod common;
 
 use asset_importer::{get_import_extensions, version};

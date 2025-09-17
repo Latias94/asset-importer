@@ -1,5 +1,6 @@
 //! Inspect materials: high-level fields and raw/typed properties
 
+#[path = "common/mod.rs"]
 mod common;
 
 use std::error::Error;

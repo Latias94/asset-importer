@@ -270,9 +270,13 @@ bitflags! {
     /// Predefined log stream destinations in Assimp
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
     pub struct DefaultLogStreams: u32 {
+        /// Log to a file
         const FILE     = sys::aiDefaultLogStream::aiDefaultLogStream_FILE as u32;
+        /// Log to standard output
         const STDOUT   = sys::aiDefaultLogStream::aiDefaultLogStream_STDOUT as u32;
+        /// Log to standard error
         const STDERR   = sys::aiDefaultLogStream::aiDefaultLogStream_STDERR as u32;
+        /// Log to the system debugger
         const DEBUGGER = sys::aiDefaultLogStream::aiDefaultLogStream_DEBUGGER as u32;
     }
 }

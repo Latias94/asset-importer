@@ -415,28 +415,6 @@ fn test_aabb_operations() {
     assert_eq!(expanded.max, Vector3D::new(5.0, 5.0, 5.0));
 }
 
-fn create_simple_cube_obj() -> String {
-    r#"
-# Simple cube
-v -1.0 -1.0  1.0
-v  1.0 -1.0  1.0
-v  1.0  1.0  1.0
-v -1.0  1.0  1.0
-v -1.0 -1.0 -1.0
-v  1.0 -1.0 -1.0
-v  1.0  1.0 -1.0
-v -1.0  1.0 -1.0
-
-f 1 2 3 4
-f 5 8 7 6
-f 1 5 6 2
-f 2 6 7 3
-f 3 7 8 4
-f 5 1 4 8
-"#
-    .to_string()
-}
-
 #[test]
 #[cfg(feature = "build-assimp")]
 fn test_importer_desc_functionality() -> Result<(), Box<dyn std::error::Error>> {

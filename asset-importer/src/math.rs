@@ -160,18 +160,21 @@ pub fn quaternion_interpolate(a: Quaternion, b: Quaternion, d: f32) -> Quaternio
 
 // ===================== Vector2 helpers =====================
 
+/// Check if two 2D vectors are equal
 pub fn vector2_equal(a: Vector2D, b: Vector2D) -> bool {
     let aa = sys::aiVector2D { x: a.x, y: a.y };
     let bb = sys::aiVector2D { x: b.x, y: b.y };
     unsafe { sys::aiVector2AreEqual(&aa, &bb) != 0 }
 }
 
+/// Check if two 2D vectors are equal within epsilon tolerance
 pub fn vector2_equal_epsilon(a: Vector2D, b: Vector2D, eps: f32) -> bool {
     let aa = sys::aiVector2D { x: a.x, y: a.y };
     let bb = sys::aiVector2D { x: b.x, y: b.y };
     unsafe { sys::aiVector2AreEqualEpsilon(&aa, &bb, eps) != 0 }
 }
 
+/// Add two 2D vectors
 pub fn vector2_add(a: Vector2D, b: Vector2D) -> Vector2D {
     let mut dst = to_ai_vector2d(a);
     let src = to_ai_vector2d(b);
@@ -179,6 +182,7 @@ pub fn vector2_add(a: Vector2D, b: Vector2D) -> Vector2D {
     from_ai_vector2d(dst)
 }
 
+/// Subtract two 2D vectors
 pub fn vector2_sub(a: Vector2D, b: Vector2D) -> Vector2D {
     let mut dst = to_ai_vector2d(a);
     let src = to_ai_vector2d(b);
@@ -186,12 +190,14 @@ pub fn vector2_sub(a: Vector2D, b: Vector2D) -> Vector2D {
     from_ai_vector2d(dst)
 }
 
+/// Scale a 2D vector by a scalar
 pub fn vector2_scale(v: Vector2D, s: f32) -> Vector2D {
     let mut dst = to_ai_vector2d(v);
     unsafe { sys::aiVector2Scale(&mut dst, s) };
     from_ai_vector2d(dst)
 }
 
+/// Component-wise multiplication of two 2D vectors
 pub fn vector2_sym_mul(a: Vector2D, b: Vector2D) -> Vector2D {
     let mut dst = to_ai_vector2d(a);
     let other = to_ai_vector2d(b);
@@ -199,12 +205,14 @@ pub fn vector2_sym_mul(a: Vector2D, b: Vector2D) -> Vector2D {
     from_ai_vector2d(dst)
 }
 
+/// Divide a 2D vector by a scalar
 pub fn vector2_div_scalar(v: Vector2D, s: f32) -> Vector2D {
     let mut dst = to_ai_vector2d(v);
     unsafe { sys::aiVector2DivideByScalar(&mut dst, s) };
     from_ai_vector2d(dst)
 }
 
+/// Component-wise division of two 2D vectors
 pub fn vector2_div_vector(a: Vector2D, b: Vector2D) -> Vector2D {
     let mut dst = to_ai_vector2d(a);
     let mut v = to_ai_vector2d(b);
@@ -212,22 +220,26 @@ pub fn vector2_div_vector(a: Vector2D, b: Vector2D) -> Vector2D {
     from_ai_vector2d(dst)
 }
 
+/// Calculate the length of a 2D vector
 pub fn vector2_length(v: Vector2D) -> f32 {
     let vv = to_ai_vector2d(v);
     unsafe { sys::aiVector2Length(&vv) as f32 }
 }
 
+/// Calculate the squared length of a 2D vector
 pub fn vector2_length_squared(v: Vector2D) -> f32 {
     let vv = to_ai_vector2d(v);
     unsafe { sys::aiVector2SquareLength(&vv) as f32 }
 }
 
+/// Negate a 2D vector
 pub fn vector2_negate(v: Vector2D) -> Vector2D {
     let mut dst = to_ai_vector2d(v);
     unsafe { sys::aiVector2Negate(&mut dst) };
     from_ai_vector2d(dst)
 }
 
+/// Calculate the dot product of two 2D vectors
 pub fn vector2_dot(a: Vector2D, b: Vector2D) -> f32 {
     let aa = to_ai_vector2d(a);
     let bb = to_ai_vector2d(b);
@@ -236,24 +248,28 @@ pub fn vector2_dot(a: Vector2D, b: Vector2D) -> f32 {
 
 // ===================== Vector3 helpers =====================
 
+/// Check if two 3D vectors are equal
 pub fn vector3_equal(a: Vector3D, b: Vector3D) -> bool {
     let aa = to_ai_vector3d(a);
     let bb = to_ai_vector3d(b);
     unsafe { sys::aiVector3AreEqual(&aa, &bb) != 0 }
 }
 
+/// Check if two 3D vectors are equal within epsilon tolerance
 pub fn vector3_equal_epsilon(a: Vector3D, b: Vector3D, eps: f32) -> bool {
     let aa = to_ai_vector3d(a);
     let bb = to_ai_vector3d(b);
     unsafe { sys::aiVector3AreEqualEpsilon(&aa, &bb, eps) != 0 }
 }
 
+/// Check if vector a is component-wise less than vector b
 pub fn vector3_less_than(a: Vector3D, b: Vector3D) -> bool {
     let aa = to_ai_vector3d(a);
     let bb = to_ai_vector3d(b);
     unsafe { sys::aiVector3LessThan(&aa, &bb) != 0 }
 }
 
+/// Add two 3D vectors
 pub fn vector3_add(a: Vector3D, b: Vector3D) -> Vector3D {
     let mut dst = to_ai_vector3d(a);
     let src = to_ai_vector3d(b);
@@ -261,6 +277,7 @@ pub fn vector3_add(a: Vector3D, b: Vector3D) -> Vector3D {
     from_ai_vector3d(dst)
 }
 
+/// Subtract two 3D vectors
 pub fn vector3_sub(a: Vector3D, b: Vector3D) -> Vector3D {
     let mut dst = to_ai_vector3d(a);
     let src = to_ai_vector3d(b);
@@ -268,12 +285,14 @@ pub fn vector3_sub(a: Vector3D, b: Vector3D) -> Vector3D {
     from_ai_vector3d(dst)
 }
 
+/// Scale a 3D vector by a scalar
 pub fn vector3_scale(v: Vector3D, s: f32) -> Vector3D {
     let mut dst = to_ai_vector3d(v);
     unsafe { sys::aiVector3Scale(&mut dst, s) };
     from_ai_vector3d(dst)
 }
 
+/// Component-wise multiplication of two 3D vectors
 pub fn vector3_sym_mul(a: Vector3D, b: Vector3D) -> Vector3D {
     let mut dst = to_ai_vector3d(a);
     let other = to_ai_vector3d(b);
@@ -281,12 +300,14 @@ pub fn vector3_sym_mul(a: Vector3D, b: Vector3D) -> Vector3D {
     from_ai_vector3d(dst)
 }
 
+/// Divide a 3D vector by a scalar
 pub fn vector3_div_scalar(v: Vector3D, s: f32) -> Vector3D {
     let mut dst = to_ai_vector3d(v);
     unsafe { sys::aiVector3DivideByScalar(&mut dst, s) };
     from_ai_vector3d(dst)
 }
 
+/// Component-wise division of two 3D vectors
 pub fn vector3_div_vector(a: Vector3D, b: Vector3D) -> Vector3D {
     let mut dst = to_ai_vector3d(a);
     let mut other = to_ai_vector3d(b);
@@ -294,28 +315,33 @@ pub fn vector3_div_vector(a: Vector3D, b: Vector3D) -> Vector3D {
     from_ai_vector3d(dst)
 }
 
+/// Calculate the length of a 3D vector
 pub fn vector3_length(v: Vector3D) -> f32 {
     let vv = to_ai_vector3d(v);
     unsafe { sys::aiVector3Length(&vv) as f32 }
 }
 
+/// Calculate the squared length of a 3D vector
 pub fn vector3_length_squared(v: Vector3D) -> f32 {
     let vv = to_ai_vector3d(v);
     unsafe { sys::aiVector3SquareLength(&vv) as f32 }
 }
 
+/// Negate a 3D vector
 pub fn vector3_negate(v: Vector3D) -> Vector3D {
     let mut vv = to_ai_vector3d(v);
     unsafe { sys::aiVector3Negate(&mut vv) };
     from_ai_vector3d(vv)
 }
 
+/// Calculate the dot product of two 3D vectors
 pub fn vector3_dot(a: Vector3D, b: Vector3D) -> f32 {
     let aa = to_ai_vector3d(a);
     let bb = to_ai_vector3d(b);
     unsafe { sys::aiVector3DotProduct(&aa, &bb) as f32 }
 }
 
+/// Calculate the cross product of two 3D vectors
 pub fn vector3_cross(a: Vector3D, b: Vector3D) -> Vector3D {
     let mut dst = sys::aiVector3D {
         x: 0.0,
@@ -328,18 +354,21 @@ pub fn vector3_cross(a: Vector3D, b: Vector3D) -> Vector3D {
     from_ai_vector3d(dst)
 }
 
+/// Normalize a 3D vector to unit length
 pub fn vector3_normalize(v: Vector3D) -> Vector3D {
     let mut vv = to_ai_vector3d(v);
     unsafe { sys::aiVector3Normalize(&mut vv) };
     from_ai_vector3d(vv)
 }
 
+/// Safely normalize a 3D vector (handles zero-length vectors)
 pub fn vector3_normalize_safe(v: Vector3D) -> Vector3D {
     let mut vv = to_ai_vector3d(v);
     unsafe { sys::aiVector3NormalizeSafe(&mut vv) };
     from_ai_vector3d(vv)
 }
 
+/// Rotate a 3D vector by a quaternion
 pub fn vector3_rotate_by_quaternion(v: Vector3D, q: Quaternion) -> Vector3D {
     let mut vv = to_ai_vector3d(v);
     let qq = sys::aiQuaternion {
@@ -354,6 +383,7 @@ pub fn vector3_rotate_by_quaternion(v: Vector3D, q: Quaternion) -> Vector3D {
 
 // ===================== Matrix3 extra =====================
 
+/// Extract a 3x3 matrix from a 4x4 matrix
 pub fn matrix3_from_matrix4(m: Matrix4x4) -> Matrix3x3 {
     let am = to_ai_matrix4x4(m);
     let mut out = sys::aiMatrix3x3::default();
@@ -361,6 +391,7 @@ pub fn matrix3_from_matrix4(m: Matrix4x4) -> Matrix3x3 {
     from_ai_matrix3x3(out)
 }
 
+/// Create a 3x3 rotation matrix from a quaternion
 pub fn matrix3_from_quaternion(q: Quaternion) -> Matrix3x3 {
     let mut out = sys::aiMatrix3x3::default();
     let qq = sys::aiQuaternion {
@@ -373,35 +404,41 @@ pub fn matrix3_from_quaternion(q: Quaternion) -> Matrix3x3 {
     from_ai_matrix3x3(out)
 }
 
+/// Check if two 3x3 matrices are equal
 pub fn matrix3_are_equal(a: Matrix3x3, b: Matrix3x3) -> bool {
     let aa = to_ai_matrix3x3(a);
     let bb = to_ai_matrix3x3(b);
     unsafe { sys::aiMatrix3AreEqual(&aa, &bb) != 0 }
 }
 
+/// Check if two 3x3 matrices are equal within epsilon tolerance
 pub fn matrix3_are_equal_epsilon(a: Matrix3x3, b: Matrix3x3, eps: f32) -> bool {
     let aa = to_ai_matrix3x3(a);
     let bb = to_ai_matrix3x3(b);
     unsafe { sys::aiMatrix3AreEqualEpsilon(&aa, &bb, eps) != 0 }
 }
 
+/// Calculate the inverse of a 3x3 matrix
 pub fn matrix3_inverse(m: Matrix3x3) -> Matrix3x3 {
     let mut am = to_ai_matrix3x3(m);
     unsafe { sys::aiMatrix3Inverse(&mut am) };
     from_ai_matrix3x3(am)
 }
 
+/// Calculate the determinant of a 3x3 matrix
 pub fn matrix3_determinant(m: Matrix3x3) -> f32 {
     let am = to_ai_matrix3x3(m);
     unsafe { sys::aiMatrix3Determinant(&am) as f32 }
 }
 
+/// Create a 3x3 rotation matrix around the Z axis
 pub fn matrix3_rotation_z(angle: f32) -> Matrix3x3 {
     let mut out = sys::aiMatrix3x3::default();
     unsafe { sys::aiMatrix3RotationZ(&mut out, angle) };
     from_ai_matrix3x3(out)
 }
 
+/// Create a 3x3 rotation matrix around an arbitrary axis
 pub fn matrix3_from_rotation_axis(axis: Vector3D, angle: f32) -> Matrix3x3 {
     let mut out = sys::aiMatrix3x3::default();
     let ax = to_ai_vector3d(axis);
@@ -409,6 +446,7 @@ pub fn matrix3_from_rotation_axis(axis: Vector3D, angle: f32) -> Matrix3x3 {
     from_ai_matrix3x3(out)
 }
 
+/// Create a 3x3 translation matrix from a 2D vector
 pub fn matrix3_translation(t: Vector2D) -> Matrix3x3 {
     let mut out = sys::aiMatrix3x3::default();
     let tv = to_ai_vector2d(t);
@@ -416,6 +454,7 @@ pub fn matrix3_translation(t: Vector2D) -> Matrix3x3 {
     from_ai_matrix3x3(out)
 }
 
+/// Create a 3x3 rotation matrix that rotates from one vector to another
 pub fn matrix3_from_to(from: Vector3D, to: Vector3D) -> Matrix3x3 {
     let mut out = sys::aiMatrix3x3::default();
     let f = to_ai_vector3d(from);
@@ -426,6 +465,7 @@ pub fn matrix3_from_to(from: Vector3D, to: Vector3D) -> Matrix3x3 {
 
 // ===================== Matrix4 extra =====================
 
+/// Create a 4x4 matrix from a 3x3 matrix
 pub fn matrix4_from_matrix3(m: Matrix3x3) -> Matrix4x4 {
     let am = to_ai_matrix3x3(m);
     let mut out = sys::aiMatrix4x4::default();
@@ -433,6 +473,7 @@ pub fn matrix4_from_matrix3(m: Matrix3x3) -> Matrix4x4 {
     from_ai_matrix4x4(out)
 }
 
+/// Create a 4x4 transformation matrix from scale, rotation quaternion, and translation
 pub fn matrix4_from_s_q_t(scale: Vector3D, rot: Quaternion, pos: Vector3D) -> Matrix4x4 {
     let mut out = sys::aiMatrix4x4::default();
     let s = to_ai_vector3d(scale);
@@ -447,6 +488,7 @@ pub fn matrix4_from_s_q_t(scale: Vector3D, rot: Quaternion, pos: Vector3D) -> Ma
     from_ai_matrix4x4(out)
 }
 
+/// Add two 4x4 matrices
 pub fn matrix4_add(a: Matrix4x4, b: Matrix4x4) -> Matrix4x4 {
     let mut aa = to_ai_matrix4x4(a);
     let bb = to_ai_matrix4x4(b);
@@ -454,34 +496,40 @@ pub fn matrix4_add(a: Matrix4x4, b: Matrix4x4) -> Matrix4x4 {
     from_ai_matrix4x4(aa)
 }
 
+/// Check if two 4x4 matrices are equal
 pub fn matrix4_are_equal(a: Matrix4x4, b: Matrix4x4) -> bool {
     let aa = to_ai_matrix4x4(a);
     let bb = to_ai_matrix4x4(b);
     unsafe { sys::aiMatrix4AreEqual(&aa, &bb) != 0 }
 }
 
+/// Check if two 4x4 matrices are equal within epsilon tolerance
 pub fn matrix4_are_equal_epsilon(a: Matrix4x4, b: Matrix4x4, eps: f32) -> bool {
     let aa = to_ai_matrix4x4(a);
     let bb = to_ai_matrix4x4(b);
     unsafe { sys::aiMatrix4AreEqualEpsilon(&aa, &bb, eps) != 0 }
 }
 
+/// Calculate the inverse of a 4x4 matrix
 pub fn matrix4_inverse(m: Matrix4x4) -> Matrix4x4 {
     let mut am = to_ai_matrix4x4(m);
     unsafe { sys::aiMatrix4Inverse(&mut am) };
     from_ai_matrix4x4(am)
 }
 
+/// Calculate the determinant of a 4x4 matrix
 pub fn matrix4_determinant(m: Matrix4x4) -> f32 {
     let am = to_ai_matrix4x4(m);
     unsafe { sys::aiMatrix4Determinant(&am) as f32 }
 }
 
+/// Check if a 4x4 matrix is the identity matrix
 pub fn matrix4_is_identity(m: Matrix4x4) -> bool {
     let am = to_ai_matrix4x4(m);
     unsafe { sys::aiMatrix4IsIdentity(&am) != 0 }
 }
 
+/// Decompose a 4x4 matrix into scale, Euler angles, and position
 pub fn matrix4_decompose_euler(m: Matrix4x4) -> (Vector3D, Vector3D, Vector3D) {
     let am = to_ai_matrix4x4(m);
     let mut s = sys::aiVector3D {
@@ -507,6 +555,7 @@ pub fn matrix4_decompose_euler(m: Matrix4x4) -> (Vector3D, Vector3D, Vector3D) {
     )
 }
 
+/// Decompose a 4x4 matrix into scale, axis-angle rotation, and position
 pub fn matrix4_decompose_axis_angle(m: Matrix4x4) -> (Vector3D, Vector3D, f32, Vector3D) {
     let am = to_ai_matrix4x4(m);
     let mut s = sys::aiVector3D {
@@ -538,6 +587,7 @@ pub fn matrix4_decompose_axis_angle(m: Matrix4x4) -> (Vector3D, Vector3D, f32, V
     )
 }
 
+/// Decompose a 4x4 matrix into quaternion rotation and position (no scaling)
 pub fn matrix4_decompose_no_scaling(m: Matrix4x4) -> (Quaternion, Vector3D) {
     let am = to_ai_matrix4x4(m);
     let mut q = sys::aiQuaternion {
@@ -555,28 +605,35 @@ pub fn matrix4_decompose_no_scaling(m: Matrix4x4) -> (Quaternion, Vector3D) {
     (from_ai_quaternion(q), from_ai_vector3d(p))
 }
 
+/// Create a 4x4 rotation matrix from Euler angles
 pub fn matrix4_from_euler(x: f32, y: f32, z: f32) -> Matrix4x4 {
     let mut out = sys::aiMatrix4x4::default();
     unsafe { sys::aiMatrix4FromEulerAngles(&mut out, x, y, z) };
     from_ai_matrix4x4(out)
 }
 
+/// Create a 4x4 rotation matrix around the X axis
 pub fn matrix4_rotation_x(angle: f32) -> Matrix4x4 {
     let mut out = sys::aiMatrix4x4::default();
     unsafe { sys::aiMatrix4RotationX(&mut out, angle) };
     from_ai_matrix4x4(out)
 }
+
+/// Create a 4x4 rotation matrix around the Y axis
 pub fn matrix4_rotation_y(angle: f32) -> Matrix4x4 {
     let mut out = sys::aiMatrix4x4::default();
     unsafe { sys::aiMatrix4RotationY(&mut out, angle) };
     from_ai_matrix4x4(out)
 }
+
+/// Create a 4x4 rotation matrix around the Z axis
 pub fn matrix4_rotation_z(angle: f32) -> Matrix4x4 {
     let mut out = sys::aiMatrix4x4::default();
     unsafe { sys::aiMatrix4RotationZ(&mut out, angle) };
     from_ai_matrix4x4(out)
 }
 
+/// Create a 4x4 rotation matrix around an arbitrary axis
 pub fn matrix4_from_rotation_axis(axis: Vector3D, angle: f32) -> Matrix4x4 {
     let mut out = sys::aiMatrix4x4::default();
     let ax = to_ai_vector3d(axis);
@@ -584,6 +641,7 @@ pub fn matrix4_from_rotation_axis(axis: Vector3D, angle: f32) -> Matrix4x4 {
     from_ai_matrix4x4(out)
 }
 
+/// Create a 4x4 translation matrix
 pub fn matrix4_translation(t: Vector3D) -> Matrix4x4 {
     let mut out = sys::aiMatrix4x4::default();
     let tt = to_ai_vector3d(t);
@@ -591,6 +649,7 @@ pub fn matrix4_translation(t: Vector3D) -> Matrix4x4 {
     from_ai_matrix4x4(out)
 }
 
+/// Create a 4x4 scaling matrix
 pub fn matrix4_scaling(s: Vector3D) -> Matrix4x4 {
     let mut out = sys::aiMatrix4x4::default();
     let ss = to_ai_vector3d(s);
@@ -598,6 +657,7 @@ pub fn matrix4_scaling(s: Vector3D) -> Matrix4x4 {
     from_ai_matrix4x4(out)
 }
 
+/// Create a 4x4 rotation matrix that rotates from one vector to another
 pub fn matrix4_from_to(from: Vector3D, to: Vector3D) -> Matrix4x4 {
     let mut out = sys::aiMatrix4x4::default();
     let f = to_ai_vector3d(from);
@@ -608,6 +668,7 @@ pub fn matrix4_from_to(from: Vector3D, to: Vector3D) -> Matrix4x4 {
 
 // ===================== Quaternion extra =====================
 
+/// Create a quaternion from Euler angles
 pub fn quaternion_from_euler(x: f32, y: f32, z: f32) -> Quaternion {
     let mut q = sys::aiQuaternion {
         w: 1.0,
@@ -619,6 +680,7 @@ pub fn quaternion_from_euler(x: f32, y: f32, z: f32) -> Quaternion {
     from_ai_quaternion(q)
 }
 
+/// Create a quaternion from axis-angle representation
 pub fn quaternion_from_axis_angle(axis: Vector3D, angle: f32) -> Quaternion {
     let mut q = sys::aiQuaternion {
         w: 1.0,
@@ -631,6 +693,7 @@ pub fn quaternion_from_axis_angle(axis: Vector3D, angle: f32) -> Quaternion {
     from_ai_quaternion(q)
 }
 
+/// Create a quaternion from a normalized 3D vector
 pub fn quaternion_from_normalized_vector3(v: Vector3D) -> Quaternion {
     let mut q = sys::aiQuaternion {
         w: 1.0,
@@ -643,6 +706,7 @@ pub fn quaternion_from_normalized_vector3(v: Vector3D) -> Quaternion {
     from_ai_quaternion(q)
 }
 
+/// Check if two quaternions are equal
 pub fn quaternion_equal(a: Quaternion, b: Quaternion) -> bool {
     let aa = sys::aiQuaternion {
         w: a.w,
@@ -659,6 +723,7 @@ pub fn quaternion_equal(a: Quaternion, b: Quaternion) -> bool {
     unsafe { sys::aiQuaternionAreEqual(&aa, &bb) != 0 }
 }
 
+/// Check if two quaternions are equal within epsilon tolerance
 pub fn quaternion_equal_epsilon(a: Quaternion, b: Quaternion, eps: f32) -> bool {
     let aa = sys::aiQuaternion {
         w: a.w,
@@ -675,6 +740,7 @@ pub fn quaternion_equal_epsilon(a: Quaternion, b: Quaternion, eps: f32) -> bool 
     unsafe { sys::aiQuaternionAreEqualEpsilon(&aa, &bb, eps) != 0 }
 }
 
+/// Calculate the conjugate of a quaternion
 pub fn quaternion_conjugate(q: Quaternion) -> Quaternion {
     let mut qq = sys::aiQuaternion {
         w: q.w,
@@ -686,6 +752,7 @@ pub fn quaternion_conjugate(q: Quaternion) -> Quaternion {
     from_ai_quaternion(qq)
 }
 
+/// Multiply two quaternions
 pub fn quaternion_multiply(a: Quaternion, b: Quaternion) -> Quaternion {
     let mut dst = sys::aiQuaternion {
         w: a.w,

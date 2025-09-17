@@ -1,10 +1,10 @@
 //! Convert a model to another format based on output extension
 
+#[path = "common/mod.rs"]
 mod common;
 
 use std::error::Error;
 
-use asset_importer::postprocess::PostProcessSteps;
 #[cfg(feature = "export")]
 use asset_importer::{exporter::ExportBuilder, get_export_formats, Scene};
 
@@ -15,40 +15,49 @@ fn main() -> Result<(), Box<dyn Error>> {
     if args.len() < 3 {
         eprintln!(
             "Usage: {} <input_model> <output_file>",
-            args.get(0).unwrap_or(&"06_convert".to_string())
+            args.first().unwrap_or(&"06_convert".to_string())
         );
         std::process::exit(1);
     }
-    let input = std::path::Path::new(&args[1]);
-    let output = std::path::Path::new(&args[2]);
+    let _input = std::path::Path::new(&args[1]);
+    let _output = std::path::Path::new(&args[2]);
+
+    let result = {
+        #[cfg(not(feature = "export"))]
+        {
+            eprintln!("This example requires the 'export' feature. Re-run with: --features export");
+            Err("Export feature not enabled".into())
+        }
+
+        #[cfg(feature = "export")]
+        {
+            let scene: Scene = common::import_scene(input, PostProcessSteps::TRIANGULATE)?;
+            let ext = output
+                .extension()
+                .and_then(|s| s.to_str())
+                .unwrap_or("")
+                .to_ascii_lowercase();
+            let id = match map_extension_to_id(&ext) {
+                Some(id) => id,
+                None => {
+                    eprintln!("Unknown export extension '.{}'", ext);
+                    return Err(format!("Unknown export extension '.{}'", ext).into());
+                }
+            };
+            ExportBuilder::new(id).export_to_file(&scene, output)?;
+            println!("Wrote {}", output.display());
+            Ok(())
+        }
+    };
+
+    common::shutdown_logging();
 
     #[cfg(not(feature = "export"))]
-    {
-        eprintln!("This example requires the 'export' feature. Re-run with: --features export");
+    if result.is_err() {
         std::process::exit(1);
     }
 
-    #[cfg(feature = "export")]
-    {
-        let scene: Scene = common::import_scene(input, PostProcessSteps::TRIANGULATE)?;
-        let ext = output
-            .extension()
-            .and_then(|s| s.to_str())
-            .unwrap_or("")
-            .to_ascii_lowercase();
-        let id = match map_extension_to_id(&ext) {
-            Some(id) => id,
-            None => {
-                eprintln!("Unknown export extension '.{}'", ext);
-                std::process::exit(2);
-            }
-        };
-        ExportBuilder::new(id).export_to_file(&scene, output)?;
-        println!("Wrote {}", output.display());
-    }
-
-    common::shutdown_logging();
-    Ok(())
+    result
 }
 
 #[cfg(feature = "export")]
