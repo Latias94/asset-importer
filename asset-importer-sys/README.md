@@ -24,11 +24,30 @@ The bindings include:
 
 ## Build Features
 
-**Default**: Builds from source for best compatibility.
+**Default**: Uses prebuilt binaries for fastest builds.
+
+### Prebuilt Binaries (Default)
+```toml
+[dependencies]
+asset-importer-sys = "0.1"
+# or explicitly:
+asset-importer-sys = { features = ["prebuilt"] }
+```
+- Downloads prebuilt libraries from GitHub releases
+- No build dependencies required
+- Fastest option for development
+
+### Build from Source
+```toml
+asset-importer-sys = { features = ["build-assimp"] }
+```
+- Builds assimp from bundled source
+- Requires: CMake, C++ compiler, Git
+- Full control over build configuration
+- Best compatibility across platforms
 
 ### System Library
 ```toml
-[dependencies]
 asset-importer-sys = { features = ["system"] }
 ```
 Uses system-installed assimp. Install via package manager:
@@ -36,21 +55,17 @@ Uses system-installed assimp. Install via package manager:
 - **Ubuntu/Debian**: `sudo apt install libassimp-dev`
 - **Windows**: Use vcpkg or manual installation
 
-### Build from Source (Explicit)
-```toml
-asset-importer-sys = { features = ["build-assimp"] }
-```
-- Explicitly builds assimp from bundled source
-- Requires: CMake, C++ compiler, Git
-- Full control over build configuration
+On Windows with vcpkg, pick a triplet that matches your desired CRT:
+- `x64-windows` → dynamic CRT (/MD)
+- `x64-windows-static` → static CRT (/MT)
 
-### Prebuilt Binaries
-```toml
-asset-importer-sys = { features = ["prebuilt"] }
+If you use the static triplet, also enable Rust `crt-static` so all crates agree:
+
 ```
-- Downloads prebuilt libraries from GitHub releases
-- No build dependencies required
-- Fastest option for development
+# .cargo/config.toml
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]
+```
 
 ### Static Linking
 ```toml
@@ -76,6 +91,7 @@ asset-importer-sys = {
 
 - `ASSIMP_DIR`: Path to an Assimp source tree to use when the `assimp` submodule is not present (builds from this directory).
 - `ASSET_IMPORTER_PACKAGE_DIR`: Use local prebuilt packages
+  - On Windows we publish both `-md` and `-mt` suffixed archives; the build script selects the right one automatically and falls back to the old name if not found.
 - `CMAKE_GENERATOR`: Override CMake generator (e.g., "Ninja")
 
 ## Platform Support

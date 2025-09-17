@@ -38,17 +38,39 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
     let crate_version = env::var("CARGO_PKG_VERSION").unwrap();
     let link_type = static_lib();
+    let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
+    let target_env = env::var("CARGO_CFG_TARGET_ENV").unwrap_or_default();
+    let target_features = env::var("CARGO_CFG_TARGET_FEATURE").unwrap_or_default();
+    let crt = if target_os == "windows" && target_env == "msvc" {
+        if target_features.split(',').any(|f| f == "crt-static") {
+            "mt"
+        } else {
+            "md"
+        }
+    } else {
+        ""
+    };
 
     println!("Package configuration:");
     println!("  Target: {}", target);
     println!("  Version: {}", crate_version);
     println!("  Link type: {}", link_type);
     println!("  Package dir: {}", ar_dst_dir.display());
+    if !crt.is_empty() {
+        println!("  CRT: {}", crt);
+    }
 
-    let ar_filename = format!(
-        "asset-importer-{}-{}-{}.tar.gz",
-        crate_version, target, link_type
-    );
+    let ar_filename = if crt.is_empty() {
+        format!(
+            "asset-importer-{}-{}-{}.tar.gz",
+            crate_version, target, link_type
+        )
+    } else {
+        format!(
+            "asset-importer-{}-{}-{}-{}.tar.gz",
+            crate_version, target, link_type, crt
+        )
+    };
 
     // Determine the source directory based on build type
     let from_dir = if cfg!(feature = "build-assimp") {

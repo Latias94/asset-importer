@@ -46,12 +46,23 @@ jobs:
             link_type: dylib
           
           # Windows targets
+          # Emit both MD and MT variants for Windows
           - target: x86_64-pc-windows-msvc
             os: windows-latest
             link_type: static
+            crt: md
           - target: x86_64-pc-windows-msvc
             os: windows-latest
             link_type: dylib
+            crt: md
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            link_type: static
+            crt: mt
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            link_type: dylib
+            crt: mt
 
     steps:
       - name: Checkout repository
@@ -124,7 +135,9 @@ jobs:
           target: ${{ matrix.target }}
 
       # Build with appropriate features
-      - name: Build asset-importer-sys
+      # Non-Windows build
+      - name: Build asset-importer-sys (non-Windows)
+        if: runner.os != 'Windows'
         working-directory: asset-importer-sys
         run: |
           if [ "${{ matrix.link_type }}" = "static" ]; then
@@ -139,8 +152,28 @@ jobs:
           # Set TARGET environment variable for package binary
           TARGET: ${{ matrix.target }}
 
+      # Windows build with optional CRT override
+      - name: Build asset-importer-sys (Windows)
+        if: runner.os == 'Windows'
+        working-directory: asset-importer-sys
+        run: |
+          FEATURES="build-assimp"
+          if [ "${{ matrix.link_type }}" = "static" ]; then
+            FEATURES="${FEATURES},static-link"
+          fi
+          if [ "${{ matrix.crt }}" = "mt" ]; then
+            export RUSTFLAGS="-C target-feature=+crt-static"
+          fi
+          echo "Using FEATURES=${FEATURES} RUSTFLAGS=${RUSTFLAGS:-<empty>}"
+          cargo build --release --target ${{ matrix.target }} --features "${FEATURES}"
+        shell: bash
+        env:
+          ASSET_IMPORTER_FORCE_BUILD: "1"
+          TARGET: ${{ matrix.target }}
+
       # Run the package tool to create archives
-      - name: Package binaries
+      - name: Package binaries (non-Windows)
+        if: runner.os != 'Windows'
         working-directory: asset-importer-sys
         run: |
           if [ "${{ matrix.link_type }}" = "static" ]; then
@@ -151,9 +184,26 @@ jobs:
         shell: bash
         env:
           ASSET_IMPORTER_PACKAGE_DIR: ${{ github.workspace }}/packages
-          # Force source build in CI
           ASSET_IMPORTER_FORCE_BUILD: "1"
-          # Set TARGET environment variable for package binary
+          TARGET: ${{ matrix.target }}
+
+      - name: Package binaries (Windows)
+        if: runner.os == 'Windows'
+        working-directory: asset-importer-sys
+        run: |
+          FEATURES="build-assimp"
+          if [ "${{ matrix.link_type }}" = "static" ]; then
+            FEATURES="${FEATURES},static-link"
+          fi
+          if [ "${{ matrix.crt }}" = "mt" ]; then
+            export RUSTFLAGS="-C target-feature=+crt-static"
+          fi
+          echo "Using FEATURES=${FEATURES} RUSTFLAGS=${RUSTFLAGS:-<empty>}"
+          cargo run --bin package --release --target ${{ matrix.target }} --features "${FEATURES}"
+        shell: bash
+        env:
+          ASSET_IMPORTER_PACKAGE_DIR: ${{ github.workspace }}/packages
+          ASSET_IMPORTER_FORCE_BUILD: "1"
           TARGET: ${{ matrix.target }}
 
       # Upload artifacts for release

@@ -30,14 +30,14 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-# Default – Build from source (best compatibility)
+# Default – Use prebuilt binaries (fastest)
 asset-importer = "0.1"
+
+# Or build from source (best compatibility)
+asset-importer = { version = "0.1", features = ["build-assimp"] }
 
 # Or use system-installed assimp
 asset-importer = { version = "0.1", features = ["system"] }
-
-# Or use prebuilt binaries (fastest, requires release)
-asset-importer = { version = "0.1", features = ["prebuilt"] }
 ```
 
 Basic usage:
@@ -62,10 +62,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ## Build Options
 
-### Default: Build from Source
+### Default: Prebuilt Binaries
 
 ```toml
 asset-importer = "0.1"
+```
+
+- **Fastest**: No compilation time
+- **Convenient**: No native toolchain required
+- **Requires**: Available release artifacts from GitHub releases
+
+### Build from Source
+
+```toml
+asset-importer = { version = "0.1", features = ["build-assimp"] }
 ```
 
 - **Best compatibility**: Works on all platforms
@@ -82,24 +92,17 @@ asset-importer = { version = "0.1", features = ["system"] }
 - **Setup required**: Install via `brew install assimp` (macOS), `apt install libassimp-dev` (Ubuntu)
 - **Version dependent**: Behavior may vary based on system library version
 
-### Prebuilt Binaries
-
-```toml
-asset-importer = { version = "0.1", features = ["prebuilt"] }
-```
-
-- **Fastest**: No compilation time
-- **Convenient**: No native toolchain required
-- **Requires**: Available release artifacts
-
 ### Additional Features
 
 ```toml
 asset-importer = {
+    version = "0.1",
     features = [
-        "export",        # Enable export functionality
-        "static-link",   # Prefer static linking (source/prebuilt)
-        "nozlib"         # Disable zlib
+        "export",          # Enable export functionality
+        "type-extensions", # Enable convenience methods on types
+        "mint",            # Enable mint math library integration
+        "static-link",     # Prefer static linking (source/prebuilt)
+        "nozlib"           # Disable zlib compression support
     ]
 }
 ```
@@ -108,7 +111,7 @@ asset-importer = {
 
 ### Source Build Dependencies
 
-When building from source (default), you'll need:
+When building from source (`build-assimp` feature), you'll need:
 
 - **CMake** (3.10 or later)
 - **C++ Compiler** (MSVC on Windows, GCC/Clang on Linux/macOS)
@@ -122,16 +125,44 @@ When building from source (default), you'll need:
 
 For detailed platform-specific instructions and troubleshooting, see the [asset-importer-sys README](https://github.com/Latias94/asset-importer/blob/main/asset-importer-sys/README.md#build-requirements).
 
-## Why build from source by default?
+## Windows Notes (MSVC CRT)
 
-- **Best compatibility**: Works reliably across all platforms and environments
-- **Latest features**: Always uses the most recent Assimp version
-- **No external dependencies**: Self-contained build process
-- **CI/CD friendly**: No need for prebuilt artifacts during development
+- Default Rust (MSVC) uses dynamic CRT (/MD). Our build follows Rust’s choice automatically.
+- If you need static CRT (/MT), set a target-wide flag so all crates agree:
 
-If you prefer faster builds or have constraints, use:
+```
+# .cargo/config.toml
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]
+```
 
-- `--features prebuilt` to use prebuilt binaries (when available)
+or per-build:
+
+```
+RUSTFLAGS="-C target-feature=+crt-static" cargo build --release
+```
+
+- Prebuilt binaries: we publish both MD and MT variants on Windows. Filenames include a `-md` or `-mt` suffix, for example:
+  `asset-importer-<version>-x86_64-pc-windows-msvc-<static|dylib>-md.tar.gz`.
+  The build script auto-selects the variant matching your current CRT and falls back to old names if needed.
+
+- vcpkg (with `features=["system"]`):
+  - Choose triplet to match CRT:
+    - `x64-windows` → /MD (dynamic)
+    - `x64-windows-static` → /MT (static)
+  - Install: `vcpkg install assimp:x64-windows` or `assimp:x64-windows-static`.
+  - If using the static triplet, also enable `crt-static` to avoid LNK2038.
+
+## Why prebuilt binaries by default?
+
+- **Fast builds**: No compilation time for Assimp
+- **Easy setup**: No native toolchain required
+- **CI/CD friendly**: Faster builds in continuous integration
+- **Consistent**: Same binary across environments
+
+If you need more control or compatibility, use:
+
+- `--features build-assimp` to build from source (best compatibility)
 - `--features system` to link an existing installation
 
 ## Architecture

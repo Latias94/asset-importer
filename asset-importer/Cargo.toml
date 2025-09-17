@@ -50,16 +50,26 @@ glam = "0.30"
 mint = { version = "0.5", optional = true }
 
 [features]
-default = []
-# Enable mint math library integration (for interop with other math libs)
-mint = ["dep:mint", "asset-importer-sys/mint"]
-# Enable export functionality
-export = ["asset-importer-sys/export"]
+default = ["prebuilt"]
 
-# Enable system assimp (instead of bundled)
-system = ["asset-importer-sys/system"]
-# Build assimp from source
+# Math library integrations
+mint = ["dep:mint", "asset-importer-sys/mint"]
+
+# Functionality features
+export = ["asset-importer-sys/export"]
+type-extensions = ["asset-importer-sys/type-extensions"]
+
+# Build method features (mutually exclusive)
+# Use prebuilt binaries (default, fastest)
+prebuilt = ["asset-importer-sys/prebuilt"]
+# Build assimp from source (slower but most compatible)
 build-assimp = ["asset-importer-sys/build-assimp"]
+# Use system-installed assimp
+system = ["asset-importer-sys/system"]
+
+# Linking options
+static-link = ["asset-importer-sys/static-link"]
+nozlib = ["asset-importer-sys/nozlib"]
 
 [dev-dependencies]
 approx = "0.5"
@@ -96,6 +106,5 @@ version = "0.5"
 [dev-dependencies.raw-window-handle]
 version = "0.6"
 
-# 添加 OpenGL 加载器
 [dev-dependencies.gl]
 version = "0.14"
