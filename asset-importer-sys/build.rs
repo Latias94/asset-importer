@@ -1048,7 +1048,38 @@ fn generate_bindings(config: &BuildConfig, built_include_dir: Option<&std::path:
         // Create config.h in OUT_DIR instead of modifying source directory
         std::fs::create_dir_all(&out_include_dir)
             .expect("Failed to create OUT_DIR assimp include directory");
-        std::fs::write(&out_config_file, "").expect("Unable to write config.h to OUT_DIR");
+
+        // Generate config.h from config.h.in template
+        let config_h_in = assimp_include.join("assimp").join("config.h.in");
+        if config_h_in.exists() {
+            let template_content = std::fs::read_to_string(&config_h_in)
+                .expect("Failed to read config.h.in template");
+
+            // Process the template by replacing CMake variables with appropriate values
+            let processed_content = template_content
+                .replace("#cmakedefine ASSIMP_DOUBLE_PRECISION 1", "// #define ASSIMP_DOUBLE_PRECISION 1")
+                .replace("#cmakedefine01 ASSIMP_BUILD_DEBUG_MACROS", "#define ASSIMP_BUILD_DEBUG_MACROS 0")
+                .replace("#cmakedefine ASSIMP_BUILD_BOOST_WORKAROUND", "// #define ASSIMP_BUILD_BOOST_WORKAROUND")
+                .replace("#cmakedefine ASSIMP_BUILD_NO_VALIDATEDS_PROCESS", "// #define ASSIMP_BUILD_NO_VALIDATEDS_PROCESS")
+                .replace("#cmakedefine ASSIMP_BUILD_NO_OWN_ZLIB", "// #define ASSIMP_BUILD_NO_OWN_ZLIB");
+
+            std::fs::write(&out_config_file, processed_content)
+                .expect("Unable to write processed config.h to OUT_DIR");
+        } else {
+            // Fallback: create a minimal config.h with essential definitions
+            let minimal_config = r#"#ifndef AI_CONFIG_H_INC
+#define AI_CONFIG_H_INC
+
+// Essential macro definitions for Assimp
+#if (!defined AI_CONFIG_CHECK_IDENTITY_MATRIX_EPSILON_DEFAULT)
+#   define AI_CONFIG_CHECK_IDENTITY_MATRIX_EPSILON_DEFAULT 10e-3f
+#endif
+
+#endif // AI_CONFIG_H_INC
+"#;
+            std::fs::write(&out_config_file, minimal_config)
+                .expect("Unable to write minimal config.h to OUT_DIR");
+        }
     }
 
     let mut builder = bindgen::Builder::default()
