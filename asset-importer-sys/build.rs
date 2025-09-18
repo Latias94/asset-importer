@@ -45,7 +45,14 @@ impl BuildConfig {
     }
 
     fn cmake_profile(&self) -> &str {
-        if self.is_debug() { "Debug" } else { "Release" }
+        // On MSVC, avoid Debug CRT and iterator-debug by using RelWithDebInfo when Cargo is in debug.
+        if self.is_msvc() && self.is_debug() {
+            "RelWithDebInfo"
+        } else if self.is_debug() {
+            "Debug"
+        } else {
+            "Release"
+        }
     }
 
     fn assimp_source_dir(&self) -> PathBuf {
@@ -664,6 +671,9 @@ fn configure_cmake_crt(cmake_config: &mut cmake::Config, config: &BuildConfig) {
             "MultiThreadedDLL"
         };
         cmake_config.define("CMAKE_MSVC_RUNTIME_LIBRARY", msvc_rt);
+
+        // Ensure CMake honors CMAKE_MSVC_RUNTIME_LIBRARY even on older projects
+        cmake_config.define("CMAKE_POLICY_DEFAULT_CMP0091", "NEW");
 
         // Some Assimp trees support opting into static CRT via this toggle; set it
         // to match our target selection to avoid project-local overrides to /MTd.
