@@ -1038,16 +1038,17 @@ fn generate_bindings(config: &BuildConfig, built_include_dir: Option<&std::path:
     let wrapper_h = config.manifest_dir.join("wrapper.h");
     let assimp_include = config.assimp_include_dir();
 
-    // Create empty config.h if it doesn't exist (needed for system builds) only when using submodule path
+    // Create empty config.h in OUT_DIR if it doesn't exist (needed for system builds) only when using submodule path
     let submodule_include = config.manifest_dir.join("assimp").join("include");
     let use_submodule = assimp_include == submodule_include;
-    let config_file = assimp_include.join("assimp").join("config.h");
-    if use_submodule && !config_file.exists() {
-        if let Some(parent) = config_file.parent() {
-            std::fs::create_dir_all(parent).expect("Failed to create assimp include directory");
-        }
-        std::fs::write(&config_file, "")
-            .expect("Unable to write config.h to assimp/include/assimp/");
+    let out_include_dir = config.out_dir.join("include").join("assimp");
+    let out_config_file = out_include_dir.join("config.h");
+
+    if use_submodule && !assimp_include.join("assimp").join("config.h").exists() {
+        // Create config.h in OUT_DIR instead of modifying source directory
+        std::fs::create_dir_all(&out_include_dir)
+            .expect("Failed to create OUT_DIR assimp include directory");
+        std::fs::write(&out_config_file, "").expect("Unable to write config.h to OUT_DIR");
     }
 
     let mut builder = bindgen::Builder::default()
@@ -1061,7 +1062,11 @@ fn generate_bindings(config: &BuildConfig, built_include_dir: Option<&std::path:
             .clang_arg(format!("-I{}", built_include.display()))
             .clang_arg(format!("-I{}", assimp_include.display()));
     } else {
-        // Use submodule include directory only
+        // For submodule builds without built include, add OUT_DIR include first if config.h was created there
+        if use_submodule && out_config_file.exists() {
+            builder = builder.clang_arg(format!("-I{}", config.out_dir.join("include").display()));
+        }
+        // Use submodule include directory
         builder = builder.clang_arg(format!("-I{}", assimp_include.display()));
     }
 
