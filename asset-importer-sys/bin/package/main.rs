@@ -2,9 +2,6 @@ use std::{env, fs, path::PathBuf};
 
 use flate2::{Compression, write::GzEncoder};
 
-const LICENSE_APACHE_FILEPATH: &str = "LICENSE-APACHE";
-const LICENSE_MIT_FILEPATH: &str = "LICENSE-MIT";
-
 const fn static_lib() -> &'static str {
     if cfg!(feature = "static-link") {
         "static"
@@ -87,25 +84,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Err("Package tool requires build-assimp feature".into());
     };
 
-    // Find license files in workspace root
-    let license_apache_path = workspace_root.join("LICENSE-APACHE");
-    let license_mit_path = workspace_root.join("LICENSE-MIT");
-
-    if !license_apache_path.exists() {
-        return Err(format!(
-            "Apache license file not found at {}",
-            license_apache_path.display()
-        )
-        .into());
-    }
-    if !license_mit_path.exists() {
-        return Err(format!(
-            "MIT license file not found at {}",
-            license_mit_path.display()
-        )
-        .into());
-    }
-
     fs::create_dir_all(&ar_dst_dir)?;
     println!("Packaging at: {}", ar_dst_dir.display());
 
@@ -139,17 +117,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    // Add license files
-    let mut license_apache_file = fs::File::open(&license_apache_path)?;
-    archive.append_file(LICENSE_APACHE_FILEPATH, &mut license_apache_file)?;
-    println!(
-        "Added Apache license file: {}",
-        license_apache_path.display()
-    );
-
-    let mut license_mit_file = fs::File::open(&license_mit_path)?;
-    archive.append_file(LICENSE_MIT_FILEPATH, &mut license_mit_file)?;
-    println!("Added MIT license file: {}", license_mit_path.display());
+    // Add license file: only include workspace-root LICENSE
+    let license_single = workspace_root.join("LICENSE");
+    if !license_single.exists() {
+        return Err(format!(
+            "License file not found at {} (expected LICENSE)",
+            license_single.display()
+        )
+        .into());
+    }
+    let mut f = fs::File::open(&license_single)?;
+    archive.append_file("LICENSE", &mut f)?;
+    println!("Added license file: {}", license_single.display());
 
     archive.finish()?;
 
