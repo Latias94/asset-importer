@@ -4,11 +4,7 @@
 
 use std::path::{Path, PathBuf};
 
-use asset_importer::{
-    ImportBuilder, Importer, Scene,
-    logging::{attach_file_stream, attach_stderr_stream, attach_stdout_stream, detach_all_streams},
-    postprocess::PostProcessSteps,
-};
+use asset_importer::{ImportBuilder, Importer, Scene, postprocess::PostProcessSteps};
 
 /// How to pick a model path for examples
 #[derive(Clone, Copy)]
@@ -47,31 +43,24 @@ pub fn resolve_model_path(source: ModelSource, fallback_name: &str) -> PathBuf {
 pub fn init_logging_from_env() {
     // Only enable logging if explicitly requested to avoid potential issues
     let verbose = std::env::var("AI_EX_VERBOSE").ok().as_deref() == Some("1");
-    let log_to_stderr = std::env::var("AI_EX_STDERR").ok().as_deref() == Some("1");
-    let has_log_file = std::env::var("AI_EX_LOGFILE").is_ok();
+    let _log_to_stderr = std::env::var("AI_EX_STDERR").ok().as_deref() == Some("1");
+    let _has_log_file = std::env::var("AI_EX_LOGFILE").is_ok();
 
-    // Only attach streams if logging is explicitly requested
-    if verbose || log_to_stderr || has_log_file {
-        // Use safe logging functions instead of Assimp's predefined streams
-        if log_to_stderr {
-            let _ = attach_stderr_stream();
-        } else {
-            let _ = attach_stdout_stream();
-        }
-
-        // Optional FILE stream via AI_EX_LOGFILE
-        if let Ok(file_path) = std::env::var("AI_EX_LOGFILE") {
-            let _ = attach_file_stream(PathBuf::from(file_path));
-        }
-
-        // verbose logging is global
+    // Only enable verbose logging if explicitly requested
+    if verbose {
+        // Use safe verbose logging (no custom streams due to FFI safety issues)
         asset_importer::enable_verbose_logging(verbose);
+        if verbose {
+            println!(
+                "Verbose logging enabled (custom log streams disabled due to FFI safety issues)"
+            );
+        }
     }
 }
 
 /// Clean up logging on exit
 pub fn shutdown_logging() {
-    detach_all_streams();
+    // No-op: no custom streams to detach (they were removed due to FFI safety issues)
 }
 
 /// Import a scene using a set of default post-process steps. Accepts extra steps to combine.

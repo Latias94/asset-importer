@@ -12,7 +12,7 @@ use std::sync::{Arc, Mutex};
 use crate::{error::Result, sys};
 
 /// Trait for custom file I/O implementations
-pub trait FileSystem {
+pub trait FileSystem: std::fmt::Debug {
     /// Check if a file exists
     fn exists(&self, path: &str) -> bool;
 
@@ -68,6 +68,7 @@ pub trait FileStream {
 }
 
 /// Default file system implementation using std::fs
+#[derive(Debug)]
 pub struct DefaultFileSystem;
 
 impl FileSystem for DefaultFileSystem {
@@ -159,6 +160,7 @@ impl FileStream for StdFileStream {
 }
 
 /// Memory-based file system for testing or embedded resources
+#[derive(Debug)]
 pub struct MemoryFileSystem {
     files: std::collections::HashMap<String, Vec<u8>>,
 }

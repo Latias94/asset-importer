@@ -1,16 +1,34 @@
 //! Logging system integration with Assimp
 //!
-//! This module provides safe Rust wrappers around Assimp's logging functionality,
-//! allowing you to capture and handle log messages from the Assimp library.
-
-#![allow(clippy::unnecessary_cast)]
-
-use std::ffi::CStr;
-use std::os::raw::c_char;
-use std::sync::{Arc, Mutex};
+//! This module provides safe Rust wrappers around Assimp's logging functionality.
+//!
+//! ## Important Note
+//!
+//! Custom log streams using Assimp's callback mechanism have been removed due to
+//! access violations and memory safety issues when crossing the FFI boundary.
+//! The callback-based logging system was causing STATUS_ACCESS_VIOLATION errors
+//! because of conflicts between Assimp's C callback mechanism and Rust's memory
+//! management.
+//!
+//! ## Available Functionality
+//!
+//! - Verbose logging control (safe)
+//! - Error message retrieval (safe)
+//! - Basic logging level configuration (safe)
+//!
+//! ## Removed Functionality
+//!
+//! - Custom log streams (unsafe due to FFI callback issues)
+//! - Real-time log message capture (unsafe)
+//! - File/stdout/stderr stream attachment (unsafe)
+//!
+//! For applications that need detailed logging, consider:
+//! 1. Using verbose logging with `enable_verbose_logging()`
+//! 2. Checking error messages with `get_last_error_message()`
+//! 3. Implementing application-level logging around import operations
 
 use crate::{error::Result, sys};
-use bitflags::bitflags;
+use std::ffi::CStr;
 
 /// Log levels supported by Assimp
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -25,15 +43,30 @@ pub enum LogLevel {
     Error,
 }
 
+// Note: Custom log streams have been removed due to FFI callback safety issues.
+// The following types are kept for API compatibility but are no longer functional:
+
 /// Trait for custom log stream implementations
+///
+/// **DEPRECATED**: This trait is no longer functional due to FFI callback safety issues.
+/// Custom log streams have been removed to prevent access violations.
+#[deprecated(
+    note = "Custom log streams removed due to FFI safety issues. Use verbose logging instead."
+)]
 pub trait LogStream: Send + Sync {
     /// Write a log message
     fn write(&mut self, message: &str);
 }
 
 /// A log stream that writes to stdout
+///
+/// **DEPRECATED**: This type is no longer functional.
+#[deprecated(
+    note = "Custom log streams removed due to FFI safety issues. Use verbose logging instead."
+)]
 pub struct StdoutLogStream;
 
+#[allow(deprecated)]
 impl LogStream for StdoutLogStream {
     fn write(&mut self, message: &str) {
         print!("{}", message);
@@ -41,177 +74,98 @@ impl LogStream for StdoutLogStream {
 }
 
 /// A log stream that writes to stderr
+///
+/// **DEPRECATED**: This type is no longer functional.
+#[deprecated(
+    note = "Custom log streams removed due to FFI safety issues. Use verbose logging instead."
+)]
 pub struct StderrLogStream;
 
+#[allow(deprecated)]
 impl LogStream for StderrLogStream {
     fn write(&mut self, message: &str) {
         eprint!("{}", message);
     }
 }
 
-/// A log stream that writes to a file
-pub struct FileLogStream {
-    file: std::fs::File,
-}
-
-impl FileLogStream {
-    /// Create a new file log stream
-    pub fn new<P: AsRef<std::path::Path>>(path: P) -> Result<Self> {
-        use std::io::Write;
-        let mut file = std::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(path)
-            .map_err(|e| crate::error::Error::io_error(e.to_string()))?;
-
-        // Write header
-        writeln!(file, "=== Assimp Log Started ===")
-            .map_err(|e| crate::error::Error::io_error(e.to_string()))?;
-
-        Ok(Self { file })
-    }
-}
-
-impl LogStream for FileLogStream {
-    fn write(&mut self, message: &str) {
-        use std::io::Write;
-        let _ = self.file.write_all(message.as_bytes());
-        let _ = self.file.flush();
-    }
-}
-
-/// A log stream that collects messages in memory
-pub struct MemoryLogStream {
-    messages: Vec<String>,
-}
-
-impl MemoryLogStream {
-    /// Create a new memory log stream
-    pub fn new() -> Self {
-        Self {
-            messages: Vec::new(),
-        }
-    }
-
-    /// Get all collected messages
-    pub fn messages(&self) -> &[String] {
-        &self.messages
-    }
-
-    /// Clear all collected messages
-    pub fn clear(&mut self) {
-        self.messages.clear();
-    }
-}
-
-impl Default for MemoryLogStream {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl LogStream for MemoryLogStream {
-    fn write(&mut self, message: &str) {
-        self.messages.push(message.to_string());
-    }
-}
-
-/// Internal structure to hold the Rust log stream
-struct LogStreamWrapper {
-    stream: Arc<Mutex<dyn LogStream>>,
-}
-
-/// Global logger instance
+/// Safe logger that only provides basic functionality without FFI callbacks
 pub struct Logger {
-    streams: Vec<OwnedLogStream>,
+    verbose_enabled: bool,
 }
-
-struct OwnedLogStream {
-    ai_stream: sys::aiLogStream,
-    wrapper_ptr: *mut LogStreamWrapper,
-    stream: Arc<Mutex<dyn LogStream>>,
-}
-
-// SAFETY: OwnedLogStream is only used within the Logger which is protected by a Mutex
-// The wrapper_ptr is only accessed from the main thread and is properly cleaned up
-unsafe impl Send for OwnedLogStream {}
-unsafe impl Sync for OwnedLogStream {}
 
 impl Logger {
     /// Create a new logger
     pub fn new() -> Self {
         Self {
-            streams: Vec::new(),
+            verbose_enabled: false,
         }
     }
 
     /// Attach a log stream
-    pub fn attach_stream(&mut self, stream: Arc<Mutex<dyn LogStream>>) -> Result<()> {
-        // Allocate wrapper and keep pointer for cleanup
-        let wrapper = LogStreamWrapper {
-            stream: stream.clone(),
-        };
-        let wrapper_ptr = Box::into_raw(Box::new(wrapper));
-
-        let ai_stream = sys::aiLogStream {
-            callback: Some(log_callback),
-            user: wrapper_ptr as *mut c_char,
-        };
-
-        unsafe {
-            sys::aiAttachLogStream(&ai_stream);
-        }
-
-        self.streams.push(OwnedLogStream {
-            ai_stream,
-            wrapper_ptr,
-            stream,
-        });
-        Ok(())
+    ///
+    /// **DEPRECATED**: This method is no longer functional due to FFI callback safety issues.
+    /// It will return an error to maintain API compatibility.
+    #[deprecated(
+        note = "Custom log streams removed due to FFI safety issues. Use enable_verbose_logging instead."
+    )]
+    #[allow(deprecated)]
+    pub fn attach_stream(
+        &mut self,
+        _stream: std::sync::Arc<std::sync::Mutex<dyn LogStream>>,
+    ) -> Result<()> {
+        Err(crate::error::Error::logging_error(
+            "Custom log streams have been disabled due to FFI safety issues. Use enable_verbose_logging() instead.".to_string()
+        ))
     }
 
-    /// Detach a log stream
-    pub fn detach_stream(&mut self, stream: Arc<Mutex<dyn LogStream>>) -> Result<()> {
-        // Find owned stream
-        if let Some(pos) = self
-            .streams
-            .iter()
-            .position(|s| Arc::ptr_eq(&s.stream, &stream))
-        {
-            let owned = self.streams.remove(pos);
-            unsafe {
-                // Detach this single stream
-                sys::aiDetachLogStream(&owned.ai_stream);
-                // Free wrapper
-                let _ = Box::from_raw(owned.wrapper_ptr);
-            }
-        }
-        Ok(())
+    /// Detach a specific log stream
+    ///
+    /// **DEPRECATED**: This method is no longer functional.
+    #[deprecated(note = "Custom log streams removed due to FFI safety issues.")]
+    #[allow(deprecated)]
+    pub fn detach_stream(
+        &mut self,
+        _stream: std::sync::Arc<std::sync::Mutex<dyn LogStream>>,
+    ) -> Result<()> {
+        Err(crate::error::Error::logging_error(
+            "Custom log streams have been disabled due to FFI safety issues.".to_string(),
+        ))
     }
 
     /// Detach all log streams
+    ///
+    /// **DEPRECATED**: This method is no longer functional.
+    #[deprecated(note = "Custom log streams removed due to FFI safety issues.")]
     pub fn detach_all_streams(&mut self) {
-        // First, manually detach each stream to ensure proper cleanup
-        // This avoids the double-free issue with aiDetachAllLogStreams
-        for s in self.streams.drain(..) {
-            unsafe {
-                // Detach this single stream from Assimp
-                sys::aiDetachLogStream(&s.ai_stream);
-                // Free the wrapper that we allocated
-                let _ = Box::from_raw(s.wrapper_ptr);
-            }
-        }
-
-        // Note: We don't call aiDetachAllLogStreams() here because:
-        // 1. We've already detached all our custom streams above
-        // 2. aiDetachAllLogStreams() might try to free memory it doesn't own
-        // 3. Any remaining streams would be default streams managed by Assimp itself
+        // No-op: no streams to detach
     }
 
     /// Enable or disable verbose logging
-    pub fn enable_verbose_logging(&self, enable: bool) {
+    pub fn enable_verbose_logging(&mut self, enable: bool) {
+        self.verbose_enabled = enable;
         unsafe {
             sys::aiEnableVerboseLogging(if enable { 1 } else { 0 });
+        }
+    }
+
+    /// Check if verbose logging is enabled
+    pub fn is_verbose_enabled(&self) -> bool {
+        self.verbose_enabled
+    }
+
+    /// Get the last error message from Assimp
+    /// This is a safe way to get logging information without callbacks
+    pub fn get_last_error(&self) -> Option<String> {
+        unsafe {
+            let error_ptr = sys::aiGetErrorString();
+            if error_ptr.is_null() {
+                None
+            } else {
+                match CStr::from_ptr(error_ptr).to_str() {
+                    Ok(s) => Some(s.to_string()),
+                    Err(_) => Some("Invalid UTF-8 in error message".to_string()),
+                }
+            }
         }
     }
 }
@@ -219,37 +173,6 @@ impl Logger {
 impl Default for Logger {
     fn default() -> Self {
         Self::new()
-    }
-}
-
-impl Drop for Logger {
-    fn drop(&mut self) {
-        self.detach_all_streams();
-    }
-}
-
-/// C callback function for log messages
-extern "C" fn log_callback(message: *const c_char, user: *mut c_char) {
-    if message.is_null() || user.is_null() {
-        return;
-    }
-
-    unsafe {
-        // Convert C string to Rust string
-        let c_str = CStr::from_ptr(message);
-        let msg = match c_str.to_str() {
-            Ok(s) => s,
-            Err(_) => return, // Invalid UTF-8
-        };
-
-        // SAFETY: We know this user pointer points to our LogStreamWrapper
-        // because we only attach streams that we create ourselves
-        let wrapper = &mut *(user as *mut LogStreamWrapper);
-
-        // Write to the stream
-        if let Ok(mut stream) = wrapper.stream.lock() {
-            stream.write(msg);
-        }
     }
 }
 
@@ -262,64 +185,45 @@ pub fn global_logger() -> &'static std::sync::Mutex<Logger> {
 }
 
 /// Convenience function to attach a stdout log stream
+///
+/// **DEPRECATED**: This function is no longer functional due to FFI callback safety issues.
+#[deprecated(
+    note = "Custom log streams removed due to FFI safety issues. Use enable_verbose_logging instead."
+)]
 pub fn attach_stdout_stream() -> Result<()> {
-    let stream = Arc::new(Mutex::new(StdoutLogStream));
-    global_logger().lock().unwrap().attach_stream(stream)
+    eprintln!("Warning: Custom log streams have been disabled due to FFI safety issues.");
+    eprintln!("Use enable_verbose_logging() instead for safe logging.");
+    Err(crate::error::Error::logging_error(
+        "Custom log streams have been disabled due to FFI safety issues.".to_string(),
+    ))
 }
 
 /// Convenience function to attach a stderr log stream
-pub fn attach_stderr_stream() -> Result<()> {
-    let stream = Arc::new(Mutex::new(StderrLogStream));
-    global_logger().lock().unwrap().attach_stream(stream)
-}
-
-// === Default log streams (Assimp-provided) ===
-
-bitflags! {
-    /// Predefined log stream destinations in Assimp
-    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-    pub struct DefaultLogStreams: u32 {
-        /// Log to a file
-        const FILE     = sys::aiDefaultLogStream::aiDefaultLogStream_FILE as u32;
-        /// Log to standard output
-        const STDOUT   = sys::aiDefaultLogStream::aiDefaultLogStream_STDOUT as u32;
-        /// Log to standard error
-        const STDERR   = sys::aiDefaultLogStream::aiDefaultLogStream_STDERR as u32;
-        /// Log to the system debugger
-        const DEBUGGER = sys::aiDefaultLogStream::aiDefaultLogStream_DEBUGGER as u32;
-    }
-}
-
-/// Attach default log streams using safe Rust implementations.
-/// For `FILE`, provide a file path; for others, `file_path` is ignored.
 ///
-/// This function provides a safe alternative to Assimp's predefined streams
-/// by using our own memory-safe implementations.
-pub fn attach_default_streams(
-    streams: DefaultLogStreams,
-    file_path: Option<&std::path::Path>,
-) -> Result<()> {
-    if streams.contains(DefaultLogStreams::STDOUT) {
-        attach_stdout_stream()?;
-    }
-    if streams.contains(DefaultLogStreams::STDERR) {
-        attach_stderr_stream()?;
-    }
-    if streams.contains(DefaultLogStreams::FILE) {
-        if let Some(path) = file_path {
-            attach_file_stream(path)?;
-        }
-    }
-    // Note: DEBUGGER stream is not implemented as it's Windows-specific
-    // and would require platform-specific unsafe code
-
-    Ok(())
+/// **DEPRECATED**: This function is no longer functional due to FFI callback safety issues.
+#[deprecated(
+    note = "Custom log streams removed due to FFI safety issues. Use enable_verbose_logging instead."
+)]
+pub fn attach_stderr_stream() -> Result<()> {
+    eprintln!("Warning: Custom log streams have been disabled due to FFI safety issues.");
+    eprintln!("Use enable_verbose_logging() instead for safe logging.");
+    Err(crate::error::Error::logging_error(
+        "Custom log streams have been disabled due to FFI safety issues.".to_string(),
+    ))
 }
 
 /// Convenience function to attach a file log stream
-pub fn attach_file_stream<P: AsRef<std::path::Path>>(path: P) -> Result<()> {
-    let stream = Arc::new(Mutex::new(FileLogStream::new(path)?));
-    global_logger().lock().unwrap().attach_stream(stream)
+///
+/// **DEPRECATED**: This function is no longer functional due to FFI callback safety issues.
+#[deprecated(
+    note = "Custom log streams removed due to FFI safety issues. Use enable_verbose_logging instead."
+)]
+pub fn attach_file_stream<P: AsRef<std::path::Path>>(_path: P) -> Result<()> {
+    eprintln!("Warning: Custom log streams have been disabled due to FFI safety issues.");
+    eprintln!("Use enable_verbose_logging() instead for safe logging.");
+    Err(crate::error::Error::logging_error(
+        "Custom log streams have been disabled due to FFI safety issues.".to_string(),
+    ))
 }
 
 /// Convenience function to enable verbose logging
@@ -330,15 +234,67 @@ pub fn enable_verbose_logging(enable: bool) {
         .enable_verbose_logging(enable);
 }
 
-/// Detach all log streams (both default and custom).
-/// This is a safe alternative to aiDetachAllLogStreams that avoids double-free issues.
-pub fn detach_all_streams() {
-    // First detach our custom streams
-    global_logger().lock().unwrap().detach_all_streams();
+/// Check if verbose logging is enabled
+pub fn is_verbose_logging_enabled() -> bool {
+    global_logger().lock().unwrap().is_verbose_enabled()
+}
 
-    // Note: We don't detach default streams here because:
-    // 1. We don't track which default streams were attached
-    // 2. Calling aiDetachAllLogStreams() causes double-free issues
-    // 3. Assimp will clean up default streams during library shutdown
-    // This approach prioritizes memory safety over immediate cleanup.
+/// Get the last error message from Assimp
+pub fn get_last_error_message() -> Option<String> {
+    global_logger().lock().unwrap().get_last_error()
+}
+
+/// Detach all log streams (both default and custom).
+///
+/// **DEPRECATED**: This function is no longer functional.
+#[deprecated(note = "Custom log streams removed due to FFI safety issues.")]
+pub fn detach_all_streams() {
+    // No-op: no streams to detach
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_logger_creation() {
+        let logger = Logger::new();
+        assert!(!logger.is_verbose_enabled());
+    }
+
+    #[test]
+    fn test_verbose_logging_toggle() {
+        let mut logger = Logger::new();
+
+        // Test enabling
+        logger.enable_verbose_logging(true);
+        assert!(logger.is_verbose_enabled());
+
+        // Test disabling
+        logger.enable_verbose_logging(false);
+        assert!(!logger.is_verbose_enabled());
+    }
+
+    #[test]
+    fn test_global_logger() {
+        enable_verbose_logging(true);
+        assert!(is_verbose_logging_enabled());
+
+        enable_verbose_logging(false);
+        assert!(!is_verbose_logging_enabled());
+    }
+
+    #[test]
+    #[allow(deprecated)]
+    fn test_deprecated_functions_return_errors() {
+        // Test that deprecated functions return appropriate errors
+        let result = attach_stdout_stream();
+        assert!(result.is_err());
+
+        let result = attach_stderr_stream();
+        assert!(result.is_err());
+
+        let result = attach_file_stream("test.log");
+        assert!(result.is_err());
+    }
 }

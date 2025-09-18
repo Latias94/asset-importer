@@ -87,17 +87,14 @@ uniform bool hasTexture;
 
 void main()
 {
-    // 环境光
     float ambientStrength = 0.3;
     vec3 ambient = ambientStrength * lightColor;
 
-    // 漫反射光
     vec3 norm = normalize(Normal);
     vec3 lightDir = normalize(lightPos - FragPos);
     float diff = max(dot(norm, lightDir), 0.0);
     vec3 diffuse = diff * lightColor;
 
-    // 镜面反射光
     float specularStrength = 0.5;
     vec3 viewDir = normalize(viewPos - FragPos);
     vec3 reflectDir = reflect(-lightDir, norm);

@@ -56,6 +56,13 @@ pub enum Error {
         message: String,
     },
 
+    /// Logging operation failed
+    #[error("Logging error: {message}")]
+    LoggingError {
+        /// Error message describing the logging error
+        message: String,
+    },
+
     /// Invalid scene data
     #[error("Invalid scene: {message}")]
     InvalidScene {
@@ -119,6 +126,13 @@ impl Error {
     /// Create a new I/O error
     pub fn io_error<S: Into<String>>(message: S) -> Self {
         Self::IoError {
+            message: message.into(),
+        }
+    }
+
+    /// Create a new logging error
+    pub fn logging_error<S: Into<String>>(message: S) -> Self {
+        Self::LoggingError {
             message: message.into(),
         }
     }

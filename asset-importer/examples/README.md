@@ -33,6 +33,8 @@ Most examples accept a model path as the first argument. If missing, some exampl
 - Tools:
   - `convert_model.rs` – export to another format
   - `batch_process.rs` – batch import with post‑process presets
+- Math Integration:
+  - `07_mint_integration.rs` – mint math library interoperability (requires mint feature)
 - Introspection:
   - `importer_discovery_demo.rs` – list available importers
   - `russimp_compatible_interface.rs` – russimp compatibility surface
@@ -66,6 +68,11 @@ cargo run -p asset-importer --example format_info --features build-assimp
 Process multiple files:
 ```
 cargo run -p asset-importer --example batch_process --features build-assimp -- models/
+```
+
+Test mint math library integration:
+```
+cargo run -p asset-importer --example 07_mint_integration --features "build-assimp,mint"
 ```
 
 ## Conventions

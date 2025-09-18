@@ -1,5 +1,8 @@
 # asset-importer-sys
 
+[![asset-importer-sys (crates.io)](https://img.shields.io/crates/v/asset-importer-sys.svg)](https://crates.io/crates/asset-importer-sys)
+[![asset-importer-sys Downloads](https://img.shields.io/crates/d/asset-importer-sys.svg)](https://crates.io/crates/asset-importer-sys)
+
 Low-level FFI bindings for the [Assimp](https://github.com/assimp/assimp) 3D asset import library.
 
 This crate provides unsafe Rust FFI bindings for **Assimp v6.0.2**, implementing the vast majority of the C API functions, types, and constants.

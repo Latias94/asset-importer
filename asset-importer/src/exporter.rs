@@ -11,11 +11,20 @@ use crate::{
 };
 
 /// Builder for configuring and executing scene exports
-#[derive(Debug)]
 pub struct ExportBuilder {
     format_id: String,
     preprocessing: u32,
     file_system: Option<std::sync::Arc<std::sync::Mutex<dyn FileSystem>>>,
+}
+
+impl std::fmt::Debug for ExportBuilder {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ExportBuilder")
+            .field("format_id", &self.format_id)
+            .field("preprocessing", &self.preprocessing)
+            .field("file_system", &self.file_system.is_some())
+            .finish()
+    }
 }
 
 impl ExportBuilder {
@@ -52,13 +61,13 @@ impl ExportBuilder {
             .map_err(|_| Error::invalid_parameter("Invalid format ID"))?;
 
         let result = if let Some(fs) = &self.file_system {
-            let file_io = AssimpFileIO::new(fs.clone()).create_ai_file_io();
+            let mut file_io = AssimpFileIO::new(fs.clone()).create_ai_file_io();
             unsafe {
                 sys::aiExportSceneEx(
                     scene.as_raw(),
                     c_format.as_ptr(),
-                    &file_io as *const _ as *mut _,
                     c_path.as_ptr(),
+                    &mut file_io,
                     self.preprocessing,
                 )
             }
@@ -112,20 +121,20 @@ impl ExportBlob {
     pub fn data(&self) -> &[u8] {
         unsafe {
             let blob = &*self.blob_ptr;
-            std::slice::from_raw_parts(blob.data as *const u8, blob.size as usize)
+            std::slice::from_raw_parts(blob.data as *const u8, blob.size)
         }
     }
 
     /// Get the size of the data
     pub fn size(&self) -> usize {
-        unsafe { (*self.blob_ptr).size as usize }
+        unsafe { (*self.blob_ptr).size }
     }
 
     /// Get the name/hint for this blob
     pub fn name(&self) -> String {
         unsafe {
             let blob = &*self.blob_ptr;
-            let name_data = blob.name.data.as_ptr() as *const i8;
+            let name_data = blob.name.data.as_ptr();
             if name_data.is_null() || blob.name.length == 0 {
                 String::new()
             } else {

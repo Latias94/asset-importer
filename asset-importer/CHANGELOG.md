@@ -5,7 +5,38 @@ All notable changes to `asset-importer` will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.1.1] - 2025-09-18
+## [0.2.1] - 2025-09-19
+
+### Fixed
+- **Export functionality**: Fixed compilation errors in exporter module
+  - Added `Debug` trait constraint to `FileSystem` trait
+  - Implemented manual `Debug` for `ExportBuilder` to handle `dyn FileSystem`
+  - Fixed FFI parameter order in `aiExportSceneEx` calls
+- **Mint integration**: Fixed orphan rule violations and indexing errors
+  - Replaced direct `From` trait implementations with new `FromMint`/`ToMint` traits
+  - Fixed matrix conversion using `to_cols_array_2d()` instead of `to_cols_array()`
+  - All mint conversions now work correctly for Vector2D, Vector3D, Matrix4x4, and Quaternion
+- **Prebuilt binaries**: Fixed DLL dependency issues on Windows
+  - Added missing DLL copying logic for prebuilt binaries
+  - Prebuilt feature now works correctly without STATUS_DLL_NOT_FOUND errors
+- **Logging system**: Removed unsafe callback-based logging to prevent access violations
+  - Removed custom log streams (stdout, stderr, file) due to FFI safety issues
+  - Kept verbose logging functionality which is safe to use
+  - Added deprecation warnings for removed functionality
+  - Updated examples to use safe logging methods only
+
+### Added
+- New `FromMint` and `ToMint` traits for safe mint library integration
+- Comprehensive test coverage for all fixed functionality
+- **Mint Integration Example**: Added `07_mint_integration.rs` example demonstrating conversions between asset-importer and mint types
+
+### Removed
+- **Custom Log Streams**: Removed callback-based logging streams due to STATUS_ACCESS_VIOLATION errors
+  - `attach_stdout_stream()`, `attach_stderr_stream()`, `attach_file_stream()` now return errors
+  - `Logger::attach_stream()`, `Logger::detach_stream()` methods deprecated
+  - Use `enable_verbose_logging()` and `get_last_error_message()` for safe logging instead
+
+## [0.2.0] - 2025-09-18
 
 ### Fixed
 - Logging could cause an access violation in some cases.

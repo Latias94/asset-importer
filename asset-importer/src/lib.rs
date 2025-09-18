@@ -57,6 +57,7 @@ pub use crate::{
 pub use crate::exporter::{ExportBlob, ExportBuilder, ExportFormatDesc};
 
 // Re-export logging functionality
+#[allow(deprecated)]
 pub use crate::logging::{LogLevel, LogStream, Logger};
 
 // Re-export metadata functionality

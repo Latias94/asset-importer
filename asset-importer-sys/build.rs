@@ -485,6 +485,11 @@ fn extract_prebuilt_package(
         link_prebuilt_zlib(&extract_dir.join("lib"));
     }
 
+    // Handle Windows DLL copying for shared builds (same as build_assimp_from_source)
+    if config.is_windows() && config.is_msvc() && link_type != "static" {
+        copy_windows_dlls(extract_dir);
+    }
+
     // Link system dependencies
     link_system_dependencies(config);
 

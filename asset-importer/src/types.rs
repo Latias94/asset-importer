@@ -199,41 +199,56 @@ pub fn to_ai_color4d(c: Color4D) -> sys::aiColor4D {
 mod mint_integration {
     use super::*;
 
-    impl From<mint::Vector3<f32>> for Vector3D {
+    /// Trait for converting to mint types
+    pub trait ToMint<T> {
+        /// Convert this type to a mint type
+        fn to_mint(self) -> T;
+    }
+
+    /// Trait for converting from mint types
+    pub trait FromMint<T> {
+        /// Convert from a mint type to this type
+        fn from_mint(value: T) -> Self;
+    }
+
+    impl FromMint<mint::Vector3<f32>> for Vector3D {
         #[inline]
-        fn from(v: mint::Vector3<f32>) -> Self {
+        fn from_mint(v: mint::Vector3<f32>) -> Self {
             Vector3D::new(v.x, v.y, v.z)
         }
     }
 
-    impl From<Vector3D> for mint::Vector3<f32> {
+    impl ToMint<mint::Vector3<f32>> for Vector3D {
         #[inline]
-        fn from(v: Vector3D) -> Self {
+        fn to_mint(self) -> mint::Vector3<f32> {
             mint::Vector3 {
-                x: v.x,
-                y: v.y,
-                z: v.z,
+                x: self.x,
+                y: self.y,
+                z: self.z,
             }
         }
     }
 
-    impl From<mint::Vector2<f32>> for Vector2D {
+    impl FromMint<mint::Vector2<f32>> for Vector2D {
         #[inline]
-        fn from(v: mint::Vector2<f32>) -> Self {
+        fn from_mint(v: mint::Vector2<f32>) -> Self {
             Vector2D::new(v.x, v.y)
         }
     }
 
-    impl From<Vector2D> for mint::Vector2<f32> {
+    impl ToMint<mint::Vector2<f32>> for Vector2D {
         #[inline]
-        fn from(v: Vector2D) -> Self {
-            mint::Vector2 { x: v.x, y: v.y }
+        fn to_mint(self) -> mint::Vector2<f32> {
+            mint::Vector2 {
+                x: self.x,
+                y: self.y,
+            }
         }
     }
 
-    impl From<mint::ColumnMatrix4<f32>> for Matrix4x4 {
+    impl FromMint<mint::ColumnMatrix4<f32>> for Matrix4x4 {
         #[inline]
-        fn from(m: mint::ColumnMatrix4<f32>) -> Self {
+        fn from_mint(m: mint::ColumnMatrix4<f32>) -> Self {
             Matrix4x4::from_cols(
                 Vector4D::new(m.x.x, m.x.y, m.x.z, m.x.w),
                 Vector4D::new(m.y.x, m.y.y, m.y.z, m.y.w),
@@ -243,10 +258,10 @@ mod mint_integration {
         }
     }
 
-    impl From<Matrix4x4> for mint::ColumnMatrix4<f32> {
+    impl ToMint<mint::ColumnMatrix4<f32>> for Matrix4x4 {
         #[inline]
-        fn from(m: Matrix4x4) -> Self {
-            let cols = m.to_cols_array();
+        fn to_mint(self) -> mint::ColumnMatrix4<f32> {
+            let cols = self.to_cols_array_2d();
             mint::ColumnMatrix4 {
                 x: mint::Vector4 {
                     x: cols[0][0],
@@ -276,24 +291,28 @@ mod mint_integration {
         }
     }
 
-    impl From<mint::Quaternion<f32>> for Quaternion {
+    impl FromMint<mint::Quaternion<f32>> for Quaternion {
         #[inline]
-        fn from(q: mint::Quaternion<f32>) -> Self {
+        fn from_mint(q: mint::Quaternion<f32>) -> Self {
             Quaternion::from_xyzw(q.v.x, q.v.y, q.v.z, q.s)
         }
     }
 
-    impl From<Quaternion> for mint::Quaternion<f32> {
+    impl ToMint<mint::Quaternion<f32>> for Quaternion {
         #[inline]
-        fn from(q: Quaternion) -> Self {
+        fn to_mint(self) -> mint::Quaternion<f32> {
             mint::Quaternion {
-                s: q.w,
+                s: self.w,
                 v: mint::Vector3 {
-                    x: q.x,
-                    y: q.y,
-                    z: q.z,
+                    x: self.x,
+                    y: self.y,
+                    z: self.z,
                 },
             }
         }
     }
 }
+
+// Re-export the traits for public use when mint feature is enabled
+#[cfg(feature = "mint")]
+pub use mint_integration::{FromMint, ToMint};

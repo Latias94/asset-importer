@@ -6,7 +6,9 @@ mod common;
 use std::error::Error;
 
 #[cfg(feature = "export")]
-use asset_importer::{Scene, exporter::ExportBuilder, get_export_formats};
+use asset_importer::{
+    Scene, exporter::ExportBuilder, get_export_formats, postprocess::PostProcessSteps,
+};
 
 fn main() -> Result<(), Box<dyn Error>> {
     common::init_logging_from_env();
@@ -19,8 +21,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         );
         std::process::exit(1);
     }
-    let _input = std::path::Path::new(&args[1]);
-    let _output = std::path::Path::new(&args[2]);
+    let input = std::path::Path::new(&args[1]);
+    let output = std::path::Path::new(&args[2]);
 
     let result = {
         #[cfg(not(feature = "export"))]

@@ -4,11 +4,7 @@
 [![Documentation](https://docs.rs/asset-importer/badge.svg)](https://docs.rs/asset-importer)
 [![Rust Version](https://img.shields.io/badge/rust-1.85+-blue.svg)](https://www.rust-lang.org)
 [![Crates.io Downloads](https://img.shields.io/crates/d/asset-importer.svg)](https://crates.io/crates/asset-importer)
-[![GitHub Downloads](https://img.shields.io/github/downloads/Latias94/asset-importer/total.svg)](https://github.com/Latias94/asset-importer/releases)
 [![Made with Rust](https://img.shields.io/badge/made%20with-Rust-orange.svg)](https://www.rust-lang.org)
-
-[![asset-importer-sys (crates.io)](https://img.shields.io/crates/v/asset-importer-sys.svg)](https://crates.io/crates/asset-importer-sys)
-[![asset-importer-sys Downloads](https://img.shields.io/crates/d/asset-importer-sys.svg)](https://crates.io/crates/asset-importer-sys)
 
 A comprehensive Rust binding for the latest [Assimp](https://github.com/assimp/assimp) 3D asset import library.
 
