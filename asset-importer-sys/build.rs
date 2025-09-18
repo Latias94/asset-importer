@@ -80,6 +80,36 @@ fn main() {
     println!("cargo:rerun-if-changed=wrapper.h");
     println!("cargo:rerun-if-changed=assimp");
 
+    // Special handling for docs.rs: don't try to download, link, or build native code.
+    // We only need headers present to run bindgen and type-check the Rust API.
+    if std::env::var("DOCS_RS").is_ok() {
+        println!(
+            "cargo:warning=DOCS_RS detected: skipping native build and linking; generating bindings from headers only"
+        );
+        // Make cfg(docsrs) available to crate code
+        println!("cargo:rustc-cfg=docsrs");
+
+        let scene_h = config.assimp_include_dir().join("assimp").join("scene.h");
+
+        if scene_h.exists() {
+            // Headers available (vendored/package included): run bindgen
+            generate_bindings(&config, None);
+        } else {
+            // No headers available: fall back to pregenerated bindings if present
+            if !use_pregenerated_bindings(&config) {
+                // Last resort: fail with an actionable message for maintainers
+                panic!(
+                    "DOCS_RS build: Assimp headers not found and no pregenerated bindings present.\n\
+                     You have two supported options to enable docs.rs builds without network:\n\
+                     1) Vendor headers: include assimp/include in the published crate (ensure submodule is checked out before cargo publish).\n\
+                     2) Pregenerate bindings: add src/bindings_pregenerated.rs (full bindgen output) and the build script will use it on docs.rs.\n\
+                     See README for instructions."
+                );
+            }
+        }
+        return;
+    }
+
     // Check if assimp submodule exists
     validate_assimp_source(&config);
 
@@ -1052,16 +1082,31 @@ fn generate_bindings(config: &BuildConfig, built_include_dir: Option<&std::path:
         // Generate config.h from config.h.in template
         let config_h_in = assimp_include.join("assimp").join("config.h.in");
         if config_h_in.exists() {
-            let template_content = std::fs::read_to_string(&config_h_in)
-                .expect("Failed to read config.h.in template");
+            let template_content =
+                std::fs::read_to_string(&config_h_in).expect("Failed to read config.h.in template");
 
             // Process the template by replacing CMake variables with appropriate values
             let processed_content = template_content
-                .replace("#cmakedefine ASSIMP_DOUBLE_PRECISION 1", "// #define ASSIMP_DOUBLE_PRECISION 1")
-                .replace("#cmakedefine01 ASSIMP_BUILD_DEBUG_MACROS", "#define ASSIMP_BUILD_DEBUG_MACROS 0")
-                .replace("#cmakedefine ASSIMP_BUILD_BOOST_WORKAROUND", "// #define ASSIMP_BUILD_BOOST_WORKAROUND")
-                .replace("#cmakedefine ASSIMP_BUILD_NO_VALIDATEDS_PROCESS", "// #define ASSIMP_BUILD_NO_VALIDATEDS_PROCESS")
-                .replace("#cmakedefine ASSIMP_BUILD_NO_OWN_ZLIB", "// #define ASSIMP_BUILD_NO_OWN_ZLIB");
+                .replace(
+                    "#cmakedefine ASSIMP_DOUBLE_PRECISION 1",
+                    "// #define ASSIMP_DOUBLE_PRECISION 1",
+                )
+                .replace(
+                    "#cmakedefine01 ASSIMP_BUILD_DEBUG_MACROS",
+                    "#define ASSIMP_BUILD_DEBUG_MACROS 0",
+                )
+                .replace(
+                    "#cmakedefine ASSIMP_BUILD_BOOST_WORKAROUND",
+                    "// #define ASSIMP_BUILD_BOOST_WORKAROUND",
+                )
+                .replace(
+                    "#cmakedefine ASSIMP_BUILD_NO_VALIDATEDS_PROCESS",
+                    "// #define ASSIMP_BUILD_NO_VALIDATEDS_PROCESS",
+                )
+                .replace(
+                    "#cmakedefine ASSIMP_BUILD_NO_OWN_ZLIB",
+                    "// #define ASSIMP_BUILD_NO_OWN_ZLIB",
+                );
 
             std::fs::write(&out_config_file, processed_content)
                 .expect("Unable to write processed config.h to OUT_DIR");
@@ -1232,5 +1277,35 @@ fn configure_cpp_build_flags(build: &mut cc::Build, config: &BuildConfig) {
         _ => {
             // For other Unix-like systems
         }
+    }
+}
+
+// Use pregenerated bindings when headers are unavailable (e.g., docs.rs without vendored assimp)
+fn use_pregenerated_bindings(config: &BuildConfig) -> bool {
+    let pregenerated = config
+        .manifest_dir
+        .join("src")
+        .join("bindings_pregenerated.rs");
+    if pregenerated.exists() {
+        let out_file = config.out_dir.join("bindings.rs");
+        match std::fs::read_to_string(&pregenerated) {
+            Ok(content) => {
+                if let Err(e) = std::fs::write(&out_file, content) {
+                    panic!("Failed to write pregenerated bindings to OUT_DIR: {}", e);
+                }
+                println!(
+                    "cargo:warning=Using pregenerated bindings: {}",
+                    pregenerated.display()
+                );
+                true
+            }
+            Err(e) => panic!(
+                "Failed to read pregenerated bindings at {}: {}",
+                pregenerated.display(),
+                e
+            ),
+        }
+    } else {
+        false
     }
 }

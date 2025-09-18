@@ -107,3 +107,9 @@ prebuilt = ["tar", "flate2"]
 # Control zlib linking
 nozlib = []
 static-link = []
+
+[package.metadata.docs.rs]
+no-default-features = true
+all-features = false
+features = []
+rustdoc-args = ["--cfg", "docsrs"]

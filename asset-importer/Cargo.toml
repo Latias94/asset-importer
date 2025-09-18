@@ -108,3 +108,9 @@ version = "0.6"
 
 [dev-dependencies.gl]
 version = "0.14"
+
+[package.metadata.docs.rs]
+no-default-features = true
+all-features = false
+features = ["type-extensions"]
+rustdoc-args = ["--cfg", "docsrs"]
