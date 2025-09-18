@@ -608,6 +608,8 @@ fn configure_cmake_basic_options(cmake_config: &mut cmake::Config) {
         .define("ASSIMP_BUILD_SAMPLES", "OFF")
         .define("ASSIMP_BUILD_ASSIMP_TOOLS", "OFF")
         .define("BUILD_SHARED_LIBS", build_shared)
+        // Avoid installing PDBs in install step to prevent CI failures on MSVC
+        .define("ASSIMP_INSTALL_PDB", "OFF")
         // Disable being overly strict with warnings, which can cause build issues
         .define("ASSIMP_WARNINGS_AS_ERRORS", "OFF");
 }
@@ -797,13 +799,7 @@ fn setup_library_linking(dst: &std::path::Path, config: &BuildConfig) {
     // Link system dependencies
     link_system_dependencies(config);
 
-    // For static linking on Windows MSVC, ensure we link the correct debug CRT libraries
-    if config.is_windows() && config.is_msvc() && cfg!(feature = "static-link") && config.is_debug()
-    {
-        // Link debug CRT libraries explicitly for static linking
-        println!("cargo:rustc-link-lib=msvcrtd");
-        println!("cargo:rustc-link-lib=msvcprtd");
-    }
+    // Do not force-link debug CRTs; keep consistent with selected runtime family
 
     // Export include path for bindgen
     let include_path = dst.join("include");
