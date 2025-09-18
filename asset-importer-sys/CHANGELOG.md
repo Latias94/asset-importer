@@ -5,7 +5,7 @@ All notable changes to `asset-importer-sys` will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.1.1] - 2025-09-18
+## [0.2.0] - 2025-09-18
 
 ### Changed
 - Refactored `build.rs` and aligned MSVC runtime selection to avoid Debug CRT across all targets (use RelWithDebInfo on MSVC when Cargo is in debug).

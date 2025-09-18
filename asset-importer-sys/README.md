@@ -29,7 +29,7 @@ The bindings include:
 ### Prebuilt Binaries (Default)
 ```toml
 [dependencies]
-asset-importer-sys = "0.1"
+asset-importer-sys = "0.2"
 # or explicitly:
 asset-importer-sys = { features = ["prebuilt"] }
 ```
@@ -39,7 +39,7 @@ asset-importer-sys = { features = ["prebuilt"] }
 
 ### Build from Source
 ```toml
-asset-importer-sys = { features = ["build-assimp"] }
+asset-importer-sys = { version = "0.2", features = ["build-assimp"] }
 ```
 - Builds assimp from bundled source
 - Requires: CMake, C++ compiler, Git
@@ -48,7 +48,7 @@ asset-importer-sys = { features = ["build-assimp"] }
 
 ### System Library
 ```toml
-asset-importer-sys = { features = ["system"] }
+asset-importer-sys = { version = "0.2", features = ["system"] }
 ```
 Uses system-installed assimp. Install via package manager:
 - **macOS**: `brew install assimp`
@@ -69,17 +69,18 @@ rustflags = ["-C", "target-feature=+crt-static"]
 
 ### Static Linking
 ```toml
-asset-importer-sys = { features = ["static-link", "build-assimp"] }
+asset-importer-sys = { version = "0.2", features = ["static-link", "build-assimp"] }
 ```
 - Creates single executable with fewer external runtime dependencies
 - Larger binary size
 
 ### Additional Options
 ```toml
-asset-importer-sys = { 
+asset-importer-sys = {
+    version = "0.2",
     features = [
         "build-assimp",
-        "export",        # Enable export functionality  
+        "export",        # Enable export functionality
         "nozlib",        # Don't link zlib
         "mint",          # Math library interop
         "type-extensions" # Convenience methods
