@@ -15,7 +15,7 @@ env:
 
 jobs:
   build-prebuilt:
-    name: Build ${{ matrix.target }} (${{ matrix.link_type }})
+    name: Build ${{ matrix.target }} (${{ matrix.link_type }}${{ matrix.crt && format(', {0}', matrix.crt) || '' }})
     runs-on: ${{ matrix.os }}
     permissions:
       contents: write

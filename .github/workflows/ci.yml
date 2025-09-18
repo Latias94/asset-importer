@@ -11,7 +11,7 @@ env:
 
 jobs:
   test:
-    name: Test
+    name: Test (${{ matrix.os }}, ${{ contains(matrix.features, 'static-link') && 'static' || 'dylib' }}, ${{ matrix.crt }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -19,6 +19,13 @@ jobs:
         os: [ubuntu-latest, windows-latest, macos-latest]
         # Always build from source in CI to avoid prebuilt/version skew
         features: ['build-assimp', 'build-assimp,static-link']
+        # Add CRT dimension; only meaningful on Windows
+        crt: [dynamic, static]
+        exclude:
+          - os: ubuntu-latest
+            crt: static
+          - os: macos-latest
+            crt: static
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -55,6 +62,25 @@ jobs:
         if: runner.os == 'Windows'
         run: |
           choco install cmake
+
+      - name: Select static CRT (Windows)
+        if: ${{ runner.os == 'Windows' && matrix.crt == 'static' }}
+        shell: pwsh
+        run: |
+          echo "RUSTFLAGS=-C target-feature=+crt-static" >> $env:GITHUB_ENV
+
+      - name: Echo build parameters
+        shell: bash
+        run: |
+          echo "OS=${{ matrix.os }}"
+          echo "FEATURES=${{ matrix.features }}"
+          echo "CRT=${{ matrix.crt }}"
+          echo "RUSTFLAGS=${RUSTFLAGS:-<empty>}"
+          if [[ "${{ contains(matrix.features, 'static-link') }}" == "true" ]]; then
+            echo "LINK_TYPE=static"
+          else
+            echo "LINK_TYPE=dylib"
+          fi
 
       - name: Build workspace (from source)
         run: cargo build --workspace --features "${{ matrix.features }}"

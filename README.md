@@ -62,7 +62,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ## Build Options
 
-### Default: Prebuilt Binaries
+### Default: Prebuilt Binaries (Recommended)
 
 ```toml
 asset-importer = "0.1"
@@ -71,6 +71,7 @@ asset-importer = "0.1"
 - **Fastest**: No compilation time
 - **Convenient**: No native toolchain required
 - **Requires**: Available release artifacts from GitHub releases
+- **Note**: Only available for released versions
 
 ### Build from Source
 
@@ -165,6 +166,17 @@ If you need more control or compatibility, use:
 - `--features build-assimp` to build from source (best compatibility)
 - `--features system` to link an existing installation
 
+## Development and Testing
+
+For development work or when prebuilt binaries are not available:
+
+```toml
+# Use this for development
+asset-importer = { version = "0.1", features = ["build-assimp"] }
+```
+
+This ensures you can always build from source regardless of release availability.
+
 ## Architecture
 
 This crate provides a high-level safe API. For low-level FFI bindings, see [`asset-importer-sys`](asset-importer-sys/).
@@ -192,8 +204,6 @@ See [VERSIONING.md](VERSIONING.md) for detailed versioning strategy and release 
 
 - **Limited Testing**: Needs more real-world usage validation
 - **API Stability**: May change before 1.0 release
-- **Documentation**: Some advanced features need better docs
-- **Performance**: Not yet benchmarked against russimp
 
 ## Contributing
 

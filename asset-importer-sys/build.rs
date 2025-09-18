@@ -1,16 +1,92 @@
 use flate2::read::GzDecoder;
 use std::{env, fs, path::PathBuf};
 
+/// Build configuration containing all environment and target information
+#[derive(Debug, Clone)]
+struct BuildConfig {
+    manifest_dir: PathBuf,
+    out_dir: PathBuf,
+    target_os: String,
+    target_env: String,
+    target_features: String,
+    profile: String,
+    force_build: bool,
+}
+
+impl BuildConfig {
+    fn new() -> Self {
+        Self {
+            manifest_dir: PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap()),
+            out_dir: PathBuf::from(env::var("OUT_DIR").unwrap()),
+            target_os: env::var("CARGO_CFG_TARGET_OS").unwrap_or_default(),
+            target_env: env::var("CARGO_CFG_TARGET_ENV").unwrap_or_default(),
+            target_features: env::var("CARGO_CFG_TARGET_FEATURE").unwrap_or_default(),
+            profile: env::var("PROFILE").unwrap_or_else(|_| "release".to_string()),
+            force_build: env::var("ASSET_IMPORTER_FORCE_BUILD").is_ok(),
+        }
+    }
+
+    fn is_windows(&self) -> bool {
+        self.target_os == "windows"
+    }
+
+    fn is_msvc(&self) -> bool {
+        self.target_env == "msvc"
+    }
+
+    fn is_debug(&self) -> bool {
+        self.profile == "debug"
+    }
+
+    fn use_static_crt(&self) -> bool {
+        self.is_windows()
+            && self.is_msvc()
+            && self.target_features.split(',').any(|f| f == "crt-static")
+    }
+
+    fn cmake_profile(&self) -> &str {
+        if self.is_debug() { "Debug" } else { "Release" }
+    }
+
+    fn assimp_source_dir(&self) -> PathBuf {
+        env::var("ASSIMP_DIR")
+            .map(PathBuf::from)
+            .unwrap_or_else(|_| self.manifest_dir.join("assimp"))
+    }
+
+    fn assimp_include_dir(&self) -> PathBuf {
+        self.assimp_source_dir().join("include")
+    }
+}
+
 fn main() {
-    let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
-    let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
+    let config = BuildConfig::new();
+
+    // Re-run when cache/download related env vars change
+    println!("cargo:rerun-if-env-changed=ASSET_IMPORTER_PACKAGE_DIR");
+    println!("cargo:rerun-if-env-changed=ASSET_IMPORTER_CACHE_DIR");
+    println!("cargo:rerun-if-env-changed=ASSET_IMPORTER_OFFLINE");
+    println!("cargo:rerun-if-env-changed=CARGO_TARGET_DIR");
+    println!("cargo:rerun-if-env-changed=CARGO_NET_OFFLINE");
 
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-changed=wrapper.h");
     println!("cargo:rerun-if-changed=assimp");
 
     // Check if assimp submodule exists
-    let assimp_dir = manifest_dir.join("assimp");
+    validate_assimp_source(&config);
+
+    // Determine build strategy and generate bindings
+    let built_include_dir = determine_build_strategy(&config);
+
+    generate_bindings(&config, built_include_dir.as_deref());
+
+    // Build the C++ bridge (progress + IOSystem wrappers)
+    compile_bridge_cpp(&config, built_include_dir.as_deref());
+}
+
+fn validate_assimp_source(config: &BuildConfig) {
+    let assimp_dir = config.assimp_source_dir();
     if !assimp_dir.exists() || !assimp_dir.join("include").exists() {
         panic!(
             "Assimp submodule not found at {}. Please run:\n\
@@ -18,44 +94,38 @@ fn main() {
             assimp_dir.display()
         );
     }
+}
 
-    // Check for force build environment variable (used in CI)
-    let force_build = env::var("ASSET_IMPORTER_FORCE_BUILD").is_ok();
-
-    // Determine build strategy and generate bindings
-    let built_include_dir = if cfg!(feature = "system") {
+fn determine_build_strategy(config: &BuildConfig) -> Option<PathBuf> {
+    if cfg!(feature = "system") {
         if cfg!(feature = "static-link") {
             println!(
                 "cargo:warning=feature 'static-link' is ignored with 'system' linking; using dynamic system lib"
             );
         }
         // Explicitly use system assimp
-        link_system_assimp();
+        link_system_assimp(config);
         None
-    } else if cfg!(feature = "build-assimp") || cfg!(feature = "static-link") || force_build {
+    } else if cfg!(feature = "build-assimp") || cfg!(feature = "static-link") || config.force_build
+    {
         // Explicitly build from source
-        build_assimp_from_source(&manifest_dir, &out_dir);
+        build_assimp_from_source(config);
         // Use the built include directory which has config.h
-        Some(out_dir.join("include"))
+        Some(config.out_dir.join("include"))
     } else if cfg!(feature = "prebuilt") {
         // Explicitly use prebuilt binaries, and use their include directory for wrapper/bindgen
-        let include = link_prebuilt_assimp(&out_dir);
+        let include = link_prebuilt_assimp(config);
         Some(include)
     } else {
         // Default: build from source for better compatibility
-        build_assimp_from_source(&manifest_dir, &out_dir);
-        Some(out_dir.join("include"))
-    };
-
-    generate_bindings(&manifest_dir, &out_dir, built_include_dir.as_deref());
-
-    // Build the C++ bridge (progress + IOSystem wrappers)
-    compile_bridge_cpp(&manifest_dir, built_include_dir.as_deref());
+        build_assimp_from_source(config);
+        Some(config.out_dir.join("include"))
+    }
 }
 
-fn link_system_assimp() {
+fn link_system_assimp(config: &BuildConfig) {
     // Try to find and link system assimp
-    if !try_system_assimp() {
+    if !try_system_assimp(config) {
         panic!(
             "System assimp library not found!\n\
              \n\
@@ -83,57 +153,54 @@ fn link_system_assimp() {
         );
     }
     // Ensure platform runtime/system libs are linked consistently
-    link_system_dependencies();
+    link_system_dependencies(config);
 }
 
-fn try_system_assimp() -> bool {
-    // Try common system paths
-    #[cfg(target_os = "windows")]
-    {
-        // Try vcpkg
-        if env::var("VCPKG_ROOT").is_ok() {
-            println!("cargo:rustc-link-lib=assimp");
-            return true;
-        }
-    }
-
-    #[cfg(target_os = "macos")]
-    {
-        // Try homebrew paths
-        let homebrew_paths = [
-            "/opt/homebrew/lib", // Apple Silicon
-            "/usr/local/lib",    // Intel
-        ];
-
-        for path in &homebrew_paths {
-            let lib_path = PathBuf::from(path).join("libassimp.dylib");
-            if lib_path.exists() {
-                println!("cargo:rustc-link-search=native={}", path);
+fn try_system_assimp(config: &BuildConfig) -> bool {
+    match config.target_os.as_str() {
+        "windows" => {
+            // Try vcpkg
+            if env::var("VCPKG_ROOT").is_ok() {
                 println!("cargo:rustc-link-lib=assimp");
                 return true;
             }
         }
-    }
+        "macos" => {
+            // Try homebrew paths
+            let homebrew_paths = [
+                "/opt/homebrew/lib", // Apple Silicon
+                "/usr/local/lib",    // Intel
+            ];
 
-    #[cfg(target_os = "linux")]
-    {
-        // Try common Linux paths
-        let linux_paths = ["/usr/lib", "/usr/local/lib", "/usr/lib/x86_64-linux-gnu"];
-
-        for path in &linux_paths {
-            let lib_path = PathBuf::from(path).join("libassimp.so");
-            if lib_path.exists() {
-                println!("cargo:rustc-link-search=native={}", path);
-                println!("cargo:rustc-link-lib=assimp");
-                return true;
+            for path in &homebrew_paths {
+                let lib_path = PathBuf::from(path).join("libassimp.dylib");
+                if lib_path.exists() {
+                    println!("cargo:rustc-link-search=native={}", path);
+                    println!("cargo:rustc-link-lib=assimp");
+                    return true;
+                }
             }
         }
+        "linux" => {
+            // Try common Linux paths
+            let linux_paths = ["/usr/lib", "/usr/local/lib", "/usr/lib/x86_64-linux-gnu"];
+
+            for path in &linux_paths {
+                let lib_path = PathBuf::from(path).join("libassimp.so");
+                if lib_path.exists() {
+                    println!("cargo:rustc-link-search=native={}", path);
+                    println!("cargo:rustc-link-lib=assimp");
+                    return true;
+                }
+            }
+        }
+        _ => {}
     }
 
     false
 }
 
-fn link_prebuilt_assimp(out_dir: &std::path::Path) -> std::path::PathBuf {
+fn link_prebuilt_assimp(config: &BuildConfig) -> PathBuf {
     let target = env::var("TARGET").unwrap();
     let crate_version = env::var("CARGO_PKG_VERSION").unwrap();
 
@@ -145,11 +212,8 @@ fn link_prebuilt_assimp(out_dir: &std::path::Path) -> std::path::PathBuf {
     };
 
     // Choose CRT suffix on Windows MSVC to disambiguate MD/MT
-    let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
-    let target_env = env::var("CARGO_CFG_TARGET_ENV").unwrap_or_default();
-    let target_features = env::var("CARGO_CFG_TARGET_FEATURE").unwrap_or_default();
-    let crt_suffix = if target_os == "windows" && target_env == "msvc" {
-        if target_features.split(',').any(|f| f == "crt-static") {
+    let crt_suffix = if config.is_windows() && config.is_msvc() {
+        if config.use_static_crt() {
             Some("mt")
         } else {
             Some("md")
@@ -171,20 +235,22 @@ fn link_prebuilt_assimp(out_dir: &std::path::Path) -> std::path::PathBuf {
         crate_version, target, link_type
     ));
 
+    // Resolve stable cache root to avoid repeated downloads across builds
+    let cache_root = prebuilt_cache_root(config);
     let ar_src_dir = if let Ok(package_dir) = env::var("ASSET_IMPORTER_PACKAGE_DIR") {
-        // Use local package directory if specified
         PathBuf::from(package_dir)
     } else {
-        // Download from GitHub releases
-        download_prebuilt_packages(out_dir, &archive_names);
-        out_dir.to_path_buf()
+        // Download archive(s) into cache if not present
+        download_prebuilt_packages(&cache_root, &archive_names);
+        cache_root.clone()
     };
 
-    // Extract the archive
-    extract_prebuilt_package(&ar_src_dir, &archive_names, out_dir, link_type);
+    // Determine and ensure extraction directory inside cache
+    let extract_dir = prebuilt_extract_dir(config, link_type, crt_suffix);
+    extract_prebuilt_package(config, &ar_src_dir, &archive_names, &extract_dir, link_type);
 
-    // Return the include directory inside the extracted package
-    out_dir.join(link_type).join("include")
+    // Return the include directory inside the cached extraction
+    extract_dir.join("include")
 }
 
 fn download_prebuilt_packages(out_dir: &std::path::Path, archive_names: &[String]) {
@@ -199,6 +265,13 @@ fn download_prebuilt_packages(out_dir: &std::path::Path, archive_names: &[String
     ];
 
     let mut last_error = String::new();
+
+    // If any of the candidate archives already exists in cache, skip downloading
+    for name in archive_names {
+        if out_dir.join(name).exists() {
+            return;
+        }
+    }
 
     for tag in &tag_formats {
         for archive_name in archive_names {
@@ -247,6 +320,20 @@ fn try_download(
         return Ok(());
     }
 
+    // Respect offline mode if requested
+    let offline = env::var("ASSET_IMPORTER_OFFLINE").is_ok()
+        || matches!(
+            env::var("CARGO_NET_OFFLINE").ok().as_deref(),
+            Some("true") | Some("1") | Some("yes")
+        );
+    if offline {
+        return Err(format!(
+            "Offline mode enabled and archive not found in cache: {}",
+            archive_path.display()
+        )
+        .into());
+    }
+
     // This is important info for users to know download is happening
     println!(
         "cargo:warning=Downloading prebuilt package from: {}",
@@ -276,6 +363,7 @@ fn try_download(
         .bytes()
         .map_err(|e| format!("Failed to read response bytes: {}", e))?;
 
+    std::fs::create_dir_all(out_dir).ok();
     fs::write(&archive_path, &bytes)
         .map_err(|e| format!("Failed to write downloaded package: {}", e))?;
 
@@ -290,9 +378,10 @@ fn try_download(
 }
 
 fn extract_prebuilt_package(
+    config: &BuildConfig,
     ar_src_dir: &std::path::Path,
     archive_names: &[String],
-    out_dir: &std::path::Path,
+    extract_dir: &std::path::Path,
     link_type: &str,
 ) {
     // Pick the first archive that exists
@@ -313,14 +402,20 @@ fn extract_prebuilt_package(
         )
     });
 
-    let file = fs::File::open(&archive_path).expect("Failed to open prebuilt package");
-
-    let mut archive = tar::Archive::new(GzDecoder::new(file));
-    let extract_dir = out_dir.join(link_type);
-
-    archive
-        .unpack(&extract_dir)
-        .expect("Failed to extract prebuilt package");
+    // If we already have a valid extraction (include + lib exist), skip extracting
+    let include_ok = extract_dir.join("include").exists();
+    let lib_ok = extract_dir.join("lib").exists() || extract_dir.join("lib64").exists();
+    if !(include_ok && lib_ok) {
+        let file = fs::File::open(&archive_path).expect("Failed to open prebuilt package");
+        let mut archive = tar::Archive::new(GzDecoder::new(file));
+        if extract_dir.exists() {
+            let _ = std::fs::remove_dir_all(extract_dir);
+        }
+        std::fs::create_dir_all(extract_dir).expect("Failed to create cache extract directory");
+        archive
+            .unpack(extract_dir)
+            .expect("Failed to extract prebuilt package");
+    }
 
     // Set up library search paths
     println!(
@@ -333,42 +428,14 @@ fn extract_prebuilt_package(
     );
 
     // Link the library (auto-detect Windows import lib name like assimp-vc143-mt.lib)
-    let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap();
-    let target_env = env::var("CARGO_CFG_TARGET_ENV").unwrap_or_default();
     let mut lib_name = String::from("assimp");
-    if target_os == "windows" {
-        let lib_dir = extract_dir.join("lib");
-        if let Ok(read) = fs::read_dir(&lib_dir) {
-            for entry in read.flatten() {
-                let p = entry.path();
-                if let Some(name) = p.file_name().and_then(|s| s.to_str()) {
-                    let lower = name.to_ascii_lowercase();
-                    if lower.starts_with("assimp") && lower.ends_with(".lib") {
-                        if let Some(stem) = p.file_stem().and_then(|s| s.to_str()) {
-                            lib_name = stem.to_string();
-                            break;
-                        }
-                    }
-                }
-            }
-        }
+    if config.is_windows() {
+        lib_name = detect_windows_lib_name(&extract_dir.join("lib")).unwrap_or(lib_name);
     }
+
     // Warn if runtime flavor likely mismatches Rust target feature on MSVC
-    if target_os == "windows" && target_env == "msvc" {
-        let features = env::var("CARGO_CFG_TARGET_FEATURE").unwrap_or_default();
-        let use_static_crt = features.split(',').any(|f| f == "crt-static");
-        let lname = lib_name.to_ascii_lowercase();
-        if !use_static_crt && lname.contains("-mt") {
-            println!(
-                "cargo:warning=Prebuilt assimp appears to use static MSVC runtime (-mt) while your Rust target uses dynamic CRT. Consider enabling crt-static or using a MD-built prebuilt."
-            );
-        }
-        if use_static_crt && lname.contains("-md") {
-            println!(
-                "cargo:warning=Prebuilt assimp appears to use dynamic MSVC runtime (-md) while your Rust target uses static CRT. Consider disabling crt-static or using a MT-built prebuilt."
-            );
-        }
-    }
+    validate_crt_compatibility(config, &lib_name);
+
     if link_type == "static" {
         println!("cargo:rustc-link-lib=static={}", lib_name);
     } else {
@@ -376,38 +443,13 @@ fn extract_prebuilt_package(
     }
 
     // For prebuilt static libraries on Windows/MSVC, link bundled zlib if present
-    if link_type == "static"
-        && target_os == "windows"
-        && target_env == "msvc"
-        && !cfg!(feature = "nozlib")
+    if link_type == "static" && config.is_windows() && config.is_msvc() && !cfg!(feature = "nozlib")
     {
-        let lib_dir = extract_dir.join("lib");
-        if let Ok(read) = fs::read_dir(&lib_dir) {
-            for entry in read.flatten() {
-                let p = entry.path();
-                if let (Some(name), Some(ext)) = (
-                    p.file_name().and_then(|s| s.to_str()),
-                    p.extension().and_then(|s| s.to_str()),
-                ) {
-                    if ext.eq_ignore_ascii_case("lib") && name.to_ascii_lowercase().contains("zlib")
-                    {
-                        if let Some(stem) = p.file_stem().and_then(|s| s.to_str()) {
-                            println!("cargo:rustc-link-lib=static={}", stem);
-                            break;
-                        }
-                    }
-                }
-            }
-        } else {
-            println!(
-                "cargo:warning=Expected zlib static library with prebuilt static assimp but none found in {}",
-                lib_dir.display()
-            );
-        }
+        link_prebuilt_zlib(&extract_dir.join("lib"));
     }
 
     // Link system dependencies
-    link_system_dependencies();
+    link_system_dependencies(config);
 
     if env::var("ASSET_IMPORTER_VERBOSE").is_ok() {
         println!(
@@ -417,14 +459,67 @@ fn extract_prebuilt_package(
     }
 }
 
-#[allow(dead_code)]
-fn link_system_dependencies() {
-    let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap();
-    let target_env = env::var("CARGO_CFG_TARGET_ENV").unwrap_or_default();
+fn detect_windows_lib_name(lib_dir: &std::path::Path) -> Option<String> {
+    if let Ok(read) = fs::read_dir(lib_dir) {
+        for entry in read.flatten() {
+            let p = entry.path();
+            if let Some(name) = p.file_name().and_then(|s| s.to_str()) {
+                let lower = name.to_ascii_lowercase();
+                if lower.starts_with("assimp") && lower.ends_with(".lib") {
+                    if let Some(stem) = p.file_stem().and_then(|s| s.to_str()) {
+                        return Some(stem.to_string());
+                    }
+                }
+            }
+        }
+    }
+    None
+}
 
-    match target_os.as_str() {
+fn validate_crt_compatibility(config: &BuildConfig, lib_name: &str) {
+    if config.is_windows() && config.is_msvc() {
+        let lname = lib_name.to_ascii_lowercase();
+        if !config.use_static_crt() && lname.contains("-mt") {
+            println!(
+                "cargo:warning=Prebuilt assimp appears to use static MSVC runtime (-mt) while your Rust target uses dynamic CRT. Consider enabling crt-static or using a MD-built prebuilt."
+            );
+        }
+        if config.use_static_crt() && lname.contains("-md") {
+            println!(
+                "cargo:warning=Prebuilt assimp appears to use dynamic MSVC runtime (-md) while your Rust target uses static CRT. Consider disabling crt-static or using a MT-built prebuilt."
+            );
+        }
+    }
+}
+
+fn link_prebuilt_zlib(lib_dir: &std::path::Path) {
+    if let Ok(read) = fs::read_dir(lib_dir) {
+        for entry in read.flatten() {
+            let p = entry.path();
+            if let (Some(name), Some(ext)) = (
+                p.file_name().and_then(|s| s.to_str()),
+                p.extension().and_then(|s| s.to_str()),
+            ) {
+                if ext.eq_ignore_ascii_case("lib") && name.to_ascii_lowercase().contains("zlib") {
+                    if let Some(stem) = p.file_stem().and_then(|s| s.to_str()) {
+                        println!("cargo:rustc-link-lib=static={}", stem);
+                        break;
+                    }
+                }
+            }
+        }
+    } else {
+        println!(
+            "cargo:warning=Expected zlib static library with prebuilt static assimp but none found in {}",
+            lib_dir.display()
+        );
+    }
+}
+
+fn link_system_dependencies(config: &BuildConfig) {
+    match config.target_os.as_str() {
         "windows" => {
-            if target_env == "msvc" {
+            if config.is_msvc() {
                 println!("cargo:rustc-link-lib=user32");
                 println!("cargo:rustc-link-lib=gdi32");
                 println!("cargo:rustc-link-lib=shell32");
@@ -470,28 +565,30 @@ fn generate_bindings_from_system(manifest_dir: &std::path::Path, out_dir: &std::
         .expect("Couldn't write bindings!");
 }
 
-fn build_assimp_from_source(manifest_dir: &std::path::Path, _out_path: &std::path::Path) {
-    let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap();
-    let target_env = env::var("CARGO_CFG_TARGET_ENV").unwrap_or_default();
-    let profile = env::var("PROFILE").unwrap_or_default();
-    let _is_debug = profile == "debug";
-
-    // Allow overriding the Assimp source directory via ASSIMP_DIR
-    let assimp_src = env::var("ASSIMP_DIR")
-        .map(std::path::PathBuf::from)
-        .unwrap_or_else(|_| manifest_dir.join("assimp"));
+fn build_assimp_from_source(config: &BuildConfig) {
+    let assimp_src = config.assimp_source_dir();
 
     // Check if assimp source exists
     if !assimp_src.exists() {
         panic!(
             "Assimp source not found. Set ASSIMP_DIR to a valid Assimp source, or init submodule at {}.\nHint:\n  git submodule update --init --recursive\n  or set environment variable ASSIMP_DIR=/path/to/assimp",
-            manifest_dir.join("assimp").display()
+            config.manifest_dir.join("assimp").display()
         );
     }
 
-    let mut config = cmake::Config::new(&assimp_src);
+    let mut cmake_config = cmake::Config::new(&assimp_src);
+    configure_cmake_basic_options(&mut cmake_config);
+    configure_cmake_zlib(&mut cmake_config, config);
+    configure_cmake_export(&mut cmake_config);
+    configure_cmake_profile(&mut cmake_config, config);
+    configure_cmake_crt(&mut cmake_config, config);
+    configure_cmake_platform_specific(&mut cmake_config, config);
 
-    // Configure CMake options
+    let dst = cmake_config.build();
+    setup_library_linking(&dst, config);
+}
+
+fn configure_cmake_basic_options(cmake_config: &mut cmake::Config) {
     // Shared vs static library build
     let build_shared = if cfg!(feature = "static-link") {
         "OFF"
@@ -499,100 +596,153 @@ fn build_assimp_from_source(manifest_dir: &std::path::Path, _out_path: &std::pat
         "ON"
     };
 
-    config
+    cmake_config
         .define("ASSIMP_BUILD_TESTS", "OFF")
         .define("ASSIMP_BUILD_SAMPLES", "OFF")
         .define("ASSIMP_BUILD_ASSIMP_TOOLS", "OFF")
         .define("BUILD_SHARED_LIBS", build_shared)
         // Disable being overly strict with warnings, which can cause build issues
         .define("ASSIMP_WARNINGS_AS_ERRORS", "OFF");
+}
 
+fn configure_cmake_zlib(cmake_config: &mut cmake::Config, config: &BuildConfig) {
     // Configure zlib based on nozlib feature, platform, and shared/static build
     if cfg!(feature = "nozlib") {
-        config.define("ASSIMP_BUILD_ZLIB", "OFF");
-    } else if target_os == "windows" {
+        cmake_config.define("ASSIMP_BUILD_ZLIB", "OFF");
+    } else if config.is_windows() {
         // Use bundled zlib on Windows (assimp default)
-        config.define("ASSIMP_BUILD_ZLIB", "ON");
+        cmake_config.define("ASSIMP_BUILD_ZLIB", "ON");
     } else {
         // Unix (Linux/macOS):
         // - macOS: always use system zlib (shared), system libz.dylib is universally available and avoids
         //   issues in contrib zlib headers conflicting with SDK headers.
         // - Linux: for shared builds, bundle zlib to avoid picking up non-PIC libz.a; for static builds,
         //   prefer system zlib if available.
-        if target_os == "macos" {
-            config.define("ASSIMP_BUILD_ZLIB", "OFF");
+        if config.target_os == "macos" {
+            cmake_config.define("ASSIMP_BUILD_ZLIB", "OFF");
         } else {
-            let building_shared = build_shared == "ON";
+            let building_shared = !cfg!(feature = "static-link");
             if building_shared {
-                config.define("ASSIMP_BUILD_ZLIB", "ON");
+                cmake_config.define("ASSIMP_BUILD_ZLIB", "ON");
             } else {
                 let use_system = has_system_zlib_any();
-                config.define("ASSIMP_BUILD_ZLIB", if use_system { "OFF" } else { "ON" });
+                cmake_config.define("ASSIMP_BUILD_ZLIB", if use_system { "OFF" } else { "ON" });
             }
         }
     }
+}
 
+fn configure_cmake_export(cmake_config: &mut cmake::Config) {
     // Enable export functionality if requested
     #[cfg(feature = "export")]
-    config.define("ASSIMP_BUILD_NO_EXPORT", "OFF");
+    cmake_config.define("ASSIMP_BUILD_NO_EXPORT", "OFF");
 
     #[cfg(not(feature = "export"))]
-    config.define("ASSIMP_BUILD_NO_EXPORT", "ON");
+    cmake_config.define("ASSIMP_BUILD_NO_EXPORT", "ON");
+}
 
+fn configure_cmake_profile(cmake_config: &mut cmake::Config, config: &BuildConfig) {
     // Use a CMake profile that matches Cargo's profile to avoid MD/MDd mismatches
-    // Cargo sets PROFILE to "debug" or "release" (and others), map to CMake
-    let cargo_profile = env::var("PROFILE").unwrap_or_else(|_| "release".to_string());
-    let cmake_profile = match cargo_profile.as_str() {
-        "debug" => "Debug",
-        _ => "Release",
-    };
-    config.profile(cmake_profile);
+    cmake_config.profile(config.cmake_profile());
+}
 
-    // Decide MSVC runtime based on Rust target feature `crt-static`
-    // Best practice: don't force static CRT; follow the Rust target's selection.
-    let target_features = env::var("CARGO_CFG_TARGET_FEATURE").unwrap_or_default();
-    let use_static_crt = target_os == "windows"
-        && target_env == "msvc"
-        && target_features.split(',').any(|f| f == "crt-static");
-    if target_os == "windows" && target_env == "msvc" {
-        config.static_crt(use_static_crt);
+fn configure_cmake_crt(cmake_config: &mut cmake::Config, config: &BuildConfig) {
+    // Decide MSVC runtime based on Rust target feature `crt-static`.
+    // Important: Rust on MSVC always links the release CRT, even in debug profile.
+    // To avoid LNK4098/LNK2019 mismatches, we build Assimp and our bridge with the
+    // non-debug CRT as well.
+    if config.is_windows() && config.is_msvc() {
+        // Ensure cmake crate sets the expected CRT flavor for MSVC projects
+        cmake_config.static_crt(config.use_static_crt());
+
+        // Explicitly tell Assimp's CMake logic which CRT family to use.
+        // - When Rust target has `+crt-static`, use MultiThreaded (MT) for all configs
+        // - Otherwise use MultiThreadedDLL (MD) for all configs
+        let msvc_rt = if config.use_static_crt() {
+            "MultiThreaded"
+        } else {
+            "MultiThreadedDLL"
+        };
+        cmake_config.define("CMAKE_MSVC_RUNTIME_LIBRARY", msvc_rt);
+
+        // Some Assimp trees support opting into static CRT via this toggle; set it
+        // to match our target selection to avoid project-local overrides to /MTd.
+        cmake_config.define(
+            "USE_STATIC_CRT",
+            if config.use_static_crt() { "ON" } else { "OFF" },
+        );
     }
+}
 
+fn prebuilt_cache_root(config: &BuildConfig) -> PathBuf {
+    if let Ok(dir) = env::var("ASSET_IMPORTER_CACHE_DIR") {
+        return PathBuf::from(dir);
+    }
+    let target_dir = env::var("CARGO_TARGET_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| {
+            // Prefer workspace root/target if likely in a workspace, else crate-local target
+            config
+                .manifest_dir
+                .parent()
+                .map(|p| p.join("target"))
+                .unwrap_or_else(|| config.manifest_dir.join("target"))
+        });
+    target_dir.join("asset-importer-prebuilt")
+}
+
+fn prebuilt_extract_dir(
+    config: &BuildConfig,
+    link_type: &str,
+    crt_suffix: Option<&str>,
+) -> PathBuf {
+    let cache_root = prebuilt_cache_root(config);
+    let crate_version = env::var("CARGO_PKG_VERSION").unwrap();
+    let target = env::var("TARGET").unwrap();
+    let subdir = if let Some(crt) = crt_suffix {
+        format!("{}-{}", link_type, crt)
+    } else {
+        link_type.to_string()
+    };
+    cache_root.join(crate_version).join(target).join(subdir)
+}
+
+fn configure_cmake_platform_specific(cmake_config: &mut cmake::Config, config: &BuildConfig) {
     // Platform-specific configurations
     // Set C++ standard to C++17 (required by Assimp)
-    config.define("CMAKE_CXX_STANDARD", "17");
-    config.define("CMAKE_CXX_STANDARD_REQUIRED", "ON");
+    cmake_config.define("CMAKE_CXX_STANDARD", "17");
+    cmake_config.define("CMAKE_CXX_STANDARD_REQUIRED", "ON");
 
-    match target_os.as_str() {
+    match config.target_os.as_str() {
         "windows" => {
-            if target_env == "msvc" {
+            if config.is_msvc() {
                 // Match MSVC runtime with `crt-static` and Debug/Release configuration
                 // Use generator expressions to select *Debug variants in Debug builds.
-                let msvc_rt = if use_static_crt {
+                let msvc_rt = if config.use_static_crt() {
                     "MultiThreaded$<$<CONFIG:Debug>:Debug>"
                 } else {
                     "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL"
                 };
-                config.define("CMAKE_MSVC_RUNTIME_LIBRARY", msvc_rt);
+                cmake_config.define("CMAKE_MSVC_RUNTIME_LIBRARY", msvc_rt);
                 // Enable C++ exception handling for MSVC
-                config.define("CMAKE_CXX_FLAGS", "/EHsc");
-                config.define("CMAKE_CXX_FLAGS_DEBUG", "/EHsc");
-                config.define("CMAKE_CXX_FLAGS_RELEASE", "/EHsc");
+                cmake_config.define("CMAKE_CXX_FLAGS", "/EHsc");
+                cmake_config.define("CMAKE_CXX_FLAGS_DEBUG", "/EHsc");
+                cmake_config.define("CMAKE_CXX_FLAGS_RELEASE", "/EHsc");
             }
         }
         "macos" => {
-            config.define("CMAKE_OSX_DEPLOYMENT_TARGET", "10.12");
+            cmake_config.define("CMAKE_OSX_DEPLOYMENT_TARGET", "10.12");
             // Ensure C++17 standard for macOS
-            config.define("CMAKE_CXX_FLAGS", "-std=c++17");
+            cmake_config.define("CMAKE_CXX_FLAGS", "-std=c++17");
         }
         _ => {
             // For other Unix-like systems, ensure C++17
-            config.define("CMAKE_CXX_FLAGS", "-std=c++17");
+            cmake_config.define("CMAKE_CXX_FLAGS", "-std=c++17");
         }
     }
+}
 
-    let dst = config.build();
-
+fn setup_library_linking(dst: &std::path::Path, config: &BuildConfig) {
     // Link the built library
     println!("cargo:rustc-link-search=native={}/lib", dst.display());
     println!("cargo:rustc-link-search=native={}/lib64", dst.display());
@@ -608,14 +758,8 @@ fn build_assimp_from_source(manifest_dir: &std::path::Path, _out_path: &std::pat
     println!("cargo:rustc-link-search=native={}", dst.display());
 
     // Add the CMake profile subdirectory for MSVC builds
-    let target_env = env::var("CARGO_CFG_TARGET_ENV").unwrap_or_default();
-    if target_env == "msvc" {
-        let cargo_profile = env::var("PROFILE").unwrap_or_else(|_| "release".to_string());
-        let cmake_dir = if cargo_profile == "debug" {
-            "Debug"
-        } else {
-            "Release"
-        };
+    if config.is_msvc() {
+        let cmake_dir = config.cmake_profile();
         println!(
             "cargo:rustc-link-search=native={}/build/lib/{}",
             dst.display(),
@@ -629,193 +773,178 @@ fn build_assimp_from_source(manifest_dir: &std::path::Path, _out_path: &std::pat
     }
 
     // Link to the built assimp library
-    // The library name depends on the build configuration
-    let target_env = env::var("CARGO_CFG_TARGET_ENV").unwrap_or_default();
-    if target_env == "msvc" {
-        // Auto-detect the assimp .lib file produced by CMake instead of hardcoding a name
-        let cargo_profile = env::var("PROFILE").unwrap_or_else(|_| "release".to_string());
-        let cmake_dir = if cargo_profile == "debug" {
-            "Debug"
-        } else {
-            "Release"
-        };
-        let search_dirs = [
-            dst.join("build").join("lib").join(cmake_dir),
-            dst.join("build").join("lib"),
-            dst.join("lib"),
-            dst.join("lib64"),
-        ];
-
-        let mut assimp_lib: Option<String> = None;
-        for dir in &search_dirs {
-            if let Ok(read) = std::fs::read_dir(dir) {
-                for entry in read.flatten() {
-                    let p = entry.path();
-                    if let (Some(name), Some(ext)) = (
-                        p.file_name().and_then(|s| s.to_str()),
-                        p.extension().and_then(|s| s.to_str()),
-                    ) {
-                        if ext.eq_ignore_ascii_case("lib") {
-                            let lower = name.to_ascii_lowercase();
-                            if lower.starts_with("assimp") {
-                                if let Some(stem) = p.file_stem().and_then(|s| s.to_str()) {
-                                    assimp_lib = Some(stem.to_string());
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            if assimp_lib.is_some() {
-                break;
-            }
-        }
-
-        let assimp_lib = assimp_lib.unwrap_or_else(|| "assimp".to_string());
-        if cfg!(feature = "static-link") {
-            println!("cargo:rustc-link-lib=static={}", assimp_lib);
-        } else {
-            println!("cargo:rustc-link-lib={}", assimp_lib);
-        }
-        // If building from source and zlib is enabled, link zlib explicitly.
-        // Prebuilt and system modes should not require explicit zlib linking here.
-        if !cfg!(feature = "nozlib")
-            && (cfg!(feature = "build-assimp") || env::var("ASSET_IMPORTER_FORCE_BUILD").is_ok())
-        {
-            // Auto-detect the zlib library name produced by CMake
-            let mut zlib_lib: Option<String> = None;
-            for dir in &search_dirs {
-                if let Ok(read) = std::fs::read_dir(dir) {
-                    for entry in read.flatten() {
-                        let p = entry.path();
-                        if let (Some(name), Some(ext)) = (
-                            p.file_name().and_then(|s| s.to_str()),
-                            p.extension().and_then(|s| s.to_str()),
-                        ) {
-                            if ext.eq_ignore_ascii_case("lib") {
-                                let lower = name.to_ascii_lowercase();
-                                if lower.contains("zlib") && !lower.contains("assimp") {
-                                    if let Some(stem) = p.file_stem().and_then(|s| s.to_str()) {
-                                        zlib_lib = Some(stem.to_string());
-                                        break;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                if zlib_lib.is_some() {
-                    break;
-                }
-            }
-
-            let zlib_lib = zlib_lib.unwrap_or_else(|| "zlibstatic".to_string());
-            println!("cargo:rustc-link-lib=static={}", zlib_lib);
-        }
+    if config.is_msvc() {
+        link_msvc_libraries(dst, config);
     } else {
-        // Non-MSVC: auto-detect the assimp library file
-        let search_dirs = [
-            dst.join("lib"),
-            dst.join("lib64"),
-            dst.join("build").join("lib"),
-            dst.join("build").join("lib64"),
-        ];
-
-        let mut assimp_lib: Option<String> = None;
-        let profile = env::var("PROFILE").unwrap_or_default();
-        let is_debug = profile == "debug";
-
-        // First try to find debug version if in debug mode
-        if is_debug {
-            'debug_search: for dir in &search_dirs {
-                if let Ok(read) = std::fs::read_dir(dir) {
-                    for entry in read.flatten() {
-                        let p = entry.path();
-                        if let (Some(name), Some(ext)) = (
-                            p.file_name().and_then(|s| s.to_str()),
-                            p.extension().and_then(|s| s.to_str()),
-                        ) {
-                            let lower_name = name.to_ascii_lowercase();
-                            if (ext.eq_ignore_ascii_case("a")
-                                || ext.eq_ignore_ascii_case("so")
-                                || ext.eq_ignore_ascii_case("dylib"))
-                                && lower_name.contains("assimp")
-                                && (lower_name.contains("assimpd") || lower_name.ends_with("d.a") || lower_name.ends_with("d.so") || lower_name.ends_with("d.dylib"))
-                            {
-                                if let Some(stem) = p.file_stem().and_then(|s| s.to_str()) {
-                                    // Remove lib prefix for Unix libraries
-                                    let lib_name = stem.strip_prefix("lib").unwrap_or(stem);
-                                    assimp_lib = Some(lib_name.to_string());
-                                    break 'debug_search;
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // If no debug version found or not in debug mode, find regular version
-        if assimp_lib.is_none() {
-            'release_search: for dir in &search_dirs {
-                if let Ok(read) = std::fs::read_dir(dir) {
-                    for entry in read.flatten() {
-                        let p = entry.path();
-                        if let (Some(name), Some(ext)) = (
-                            p.file_name().and_then(|s| s.to_str()),
-                            p.extension().and_then(|s| s.to_str()),
-                        ) {
-                            let lower_name = name.to_ascii_lowercase();
-                            if (ext.eq_ignore_ascii_case("a")
-                                || ext.eq_ignore_ascii_case("so")
-                                || ext.eq_ignore_ascii_case("dylib"))
-                                && lower_name.contains("assimp")
-                                && !lower_name.contains("assimpd")
-                                && !lower_name.ends_with("d.a")
-                                && !lower_name.ends_with("d.so")
-                                && !lower_name.ends_with("d.dylib")
-                            {
-                                if let Some(stem) = p.file_stem().and_then(|s| s.to_str()) {
-                                    // Remove lib prefix for Unix libraries
-                                    let lib_name = stem.strip_prefix("lib").unwrap_or(stem);
-                                    assimp_lib = Some(lib_name.to_string());
-                                    break 'release_search;
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        let assimp_lib = assimp_lib.unwrap_or_else(|| "assimp".to_string());
-        if cfg!(feature = "static-link") {
-            println!("cargo:rustc-link-lib=static={}", assimp_lib);
-        } else {
-            println!("cargo:rustc-link-lib={}", assimp_lib);
-        }
-
-        // On non-Windows, when building from source and zlib is enabled, link against system zlib
-        if !cfg!(feature = "nozlib")
-            && (cfg!(feature = "build-assimp") || env::var("ASSET_IMPORTER_FORCE_BUILD").is_ok())
-        {
-            println!("cargo:rustc-link-lib=z");
-        }
+        link_unix_libraries(dst, config);
     }
 
-    // On Windows with shared build, copy assimp DLLs next to test/example executables to
-    // avoid PATH/DLL lookup issues during `cargo test` or running examples.
-    if target_os == "windows" && target_env == "msvc" && build_shared == "ON" {
-        copy_windows_dlls(&dst);
+    // Handle Windows DLL copying for shared builds
+    if config.is_windows() && config.is_msvc() && !cfg!(feature = "static-link") {
+        copy_windows_dlls(dst);
     }
 
     // Link system dependencies
-    link_system_dependencies();
+    link_system_dependencies(config);
+
+    // For static linking on Windows MSVC, ensure we link the correct debug CRT libraries
+    if config.is_windows() && config.is_msvc() && cfg!(feature = "static-link") && config.is_debug()
+    {
+        // Link debug CRT libraries explicitly for static linking
+        println!("cargo:rustc-link-lib=msvcrtd");
+        println!("cargo:rustc-link-lib=msvcprtd");
+    }
 
     // Export include path for bindgen
     let include_path = dst.join("include");
     println!("cargo:include={}", include_path.display());
+}
+
+fn link_msvc_libraries(dst: &std::path::Path, config: &BuildConfig) {
+    let cmake_dir = config.cmake_profile();
+    let search_dirs = [
+        dst.join("build").join("lib").join(cmake_dir),
+        dst.join("build").join("lib"),
+        dst.join("lib"),
+        dst.join("lib64"),
+    ];
+
+    // Auto-detect the assimp .lib file produced by CMake
+    let assimp_lib =
+        find_library_in_dirs(&search_dirs, "assimp", "lib").unwrap_or_else(|| "assimp".to_string());
+
+    if cfg!(feature = "static-link") {
+        println!("cargo:rustc-link-lib=static={}", assimp_lib);
+    } else {
+        println!("cargo:rustc-link-lib={}", assimp_lib);
+    }
+
+    // If building from source and zlib is enabled, link zlib explicitly.
+    if !cfg!(feature = "nozlib")
+        && (cfg!(feature = "build-assimp") || env::var("ASSET_IMPORTER_FORCE_BUILD").is_ok())
+    {
+        let zlib_lib = find_library_in_dirs(&search_dirs, "zlib", "lib")
+            .unwrap_or_else(|| "zlibstatic".to_string());
+        println!("cargo:rustc-link-lib=static={}", zlib_lib);
+    }
+}
+
+fn link_unix_libraries(dst: &std::path::Path, config: &BuildConfig) {
+    let search_dirs = [
+        dst.join("lib"),
+        dst.join("lib64"),
+        dst.join("build").join("lib"),
+        dst.join("build").join("lib64"),
+    ];
+
+    // Try to find debug version first if in debug mode
+    let assimp_lib = if config.is_debug() {
+        find_unix_debug_library(&search_dirs).or_else(|| find_unix_release_library(&search_dirs))
+    } else {
+        find_unix_release_library(&search_dirs)
+    }
+    .unwrap_or_else(|| "assimp".to_string());
+
+    if cfg!(feature = "static-link") {
+        println!("cargo:rustc-link-lib=static={}", assimp_lib);
+    } else {
+        println!("cargo:rustc-link-lib={}", assimp_lib);
+    }
+
+    // On non-Windows, when building from source and zlib is enabled, link against system zlib
+    if !cfg!(feature = "nozlib")
+        && (cfg!(feature = "build-assimp") || env::var("ASSET_IMPORTER_FORCE_BUILD").is_ok())
+    {
+        println!("cargo:rustc-link-lib=z");
+    }
+}
+
+fn find_library_in_dirs(
+    search_dirs: &[PathBuf],
+    lib_prefix: &str,
+    extension: &str,
+) -> Option<String> {
+    for dir in search_dirs {
+        if let Ok(read) = fs::read_dir(dir) {
+            for entry in read.flatten() {
+                let p = entry.path();
+                if let Some(name) = p.file_name().and_then(|s| s.to_str()) {
+                    let lower = name.to_ascii_lowercase();
+                    if lower.starts_with(lib_prefix) && lower.ends_with(&format!(".{}", extension))
+                    {
+                        if let Some(stem) = p.file_stem().and_then(|s| s.to_str()) {
+                            return Some(stem.to_string());
+                        }
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
+fn find_unix_debug_library(search_dirs: &[PathBuf]) -> Option<String> {
+    for dir in search_dirs {
+        if let Ok(read) = fs::read_dir(dir) {
+            for entry in read.flatten() {
+                let p = entry.path();
+                if let (Some(name), Some(ext)) = (
+                    p.file_name().and_then(|s| s.to_str()),
+                    p.extension().and_then(|s| s.to_str()),
+                ) {
+                    let lower_name = name.to_ascii_lowercase();
+                    if (ext.eq_ignore_ascii_case("a")
+                        || ext.eq_ignore_ascii_case("so")
+                        || ext.eq_ignore_ascii_case("dylib"))
+                        && lower_name.contains("assimp")
+                        && (lower_name.contains("assimpd")
+                            || lower_name.ends_with("d.a")
+                            || lower_name.ends_with("d.so")
+                            || lower_name.ends_with("d.dylib"))
+                    {
+                        if let Some(stem) = p.file_stem().and_then(|s| s.to_str()) {
+                            // Remove lib prefix for Unix libraries
+                            let lib_name = stem.strip_prefix("lib").unwrap_or(stem);
+                            return Some(lib_name.to_string());
+                        }
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
+fn find_unix_release_library(search_dirs: &[PathBuf]) -> Option<String> {
+    for dir in search_dirs {
+        if let Ok(read) = fs::read_dir(dir) {
+            for entry in read.flatten() {
+                let p = entry.path();
+                if let (Some(name), Some(ext)) = (
+                    p.file_name().and_then(|s| s.to_str()),
+                    p.extension().and_then(|s| s.to_str()),
+                ) {
+                    let lower_name = name.to_ascii_lowercase();
+                    if (ext.eq_ignore_ascii_case("a")
+                        || ext.eq_ignore_ascii_case("so")
+                        || ext.eq_ignore_ascii_case("dylib"))
+                        && lower_name.contains("assimp")
+                        && !lower_name.contains("assimpd")
+                        && !lower_name.ends_with("d.a")
+                        && !lower_name.ends_with("d.so")
+                        && !lower_name.ends_with("d.dylib")
+                    {
+                        if let Some(stem) = p.file_stem().and_then(|s| s.to_str()) {
+                            // Remove lib prefix for Unix libraries
+                            let lib_name = stem.strip_prefix("lib").unwrap_or(stem);
+                            return Some(lib_name.to_string());
+                        }
+                    }
+                }
+            }
+        }
+    }
+    None
 }
 
 fn has_system_zlib_any() -> bool {
@@ -899,21 +1028,12 @@ fn copy_windows_dlls(dst: &std::path::Path) {
     }
 }
 
-fn generate_bindings(
-    manifest_dir: &std::path::Path,
-    out_path: &std::path::Path,
-    built_include_dir: Option<&std::path::Path>,
-) {
-    let wrapper_h = manifest_dir.join("wrapper.h");
-    // Use ASSIMP_DIR/include if provided, else submodule include
-    let assimp_include = if let Ok(dir) = env::var("ASSIMP_DIR") {
-        std::path::PathBuf::from(dir).join("include")
-    } else {
-        manifest_dir.join("assimp").join("include")
-    };
+fn generate_bindings(config: &BuildConfig, built_include_dir: Option<&std::path::Path>) {
+    let wrapper_h = config.manifest_dir.join("wrapper.h");
+    let assimp_include = config.assimp_include_dir();
 
     // Create empty config.h if it doesn't exist (needed for system builds) only when using submodule path
-    let submodule_include = manifest_dir.join("assimp").join("include");
+    let submodule_include = config.manifest_dir.join("assimp").join("include");
     let use_submodule = assimp_include == submodule_include;
     let config_file = assimp_include.join("assimp").join("config.h");
     if use_submodule && !config_file.exists() {
@@ -1003,7 +1123,7 @@ fn generate_bindings(
 
     let bindings = builder.generate().expect("Unable to generate bindings");
 
-    let out_file = out_path.join("bindings.rs");
+    let out_file = config.out_dir.join("bindings.rs");
     bindings
         .write_to_file(&out_file)
         .expect("Couldn't write bindings!");
@@ -1011,39 +1131,56 @@ fn generate_bindings(
     // Keep a temporary config.h for wrapper.cpp compilation in prebuilt/system modes
 }
 
-fn compile_bridge_cpp(manifest_dir: &std::path::Path, built_include_dir: Option<&std::path::Path>) {
+fn compile_bridge_cpp(config: &BuildConfig, built_include_dir: Option<&std::path::Path>) {
     let mut build = cc::Build::new();
     build.cpp(true);
 
     // Set C++17 standard (required by Assimp)
     build.std("c++17");
 
-    build.file(manifest_dir.join("wrapper.cpp"));
+    build.file(config.manifest_dir.join("wrapper.cpp"));
 
     // Include paths for Assimp headers: prefer built include (has config.h), then submodule include
     if let Some(dir) = built_include_dir {
         build.include(dir);
     }
-    if let Ok(dir) = env::var("ASSIMP_DIR") {
-        build.include(std::path::PathBuf::from(dir).join("include"));
-    } else {
-        build.include(manifest_dir.join("assimp").join("include"));
-    }
+    build.include(config.assimp_include_dir());
 
     // Platform-specific compiler flags
-    let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
-    let target_env = env::var("CARGO_CFG_TARGET_ENV").unwrap_or_default();
-    let target_features = env::var("CARGO_CFG_TARGET_FEATURE").unwrap_or_default();
-    let use_static_crt = target_os == "windows"
-        && target_env == "msvc"
-        && target_features.split(',').any(|f| f == "crt-static");
+    configure_cpp_build_flags(&mut build, config);
 
-    match target_os.as_str() {
+    build.compile("assimp_rust_bridge");
+}
+
+fn configure_cpp_build_flags(build: &mut cc::Build, config: &BuildConfig) {
+    match config.target_os.as_str() {
         "windows" => {
-            if target_env == "msvc" {
+            if config.is_msvc() {
                 build.flag("/EHsc");
-                // Match Rust target's runtime selection
-                build.static_crt(use_static_crt);
+
+                // Always match Rust's CRT family, but never use the MSVC debug CRT
+                // (Rust doesn't link it, which caused the unresolved __imp__CrtDbgReport).
+                // Use /MD (dynamic) or /MT (static) for both Debug and Release.
+                let use_static = config.use_static_crt();
+                build.static_crt(use_static);
+                if use_static {
+                    build.flag("/MT");
+                } else {
+                    build.flag("/MD");
+                }
+
+                // Preserve debug info/optimizations without toggling CRT flavor.
+                if config.is_debug() {
+                    build.debug(true);
+                    build.opt_level(0);
+                } else {
+                    build.debug(false);
+                    build.opt_level(2);
+                }
+
+                // Use the non-debug iterator level to be consistent with non-debug CRT.
+                build.flag("/D_ITERATOR_DEBUG_LEVEL=0");
+                // Avoid defining _DEBUG which can drag debug-CRT-only references.
             }
         }
         "macos" => {
@@ -1054,6 +1191,4 @@ fn compile_bridge_cpp(manifest_dir: &std::path::Path, built_include_dir: Option<
             // For other Unix-like systems
         }
     }
-
-    build.compile("assimp_rust_bridge");
 }

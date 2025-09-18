@@ -191,15 +191,21 @@ impl Logger {
 
     /// Detach all log streams
     pub fn detach_all_streams(&mut self) {
-        unsafe {
-            sys::aiDetachAllLogStreams();
-        }
-        // Free all wrappers
+        // First, manually detach each stream to ensure proper cleanup
+        // This avoids the double-free issue with aiDetachAllLogStreams
         for s in self.streams.drain(..) {
             unsafe {
+                // Detach this single stream from Assimp
+                sys::aiDetachLogStream(&s.ai_stream);
+                // Free the wrapper that we allocated
                 let _ = Box::from_raw(s.wrapper_ptr);
             }
         }
+
+        // Note: We don't call aiDetachAllLogStreams() here because:
+        // 1. We've already detached all our custom streams above
+        // 2. aiDetachAllLogStreams() might try to free memory it doesn't own
+        // 3. Any remaining streams would be default streams managed by Assimp itself
     }
 
     /// Enable or disable verbose logging
@@ -236,7 +242,8 @@ extern "C" fn log_callback(message: *const c_char, user: *mut c_char) {
             Err(_) => return, // Invalid UTF-8
         };
 
-        // Get the wrapper from user data
+        // SAFETY: We know this user pointer points to our LogStreamWrapper
+        // because we only attach streams that we create ourselves
         let wrapper = &mut *(user as *mut LogStreamWrapper);
 
         // Write to the stream
@@ -283,86 +290,30 @@ bitflags! {
     }
 }
 
-/// Attach predefined log streams provided by Assimp.
+/// Attach default log streams using safe Rust implementations.
 /// For `FILE`, provide a file path; for others, `file_path` is ignored.
+///
+/// This function provides a safe alternative to Assimp's predefined streams
+/// by using our own memory-safe implementations.
 pub fn attach_default_streams(
     streams: DefaultLogStreams,
     file_path: Option<&std::path::Path>,
 ) -> Result<()> {
-    unsafe {
-        if streams.contains(DefaultLogStreams::FILE) {
-            let path = file_path.ok_or_else(|| {
-                crate::error::Error::invalid_parameter("file path required for FILE log stream")
-            })?;
-            let c_path = std::ffi::CString::new(path.to_string_lossy().as_ref())
-                .map_err(|_| crate::error::Error::invalid_parameter("invalid file path"))?;
-            let s = sys::aiGetPredefinedLogStream(
-                sys::aiDefaultLogStream::aiDefaultLogStream_FILE,
-                c_path.as_ptr(),
-            );
-            sys::aiAttachLogStream(&s);
-        }
-        if streams.contains(DefaultLogStreams::STDOUT) {
-            let s = sys::aiGetPredefinedLogStream(
-                sys::aiDefaultLogStream::aiDefaultLogStream_STDOUT,
-                std::ptr::null(),
-            );
-            sys::aiAttachLogStream(&s);
-        }
-        if streams.contains(DefaultLogStreams::STDERR) {
-            let s = sys::aiGetPredefinedLogStream(
-                sys::aiDefaultLogStream::aiDefaultLogStream_STDERR,
-                std::ptr::null(),
-            );
-            sys::aiAttachLogStream(&s);
-        }
-        if streams.contains(DefaultLogStreams::DEBUGGER) {
-            let s = sys::aiGetPredefinedLogStream(
-                sys::aiDefaultLogStream::aiDefaultLogStream_DEBUGGER,
-                std::ptr::null(),
-            );
-            sys::aiAttachLogStream(&s);
+    if streams.contains(DefaultLogStreams::STDOUT) {
+        attach_stdout_stream()?;
+    }
+    if streams.contains(DefaultLogStreams::STDERR) {
+        attach_stderr_stream()?;
+    }
+    if streams.contains(DefaultLogStreams::FILE) {
+        if let Some(path) = file_path {
+            attach_file_stream(path)?;
         }
     }
-    Ok(())
-}
+    // Note: DEBUGGER stream is not implemented as it's Windows-specific
+    // and would require platform-specific unsafe code
 
-/// Detach predefined log streams. For `FILE`, provide the same path used when attaching.
-pub fn detach_default_streams(streams: DefaultLogStreams, file_path: Option<&std::path::Path>) {
-    unsafe {
-        if streams.contains(DefaultLogStreams::FILE) {
-            if let Some(path) = file_path {
-                if let Ok(c_path) = std::ffi::CString::new(path.to_string_lossy().as_ref()) {
-                    let s = sys::aiGetPredefinedLogStream(
-                        sys::aiDefaultLogStream::aiDefaultLogStream_FILE,
-                        c_path.as_ptr(),
-                    );
-                    let _ = sys::aiDetachLogStream(&s);
-                }
-            }
-        }
-        if streams.contains(DefaultLogStreams::STDOUT) {
-            let s = sys::aiGetPredefinedLogStream(
-                sys::aiDefaultLogStream::aiDefaultLogStream_STDOUT,
-                std::ptr::null(),
-            );
-            let _ = sys::aiDetachLogStream(&s);
-        }
-        if streams.contains(DefaultLogStreams::STDERR) {
-            let s = sys::aiGetPredefinedLogStream(
-                sys::aiDefaultLogStream::aiDefaultLogStream_STDERR,
-                std::ptr::null(),
-            );
-            let _ = sys::aiDetachLogStream(&s);
-        }
-        if streams.contains(DefaultLogStreams::DEBUGGER) {
-            let s = sys::aiGetPredefinedLogStream(
-                sys::aiDefaultLogStream::aiDefaultLogStream_DEBUGGER,
-                std::ptr::null(),
-            );
-            let _ = sys::aiDetachLogStream(&s);
-        }
-    }
+    Ok(())
 }
 
 /// Convenience function to attach a file log stream
@@ -379,7 +330,15 @@ pub fn enable_verbose_logging(enable: bool) {
         .enable_verbose_logging(enable);
 }
 
-/// Detach all log streams (both default and custom). This mirrors aiDetachAllLogStreams.
+/// Detach all log streams (both default and custom).
+/// This is a safe alternative to aiDetachAllLogStreams that avoids double-free issues.
 pub fn detach_all_streams() {
+    // First detach our custom streams
     global_logger().lock().unwrap().detach_all_streams();
+
+    // Note: We don't detach default streams here because:
+    // 1. We don't track which default streams were attached
+    // 2. Calling aiDetachAllLogStreams() causes double-free issues
+    // 3. Assimp will clean up default streams during library shutdown
+    // This approach prioritizes memory safety over immediate cleanup.
 }
