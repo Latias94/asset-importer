@@ -32,7 +32,7 @@ The bindings include:
 ### Prebuilt Binaries (Default)
 ```toml
 [dependencies]
-asset-importer-sys = "0.2"
+asset-importer-sys = "0.3"
 # or explicitly:
 asset-importer-sys = { features = ["prebuilt"] }
 ```
@@ -42,7 +42,7 @@ asset-importer-sys = { features = ["prebuilt"] }
 
 ### Build from Source
 ```toml
-asset-importer-sys = { version = "0.2", features = ["build-assimp"] }
+asset-importer-sys = { version = "0.3", features = ["build-assimp"] }
 ```
 - Builds assimp from bundled source
 - Requires: CMake, C++ compiler, Git
@@ -51,7 +51,7 @@ asset-importer-sys = { version = "0.2", features = ["build-assimp"] }
 
 ### System Library
 ```toml
-asset-importer-sys = { version = "0.2", features = ["system"] }
+asset-importer-sys = { version = "0.3", features = ["system"] }
 ```
 Uses system-installed assimp. Install via package manager:
 - **macOS**: `brew install assimp`
@@ -72,7 +72,7 @@ rustflags = ["-C", "target-feature=+crt-static"]
 
 ### Static Linking
 ```toml
-asset-importer-sys = { version = "0.2", features = ["static-link", "build-assimp"] }
+asset-importer-sys = { version = "0.3", features = ["static-link", "build-assimp"] }
 ```
 - Creates single executable with fewer external runtime dependencies
 - Larger binary size
@@ -80,7 +80,7 @@ asset-importer-sys = { version = "0.2", features = ["static-link", "build-assimp
 ### Additional Options
 ```toml
 asset-importer-sys = {
-    version = "0.2",
+    version = "0.3",
     features = [
         "build-assimp",
         "export",        # Enable export functionality

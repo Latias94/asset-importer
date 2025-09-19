@@ -6,6 +6,10 @@
 [![Crates.io Downloads](https://img.shields.io/crates/d/asset-importer.svg)](https://crates.io/crates/asset-importer)
 [![Made with Rust](https://img.shields.io/badge/made%20with-Rust-orange.svg)](https://www.rust-lang.org)
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![License: BSD-3-Clause](https://img.shields.io/badge/License-BSD%203--Clause-orange.svg)](https://opensource.org/licenses/BSD-3-Clause)
+
 A comprehensive Rust binding for the latest [Assimp](https://github.com/assimp/assimp) 3D asset import library.
 
 This crate provides safe, high-level Rust bindings for **Assimp v6.0.2**, implementing the vast majority of the C API with idiomatic Rust interfaces.
@@ -31,13 +35,13 @@ Add to your `Cargo.toml`:
 ```toml
 [dependencies]
 # Default – Use prebuilt binaries (fastest)
-asset-importer = "0.2"
+asset-importer = "0.3"
 
 # Or build from source (best compatibility)
-asset-importer = { version = "0.2", features = ["build-assimp"] }
+asset-importer = { version = "0.3", features = ["build-assimp"] }
 
 # Or use system-installed assimp
-asset-importer = { version = "0.2", features = ["system"] }
+asset-importer = { version = "0.3", features = ["system"] }
 ```
 
 Basic usage:
@@ -65,7 +69,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 ### Default: Prebuilt Binaries (Recommended)
 
 ```toml
-asset-importer = "0.2"
+asset-importer = "0.3"
 ```
 
 - **Fastest**: No compilation time
@@ -76,7 +80,7 @@ asset-importer = "0.2"
 ### Build from Source
 
 ```toml
-asset-importer = { version = "0.2", features = ["build-assimp"] }
+asset-importer = { version = "0.3", features = ["build-assimp"] }
 ```
 
 - **Best compatibility**: Works on all platforms
@@ -86,7 +90,7 @@ asset-importer = { version = "0.2", features = ["build-assimp"] }
 ### System Library
 
 ```toml
-asset-importer = { version = "0.2", features = ["system"] }
+asset-importer = { version = "0.3", features = ["system"] }
 ```
 
 - **Lightweight**: Uses existing system installation
@@ -97,7 +101,7 @@ asset-importer = { version = "0.2", features = ["system"] }
 
 ```toml
 asset-importer = {
-    version = "0.2",
+    version = "0.3",
     features = [
         "export",          # Enable export functionality
         "type-extensions", # Enable convenience methods on types
@@ -172,7 +176,7 @@ For development work or when prebuilt binaries are not available:
 
 ```toml
 # Use this for development
-asset-importer = { version = "0.2", features = ["build-assimp"] }
+asset-importer = { version = "0.3", features = ["build-assimp"] }
 ```
 
 This ensures you can always build from source regardless of release availability.

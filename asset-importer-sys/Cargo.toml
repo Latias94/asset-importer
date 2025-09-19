@@ -1,10 +1,10 @@
 [package]
 name = "asset-importer-sys"
-version = "0.2.1"
+version = "0.3.0"
 edition.workspace = true
 rust-version.workspace = true
 authors.workspace = true
-license-file.workspace = true
+license.workspace = true
 description = "Low-level FFI bindings for the Assimp 3D asset import library"
 homepage = "https://github.com/Latias94/asset-importer"
 repository = "https://github.com/Latias94/asset-importer"

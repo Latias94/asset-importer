@@ -21,8 +21,6 @@ fn main() -> Result<(), Box<dyn Error>> {
         );
         std::process::exit(1);
     }
-    let input = std::path::Path::new(&args[1]);
-    let output = std::path::Path::new(&args[2]);
 
     let result = {
         #[cfg(not(feature = "export"))]
@@ -33,6 +31,8 @@ fn main() -> Result<(), Box<dyn Error>> {
 
         #[cfg(feature = "export")]
         {
+            let input = std::path::Path::new(&args[1]);
+            let output = std::path::Path::new(&args[2]);
             let scene: Scene = common::import_scene(input, PostProcessSteps::TRIANGULATE)?;
             let ext = output
                 .extension()

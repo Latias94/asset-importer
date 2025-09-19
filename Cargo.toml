@@ -16,11 +16,11 @@ exclude = [
 ]
 
 [workspace.package]
-version = "0.2.1"
+version = "0.3.0"
 edition = "2024"
 rust-version = "1.85"
 authors = ["Mingzhen Zhuang <superfrankie621@gmail.com>"]
-license-file = "LICENSE"
+license = "MIT OR Apache-2.0"
 description = "Comprehensive Rust bindings for the Assimp library"
 homepage = "https://github.com/Latias94/asset-importer"
 repository = "https://github.com/Latias94/asset-importer"

@@ -117,18 +117,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    // Add license file: only include workspace-root LICENSE
-    let license_single = workspace_root.join("LICENSE");
-    if !license_single.exists() {
-        return Err(format!(
-            "License file not found at {} (expected LICENSE)",
-            license_single.display()
-        )
-        .into());
+    // Add license files
+    let license_files = [
+        ("LICENSE-MIT", "LICENSE-MIT"),
+        ("LICENSE-APACHE", "LICENSE-APACHE"),
+        ("LICENSE-assimp.txt", "LICENSE-assimp.txt"),
+    ];
+
+    for (archive_name, file_name) in license_files {
+        let license_path = workspace_root.join(file_name);
+        if license_path.exists() {
+            let mut f = fs::File::open(&license_path)?;
+            archive.append_file(archive_name, &mut f)?;
+            println!("Added license file: {}", license_path.display());
+        } else {
+            println!("License file not found: {}", license_path.display());
+        }
     }
-    let mut f = fs::File::open(&license_single)?;
-    archive.append_file("LICENSE", &mut f)?;
-    println!("Added license file: {}", license_single.display());
 
     archive.finish()?;
 

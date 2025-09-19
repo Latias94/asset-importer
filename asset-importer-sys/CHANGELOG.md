@@ -5,6 +5,13 @@ All notable changes to `asset-importer-sys` will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2025-09-19
+
+### Changed
+- **Package Distribution**: Enhanced license file inclusion in binary packages
+  - Updated packaging tool to include LICENSE-MIT, LICENSE-APACHE, and LICENSE-assimp.txt
+  - All license files are now properly included in prebuilt binary distributions
+
 ## [0.2.1] - 2025-09-19
 
 ### Fixed
