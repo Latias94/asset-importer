@@ -59,6 +59,7 @@ pub fn init_logging_from_env() {
 }
 
 /// Clean up logging on exit
+#[allow(dead_code)]
 pub fn shutdown_logging() {
     // No-op: no custom streams to detach (they were removed due to FFI safety issues)
 }
