@@ -1,5 +1,9 @@
 // Integration tests for async/await support in asset-importer
+
+// Allow unused imports since they're used conditionally based on features
+#[allow(unused_imports)]
 use asset_importer::Importer;
+#[allow(unused_imports)]
 use std::time::Duration;
 
 #[cfg(feature = "tokio")]
@@ -177,6 +181,7 @@ f 1 2 3
 
 #[cfg(not(feature = "tokio"))]
 mod sync_tests {
+    #[allow(unused_imports)]
     use super::*;
 
     #[test]
