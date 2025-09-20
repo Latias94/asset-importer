@@ -500,3 +500,30 @@ impl Iterator for MorphMeshAnimationIterator {
 }
 
 impl ExactSizeIterator for MorphMeshAnimationIterator {}
+
+// Send and Sync are safe because:
+// 1. All animation types only hold pointers to data owned by the Scene
+// 2. The Scene manages the lifetime of all Assimp data
+// 3. Assimp doesn't use global state and is thread-safe for read operations
+// 4. The pointers remain valid as long as the Scene exists
+unsafe impl Send for Animation {}
+unsafe impl Sync for Animation {}
+
+unsafe impl Send for NodeAnimation {}
+unsafe impl Sync for NodeAnimation {}
+
+unsafe impl Send for MeshAnimation {}
+unsafe impl Sync for MeshAnimation {}
+
+unsafe impl Send for MorphMeshAnimation {}
+unsafe impl Sync for MorphMeshAnimation {}
+
+// Iterators are also safe for the same reasons
+unsafe impl Send for NodeAnimationIterator {}
+unsafe impl Sync for NodeAnimationIterator {}
+
+unsafe impl Send for MeshAnimationIterator {}
+unsafe impl Sync for MeshAnimationIterator {}
+
+unsafe impl Send for MorphMeshAnimationIterator {}
+unsafe impl Sync for MorphMeshAnimationIterator {}

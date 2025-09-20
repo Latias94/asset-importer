@@ -604,6 +604,23 @@ impl<'a> Iterator for LightIterator<'a> {
 
 impl<'a> ExactSizeIterator for LightIterator<'a> {}
 
+// Scene iterators are safe because they only hold references to the Scene
+// and the Scene itself is Send + Sync
+unsafe impl<'a> Send for MeshIterator<'a> {}
+unsafe impl<'a> Sync for MeshIterator<'a> {}
+
+unsafe impl<'a> Send for MaterialIterator<'a> {}
+unsafe impl<'a> Sync for MaterialIterator<'a> {}
+
+unsafe impl<'a> Send for AnimationIterator<'a> {}
+unsafe impl<'a> Sync for AnimationIterator<'a> {}
+
+unsafe impl<'a> Send for CameraIterator<'a> {}
+unsafe impl<'a> Sync for CameraIterator<'a> {}
+
+unsafe impl<'a> Send for LightIterator<'a> {}
+unsafe impl<'a> Sync for LightIterator<'a> {}
+
 impl Scene {
     /// Get scene metadata
     pub fn metadata(&self) -> Result<Metadata> {

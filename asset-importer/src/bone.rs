@@ -323,3 +323,15 @@ pub mod utils {
             .collect()
     }
 }
+
+// Send and Sync are safe because:
+// 1. Bone only holds a pointer to data owned by the Scene
+// 2. The Scene manages the lifetime of all Assimp data
+// 3. Assimp doesn't use global state and is thread-safe for read operations
+// 4. The pointer remains valid as long as the Scene exists
+unsafe impl Send for Bone {}
+unsafe impl Sync for Bone {}
+
+// BoneIterator is also safe for the same reasons
+unsafe impl Send for BoneIterator {}
+unsafe impl Sync for BoneIterator {}

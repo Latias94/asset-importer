@@ -287,3 +287,15 @@ impl ExactSizeIterator for TextureIterator {
         self.count.saturating_sub(self.index)
     }
 }
+
+// Send and Sync are safe because:
+// 1. Texture only holds a pointer to data owned by the Scene
+// 2. The Scene manages the lifetime of all Assimp data
+// 3. Assimp doesn't use global state and is thread-safe for read operations
+// 4. The pointer remains valid as long as the Scene exists
+unsafe impl Send for Texture {}
+unsafe impl Sync for Texture {}
+
+// TextureIterator is also safe for the same reasons
+unsafe impl Send for TextureIterator {}
+unsafe impl Sync for TextureIterator {}

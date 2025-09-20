@@ -5,6 +5,22 @@ All notable changes to `asset-importer` will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2025-09-20
+
+### Added
+- **Async/Multithreading Support**: Implemented `Send` and `Sync` traits for all core types to enable async/await and multithreading usage
+  - All core types (`Scene`, `Node`, `Mesh`, `Material`, `Light`, `Camera`, `Bone`, `Animation`, `Texture`, etc.) now implement `Send + Sync`
+  - All iterator types now support multithreading
+  - Zero-copy performance maintained in multithreaded contexts
+
+## [0.3.0] - 2025-09-19
+
+### Changed
+- **License Documentation**: Enhanced license information in README with dedicated license badges
+  - Added MIT License badge
+  - Added Apache 2.0 License badge
+  - Added BSD 3-Clause License badge for Assimp dependency
+
 ## [0.2.1] - 2025-09-19
 
 ### Fixed

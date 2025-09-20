@@ -159,3 +159,11 @@ impl Clone for Light {
 }
 
 impl Copy for Light {}
+
+// Send and Sync are safe because:
+// 1. Light only holds a pointer to data owned by the Scene
+// 2. The Scene manages the lifetime of all Assimp data
+// 3. Assimp doesn't use global state and is thread-safe for read operations
+// 4. The pointer remains valid as long as the Scene exists
+unsafe impl Send for Light {}
+unsafe impl Sync for Light {}

@@ -167,6 +167,21 @@ impl Iterator for NodeIterator {
 
 impl ExactSizeIterator for NodeIterator {}
 
+// Send and Sync are safe because:
+// 1. Node only holds a pointer to data owned by the Scene
+// 2. The Scene manages the lifetime of all Assimp data
+// 3. Assimp doesn't use global state and is thread-safe for read operations
+// 4. The pointer remains valid as long as the Scene exists
+unsafe impl Send for Node {}
+unsafe impl Sync for Node {}
+
+// Node iterators are also safe for the same reasons
+unsafe impl Send for NodeIterator {}
+unsafe impl Sync for NodeIterator {}
+
+unsafe impl Send for MeshIndexIterator {}
+unsafe impl Sync for MeshIndexIterator {}
+
 /// Iterator over mesh indices in a node
 pub struct MeshIndexIterator {
     node_ptr: *const sys::aiNode,

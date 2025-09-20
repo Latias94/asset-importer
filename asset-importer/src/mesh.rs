@@ -498,3 +498,24 @@ impl MorphingMethod {
         }
     }
 }
+
+// Send and Sync are safe because:
+// 1. Mesh only holds a pointer to data owned by the Scene
+// 2. The Scene manages the lifetime of all Assimp data
+// 3. Assimp doesn't use global state and is thread-safe for read operations
+// 4. The pointer remains valid as long as the Scene exists
+unsafe impl Send for Mesh {}
+unsafe impl Sync for Mesh {}
+
+// Face, AnimMesh, and iterators are also safe for the same reasons
+unsafe impl Send for Face {}
+unsafe impl Sync for Face {}
+
+unsafe impl Send for AnimMesh {}
+unsafe impl Sync for AnimMesh {}
+
+unsafe impl Send for FaceIterator {}
+unsafe impl Sync for FaceIterator {}
+
+unsafe impl Send for AnimMeshIterator {}
+unsafe impl Sync for AnimMeshIterator {}

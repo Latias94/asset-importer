@@ -1284,3 +1284,11 @@ bitflags::bitflags! {
         const IGNORE_ALPHA  = sys::aiTextureFlags::aiTextureFlags_IgnoreAlpha as u32;
     }
 }
+
+// Send and Sync are safe because:
+// 1. Material only holds a pointer to data owned by the Scene
+// 2. The Scene manages the lifetime of all Assimp data
+// 3. Assimp doesn't use global state and is thread-safe for read operations
+// 4. The pointer remains valid as long as the Scene exists
+unsafe impl Send for Material {}
+unsafe impl Sync for Material {}

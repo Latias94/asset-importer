@@ -171,6 +171,14 @@ impl Drop for ExportBlob {
     }
 }
 
+// Send and Sync are safe because:
+// 1. ExportBlob owns the data through the blob_ptr
+// 2. The blob data is immutable after creation
+// 3. Assimp doesn't use global state and is thread-safe for read operations
+// 4. The pointer remains valid until Drop is called
+unsafe impl Send for ExportBlob {}
+unsafe impl Sync for ExportBlob {}
+
 /// Description of an export format
 #[derive(Debug, Clone)]
 pub struct ExportFormatDesc {

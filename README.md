@@ -35,13 +35,13 @@ Add to your `Cargo.toml`:
 ```toml
 [dependencies]
 # Default – Use prebuilt binaries (fastest)
-asset-importer = "0.3"
+asset-importer = "0.4"
 
 # Or build from source (best compatibility)
-asset-importer = { version = "0.3", features = ["build-assimp"] }
+asset-importer = { version = "0.4", features = ["build-assimp"] }
 
 # Or use system-installed assimp
-asset-importer = { version = "0.3", features = ["system"] }
+asset-importer = { version = "0.4", features = ["system"] }
 ```
 
 Basic usage:
@@ -69,7 +69,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 ### Default: Prebuilt Binaries (Recommended)
 
 ```toml
-asset-importer = "0.3"
+asset-importer = "0.4"
 ```
 
 - **Fastest**: No compilation time
@@ -80,7 +80,7 @@ asset-importer = "0.3"
 ### Build from Source
 
 ```toml
-asset-importer = { version = "0.3", features = ["build-assimp"] }
+asset-importer = { version = "0.4", features = ["build-assimp"] }
 ```
 
 - **Best compatibility**: Works on all platforms
@@ -90,7 +90,7 @@ asset-importer = { version = "0.3", features = ["build-assimp"] }
 ### System Library
 
 ```toml
-asset-importer = { version = "0.3", features = ["system"] }
+asset-importer = { version = "0.4", features = ["system"] }
 ```
 
 - **Lightweight**: Uses existing system installation
@@ -101,7 +101,7 @@ asset-importer = { version = "0.3", features = ["system"] }
 
 ```toml
 asset-importer = {
-    version = "0.3",
+    version = "0.4",
     features = [
         "export",          # Enable export functionality
         "type-extensions", # Enable convenience methods on types
@@ -176,7 +176,7 @@ For development work or when prebuilt binaries are not available:
 
 ```toml
 # Use this for development
-asset-importer = { version = "0.3", features = ["build-assimp"] }
+asset-importer = { version = "0.4", features = ["build-assimp"] }
 ```
 
 This ensures you can always build from source regardless of release availability.

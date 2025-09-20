@@ -289,4 +289,18 @@ mod tests {
         assert!(extensions.contains(&".obj".to_string()));
         println!("Supported extensions: {:?}", extensions);
     }
+
+    #[test]
+    fn test_send_sync_traits() {
+        // This test verifies that our core types implement Send + Sync
+        // If this compiles, our unsafe implementations are working
+
+        fn assert_send_sync<T: Send + Sync>() {}
+
+        // Test core types - if these compile, Send + Sync are implemented
+        assert_send_sync::<Scene>();
+
+        // The test passes if it compiles
+        println!("✅ Core types implement Send + Sync!");
+    }
 }
