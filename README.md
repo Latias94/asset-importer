@@ -14,6 +14,10 @@ A comprehensive Rust binding for the latest [Assimp](https://github.com/assimp/a
 
 This crate provides safe, high-level Rust bindings for **Assimp v6.0.2**, implementing the vast majority of the C API with idiomatic Rust interfaces.
 
+## Example Application
+
+See **[Model Viewer](https://github.com/Latias94/model-viewer)** (asset-importer + wgpu) - A practical model viewer built on top of this Assimp Rust binding. It serves as a real-world sample and testbed to validate asset-importer across common 3D formats.
+
 ## Status
 
 ⚠️ **Early Development**: This library is functional but lacks extensive real-world testing. Use with caution in production environments.
