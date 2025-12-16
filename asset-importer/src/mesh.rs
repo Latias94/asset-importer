@@ -9,7 +9,7 @@ use crate::{
     bone::{Bone, BoneIterator},
     ptr::SharedPtr,
     sys,
-    types::{Color4D, Vector3D, ai_string_to_string, from_ai_color4d, from_ai_vector3d},
+    types::{Color4D, Vector3D, ai_string_to_string},
 };
 
 /// A mesh containing vertices, faces, and other geometric data
@@ -47,63 +47,78 @@ impl<'a> Mesh<'a> {
     }
 
     /// Get the vertices of the mesh
-    pub fn vertices(&self) -> Vec<Vector3D> {
+    pub fn vertices(&self) -> &[Vector3D] {
         unsafe {
             let mesh = &*self.mesh_ptr.as_ptr();
+
             if mesh.mVertices.is_null() {
-                Vec::new()
-            } else {
-                let ai_vertices =
-                    std::slice::from_raw_parts(mesh.mVertices, mesh.mNumVertices as usize);
-                ai_vertices.iter().map(|&v| from_ai_vector3d(v)).collect()
+                return &[];
             }
+
+            // SAFETY:
+            // Safe to reinterpret as ai_real has a defined size matching
+            // our Vector3D allowing us to reinterpret the vector to glam types
+            // without element-wise mapping.
+            std::slice::from_raw_parts(
+                mesh.mVertices as *const Vector3D,
+                mesh.mNumVertices as usize,
+            )
         }
     }
 
     /// Get the normals of the mesh
-    pub fn normals(&self) -> Option<Vec<Vector3D>> {
+    pub fn normals(&self) -> Option<&[Vector3D]> {
         unsafe {
             let mesh = &*self.mesh_ptr.as_ptr();
+
             if mesh.mNormals.is_null() {
-                None
-            } else {
-                let ai_normals =
-                    std::slice::from_raw_parts(mesh.mNormals, mesh.mNumVertices as usize);
-                Some(ai_normals.iter().map(|&v| from_ai_vector3d(v)).collect())
+                return None;
             }
+
+            // SAFETY: Read vertices.
+            Some(std::slice::from_raw_parts(
+                mesh.mNormals as *const Vector3D,
+                mesh.mNumVertices as usize,
+            ))
         }
     }
 
     /// Get the tangents of the mesh
-    pub fn tangents(&self) -> Option<Vec<Vector3D>> {
+    pub fn tangents(&self) -> Option<&[Vector3D]> {
         unsafe {
             let mesh = &*self.mesh_ptr.as_ptr();
+
             if mesh.mTangents.is_null() {
-                None
-            } else {
-                let ai_tangents =
-                    std::slice::from_raw_parts(mesh.mTangents, mesh.mNumVertices as usize);
-                Some(ai_tangents.iter().map(|&v| from_ai_vector3d(v)).collect())
+                return None;
             }
+
+            // SAFETY: Same explanation as vertices
+            Some(std::slice::from_raw_parts(
+                mesh.mTangents as *const Vector3D,
+                mesh.mNumVertices as usize,
+            ))
         }
     }
 
     /// Get the bitangents of the mesh
-    pub fn bitangents(&self) -> Option<Vec<Vector3D>> {
+    pub fn bitangents(&self) -> Option<&[Vector3D]> {
         unsafe {
             let mesh = &*self.mesh_ptr.as_ptr();
+
             if mesh.mBitangents.is_null() {
-                None
-            } else {
-                let ai_bitangents =
-                    std::slice::from_raw_parts(mesh.mBitangents, mesh.mNumVertices as usize);
-                Some(ai_bitangents.iter().map(|&v| from_ai_vector3d(v)).collect())
+                return None;
             }
+
+            // SAFETY: Same explanation as vertices
+            Some(std::slice::from_raw_parts(
+                mesh.mBitangents as *const Vector3D,
+                mesh.mNumVertices as usize,
+            ))
         }
     }
 
     /// Get texture coordinates for a specific channel
-    pub fn texture_coords(&self, channel: usize) -> Option<Vec<Vector3D>> {
+    pub fn texture_coords(&self, channel: usize) -> Option<&[Vector3D]> {
         if channel >= sys::AI_MAX_NUMBER_OF_TEXTURECOORDS as usize {
             return None;
         }
@@ -111,18 +126,21 @@ impl<'a> Mesh<'a> {
         unsafe {
             let mesh = &*self.mesh_ptr.as_ptr();
             let tex_coords_ptr = mesh.mTextureCoords[channel];
+
             if tex_coords_ptr.is_null() {
-                None
-            } else {
-                let ai_tex_coords =
-                    std::slice::from_raw_parts(tex_coords_ptr, mesh.mNumVertices as usize);
-                Some(ai_tex_coords.iter().map(|&v| from_ai_vector3d(v)).collect())
+                return None;
             }
+
+            // SAFETY: Same explanation as vertices
+            Some(std::slice::from_raw_parts(
+                tex_coords_ptr as *const Vector3D,
+                mesh.mNumVertices as usize,
+            ))
         }
     }
 
     /// Get vertex colors for a specific channel
-    pub fn vertex_colors(&self, channel: usize) -> Option<Vec<Color4D>> {
+    pub fn vertex_colors(&self, channel: usize) -> Option<&[Color4D]> {
         if channel >= sys::AI_MAX_NUMBER_OF_COLOR_SETS as usize {
             return None;
         }
@@ -130,12 +148,16 @@ impl<'a> Mesh<'a> {
         unsafe {
             let mesh = &*self.mesh_ptr.as_ptr();
             let colors_ptr = mesh.mColors[channel];
+
             if colors_ptr.is_null() {
-                None
-            } else {
-                let ai_colors = std::slice::from_raw_parts(colors_ptr, mesh.mNumVertices as usize);
-                Some(ai_colors.iter().map(|&c| from_ai_color4d(c)).collect())
+                return None;
             }
+
+            // SAFETY: Same explanation as vertices
+            Some(std::slice::from_raw_parts(
+                colors_ptr as *const Color4D,
+                mesh.mNumVertices as usize,
+            ))
         }
     }
 
@@ -360,88 +382,112 @@ impl<'a> AnimMesh<'a> {
     }
 
     /// Replacement positions (if present)
-    pub fn vertices(&self) -> Option<Vec<Vector3D>> {
+    pub fn vertices(&self) -> Option<&[Vector3D]> {
         unsafe {
             let m = &*self.anim_ptr.as_ptr();
+
             if m.mVertices.is_null() {
-                None
-            } else {
-                let slice = std::slice::from_raw_parts(m.mVertices, m.mNumVertices as usize);
-                Some(slice.iter().map(|&v| from_ai_vector3d(v)).collect())
+                return None;
             }
+
+            // SAFETY: Same explanation as vertices
+            Some(std::slice::from_raw_parts(
+                m.mVertices as *const Vector3D,
+                m.mNumVertices as usize,
+            ))
         }
     }
 
     /// Replacement normals (if present)
-    pub fn normals(&self) -> Option<Vec<Vector3D>> {
+    pub fn normals(&self) -> Option<&[Vector3D]> {
         unsafe {
             let m = &*self.anim_ptr.as_ptr();
+
             if m.mNormals.is_null() {
-                None
-            } else {
-                let slice = std::slice::from_raw_parts(m.mNormals, m.mNumVertices as usize);
-                Some(slice.iter().map(|&v| from_ai_vector3d(v)).collect())
+                return None;
             }
+
+            // SAFETY: Same explanation as vertices
+            Some(std::slice::from_raw_parts(
+                m.mNormals as *const Vector3D,
+                m.mNumVertices as usize,
+            ))
         }
     }
 
     /// Replacement tangents (if present)
-    pub fn tangents(&self) -> Option<Vec<Vector3D>> {
+    pub fn tangents(&self) -> Option<&[Vector3D]> {
         unsafe {
             let m = &*self.anim_ptr.as_ptr();
+
             if m.mTangents.is_null() {
-                None
-            } else {
-                let slice = std::slice::from_raw_parts(m.mTangents, m.mNumVertices as usize);
-                Some(slice.iter().map(|&v| from_ai_vector3d(v)).collect())
+                return None;
             }
+
+            // SAFETY: Same explanation as vertices
+            Some(std::slice::from_raw_parts(
+                m.mTangents as *const Vector3D,
+                m.mNumVertices as usize,
+            ))
         }
     }
 
     /// Replacement bitangents (if present)
-    pub fn bitangents(&self) -> Option<Vec<Vector3D>> {
+    pub fn bitangents(&self) -> Option<&[Vector3D]> {
         unsafe {
             let m = &*self.anim_ptr.as_ptr();
+
             if m.mBitangents.is_null() {
-                None
-            } else {
-                let slice = std::slice::from_raw_parts(m.mBitangents, m.mNumVertices as usize);
-                Some(slice.iter().map(|&v| from_ai_vector3d(v)).collect())
+                return None;
             }
+
+            // SAFETY: Same explanation as vertices
+            Some(std::slice::from_raw_parts(
+                m.mBitangents as *const Vector3D,
+                m.mNumVertices as usize,
+            ))
         }
     }
 
     /// Replacement vertex colors for a specific channel
-    pub fn vertex_colors(&self, channel: usize) -> Option<Vec<Color4D>> {
+    pub fn vertex_colors(&self, channel: usize) -> Option<&[Color4D]> {
         if channel >= sys::AI_MAX_NUMBER_OF_COLOR_SETS as usize {
             return None;
         }
+
         unsafe {
             let m = &*self.anim_ptr.as_ptr();
             let ptr = m.mColors[channel];
+
             if ptr.is_null() {
-                None
-            } else {
-                let slice = std::slice::from_raw_parts(ptr, m.mNumVertices as usize);
-                Some(slice.iter().map(|&c| from_ai_color4d(c)).collect())
+                return None;
             }
+
+            // SAFETY: Same explanation as vertices
+            Some(std::slice::from_raw_parts(
+                ptr as *const Color4D,
+                m.mNumVertices as usize,
+            ))
         }
     }
 
     /// Replacement texture coordinates for a specific channel
-    pub fn texture_coords(&self, channel: usize) -> Option<Vec<Vector3D>> {
+    pub fn texture_coords(&self, channel: usize) -> Option<&[Vector3D]> {
         if channel >= sys::AI_MAX_NUMBER_OF_TEXTURECOORDS as usize {
             return None;
         }
         unsafe {
             let m = &*self.anim_ptr.as_ptr();
             let ptr = m.mTextureCoords[channel];
+
             if ptr.is_null() {
-                None
-            } else {
-                let slice = std::slice::from_raw_parts(ptr, m.mNumVertices as usize);
-                Some(slice.iter().map(|&v| from_ai_vector3d(v)).collect())
+                return None;
             }
+
+            Some(std::slice::from_raw_parts(
+                ptr as *const Vector3D,
+                m.mNumVertices as usize,
+            ))
         }
     }
 
