@@ -71,11 +71,11 @@ doctest = false
 [[bin]]
 name = "package"
 path = "bin/package/main.rs"
-required-features = ["build-assimp"]
+required-features = ["build-assimp", "package"]
 
 [dependencies]
 mint = { version = "0.5", optional = true }
-# For package binary
+# For `package` binary only
 tar = { version = "0.4", optional = true }
 flate2 = { version = "1.0", optional = true }
 
@@ -84,10 +84,11 @@ bindgen = "0.72"
 cc = "1.0"
 cmake = "0.1"
 pkg-config = { version = "0.3", optional = true }
-# Prebuilt binary support used by default path in build.rs
-reqwest = { version = "0.12", features = ["blocking", "rustls-tls"] }
-tar = { version = "0.4" }
-flate2 = { version = "1.0" }
+vcpkg = { version = "0.2", optional = true }
+# Prebuilt binary support (download + extract) is only needed when `prebuilt` is enabled.
+reqwest = { version = "0.12", features = ["blocking", "rustls-tls"], optional = true }
+tar-build = { package = "tar", version = "0.4", optional = true }
+flate2-build = { package = "flate2", version = "1.0", optional = true }
 
 [features]
 default = []
@@ -99,11 +100,13 @@ type-extensions = []
 export = []
 
 # Use system-installed assimp instead of bundled
-system = ["pkg-config"]
+system = ["pkg-config", "vcpkg"]
 # Build assimp from source (explicit feature)
-build-assimp = ["tar", "flate2"]
+build-assimp = []
+# Enable the `package` binary
+package = ["dep:tar", "dep:flate2"]
 # Use prebuilt binaries (requires release artifacts)
-prebuilt = ["tar", "flate2"]
+prebuilt = ["dep:reqwest", "dep:tar-build", "dep:flate2-build"]
 # Control zlib linking
 nozlib = []
 static-link = []

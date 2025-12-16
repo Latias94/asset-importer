@@ -133,6 +133,7 @@ dependencies = [
  "pkg-config",
  "reqwest",
  "tar",
+ "vcpkg",
 ]
 
 [[package]]

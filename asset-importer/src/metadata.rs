@@ -6,7 +6,7 @@
 use crate::{
     error::Result,
     sys,
-    types::{ai_string_to_string, Vector3D},
+    types::{Vector3D, ai_string_to_string},
 };
 
 /// Common metadata keys used across different file formats

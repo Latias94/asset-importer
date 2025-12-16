@@ -124,7 +124,7 @@ jobs:
       - name: Install Windows dependencies
         if: runner.os == 'Windows'
         run: |
-          choco install cmake
+          choco install -y llvm cmake
         shell: pwsh
 
       # Set up cross-compilation for different targets
@@ -177,9 +177,9 @@ jobs:
         working-directory: asset-importer-sys
         run: |
           if [ "${{ matrix.link_type }}" = "static" ]; then
-            cargo run --bin package --release --target ${{ matrix.target }} --features "build-assimp,static-link"
+            cargo run --bin package --release --target ${{ matrix.target }} --features "build-assimp,package,static-link"
           else
-            cargo run --bin package --release --target ${{ matrix.target }} --features "build-assimp"
+            cargo run --bin package --release --target ${{ matrix.target }} --features "build-assimp,package"
           fi
         shell: bash
         env:
@@ -192,6 +192,7 @@ jobs:
         working-directory: asset-importer-sys
         run: |
           FEATURES="build-assimp"
+          FEATURES="${FEATURES},package"
           if [ "${{ matrix.link_type }}" = "static" ]; then
             FEATURES="${FEATURES},static-link"
           fi

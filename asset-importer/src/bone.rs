@@ -9,7 +9,7 @@ use std::ptr::NonNull;
 use crate::{
     error::{Error, Result},
     sys,
-    types::{ai_string_to_string, from_ai_matrix4x4, Matrix4x4},
+    types::{Matrix4x4, ai_string_to_string, from_ai_matrix4x4},
 };
 
 /// A vertex weight that associates a vertex with a bone

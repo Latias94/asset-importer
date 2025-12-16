@@ -61,7 +61,32 @@ jobs:
       - name: Install Windows dependencies
         if: runner.os == 'Windows'
         run: |
-          choco install cmake
+          choco install -y llvm cmake
+
+  system-windows:
+    name: System Assimp (windows-latest)
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository (no submodules)
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install Windows deps (llvm + cmake)
+        run: choco install -y llvm cmake
+
+      - name: Install Assimp via vcpkg (x64-windows)
+        uses: microsoft/vcpkg-action@v1
+        with:
+          pkgs: assimp
+          triplet: x64-windows
+
+      - name: Build + test (system)
+        run: cargo test -p asset-importer --no-default-features --features system
 
       - name: Select static CRT (Windows)
         if: ${{ runner.os == 'Windows' && matrix.crt == 'static' }}
@@ -91,6 +116,46 @@ jobs:
         run: cargo test --workspace --features "${{ matrix.features }}"
         env:
           ASSET_IMPORTER_FORCE_BUILD: "1"
+
+  system:
+    name: System Assimp (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - name: Checkout repository (no submodules)
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install Linux deps (assimp + pkg-config + cmake)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake pkg-config libassimp-dev
+
+      - name: Install LLVM (libclang) for bindgen (Linux)
+        if: runner.os == 'Linux'
+        uses: KyleMayes/install-llvm-action@v1
+        with:
+          directory: ${{ runner.temp }}/llvm
+          cached: true
+          version: '14.0'
+
+      - name: Install macOS deps (assimp + pkg-config)
+        if: runner.os == 'macOS'
+        run: |
+          brew update
+          brew install assimp pkg-config
+
+      - name: Build + test (system)
+        run: cargo test -p asset-importer --no-default-features --features system
 
   clippy:
     name: Clippy

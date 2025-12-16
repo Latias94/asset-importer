@@ -7,11 +7,11 @@
 use std::marker::PhantomData;
 use std::ptr::NonNull;
 
+use crate::types::ai_string_to_string;
 use crate::{
     error::{Error, Result},
     sys,
 };
-use crate::types::ai_string_to_string;
 
 /// A texel (texture element) in ARGB8888 format
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
