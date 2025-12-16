@@ -21,7 +21,8 @@ impl<'a> Camera<'a> {
     /// # Safety
     /// Caller must ensure `camera_ptr` is non-null and points into a live `aiScene`.
     pub(crate) unsafe fn from_raw(camera_ptr: *const sys::aiCamera) -> Self {
-        let camera_ptr = SharedPtr::new(camera_ptr).expect("aiCamera pointer is null");
+        debug_assert!(!camera_ptr.is_null());
+        let camera_ptr = unsafe { SharedPtr::new_unchecked(camera_ptr) };
         Self {
             camera_ptr,
             _marker: PhantomData,

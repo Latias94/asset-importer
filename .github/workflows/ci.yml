@@ -139,6 +139,38 @@ jobs:
       - name: Build + test (system)
         run: cargo test -p asset-importer --no-default-features --features system
 
+  prebuilt:
+    name: Prebuilt Assimp (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - name: Checkout repository (no submodules)
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install LLVM (libclang) for bindgen (Linux)
+        if: runner.os == 'Linux'
+        uses: KyleMayes/install-llvm-action@v1
+        with:
+          directory: ${{ runner.temp }}/llvm
+          cached: true
+          version: '14.0'
+
+      - name: Install Windows dependencies
+        if: runner.os == 'Windows'
+        run: choco install -y llvm
+
+      - name: Build + test (prebuilt)
+        run: cargo test -p asset-importer --no-default-features --features prebuilt
+
   clippy:
     name: Clippy
     runs-on: ubuntu-latest

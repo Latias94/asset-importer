@@ -23,7 +23,8 @@ impl<'a> Node<'a> {
     /// # Safety
     /// Caller must ensure `node_ptr` is non-null and points into a live `aiScene`.
     pub(crate) unsafe fn from_raw(node_ptr: *const sys::aiNode) -> Self {
-        let node_ptr = SharedPtr::new(node_ptr).expect("aiNode pointer is null");
+        debug_assert!(!node_ptr.is_null());
+        let node_ptr = unsafe { SharedPtr::new_unchecked(node_ptr) };
         Self {
             node_ptr,
             _marker: PhantomData,
@@ -122,9 +123,31 @@ impl<'a> Node<'a> {
         }
     }
 
+    /// Get the raw mesh index array (zero-copy).
+    pub fn mesh_indices_raw(&self) -> Option<&'a [u32]> {
+        unsafe {
+            let node = &*self.node_ptr.as_ptr();
+            if node.mMeshes.is_null() || node.mNumMeshes == 0 {
+                None
+            } else {
+                Some(std::slice::from_raw_parts(
+                    node.mMeshes,
+                    node.mNumMeshes as usize,
+                ))
+            }
+        }
+    }
+
+    /// Iterate mesh indices without allocation.
+    pub fn mesh_indices_iter(&self) -> impl Iterator<Item = usize> + '_ {
+        self.mesh_indices_raw()
+            .into_iter()
+            .flat_map(|xs| xs.iter().map(|&x| x as usize))
+    }
+
     /// Find a child node by name (recursive search)
     pub fn find_node(&self, name: &str) -> Option<Node<'a>> {
-        if self.name() == name {
+        if self.name_str().as_ref() == name {
             return Some(*self);
         }
 

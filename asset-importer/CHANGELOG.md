@@ -10,11 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - **Zero-copy accessors**: Added `*_raw()` / `*_iter()` accessors for meshes (vertices/normals/tangents/bitangents/UVs/colors), plus `Texture::data_ref()` to borrow embedded texture bytes/texels without allocation.
 - **More zero-allocation views**: Added `Mesh::faces_raw()` and `Face::indices_raw()`, plus `Material::texture_ref()` / `Material::texture_refs()` with `TextureInfoRef` to query texture metadata without allocating the path `String`.
+- **More zero-copy iterators**: Added `Bone::weights_raw()` / `Bone::weights_iter()` and `Node::mesh_indices_raw()` / `Node::mesh_indices_iter()` to avoid repeated allocations in common skeletal/scene traversal code.
 
 ### Changed
 - **Stronger lifetime safety (breaking)**: Most scene-backed view types now borrow the owning `Scene` via lifetimes to prevent use-after-free in safe code.
 - **Assimp version helpers**: `version::assimp_version()` now reports `major.minor.patch` and new helpers expose patch/branch/legal strings.
 - **Thread-safety internals**: Centralized Assimp pointer sharing logic to reduce scattered `unsafe impl Send/Sync` across the codebase.
+- **Material property keys (breaking)**: `material_keys::*` are now `&CStr` constants, and `Material::get_*_property` APIs prefer `&CStr` with `*_str` convenience wrappers.
+- **Raw sys bindings opt-in (breaking)**: `asset_importer::sys` is now behind the `raw-sys` feature to reduce accidental safety contract violations.
 
 ### Fixed
 - **Send/Sync on scene-backed views**: `Texture` and other scene-backed view types now implement `Send + Sync`, matching the multithreading guarantees promised by the crate.
@@ -23,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Custom IO leaks**: Assimp `aiFileIO` user-data is now released via RAII, fixing leaks when using a custom `FileSystem`.
 - **Export blob ownership**: Export blob iteration no longer risks double-free by mixing owned and borrowed nodes.
 - **aiString conversion correctness**: `aiString` is decoded using its explicit length (no longer assuming NUL-termination) for names and metadata.
+- **Panic surface reduction**: Scene-backed `from_raw` constructors no longer `expect()` on null pointers; internal invariants are checked via `debug_assert!`.
 
 ## [0.4.0] - 2025-09-20
 

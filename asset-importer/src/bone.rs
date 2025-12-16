@@ -9,7 +9,7 @@ use crate::{
     error::{Error, Result},
     ptr::SharedPtr,
     sys,
-    types::{Matrix4x4, ai_string_to_string, from_ai_matrix4x4},
+    types::{Matrix4x4, ai_string_to_str, ai_string_to_string, from_ai_matrix4x4},
 };
 
 /// A vertex weight that associates a vertex with a bone
@@ -89,6 +89,11 @@ impl<'a> Bone<'a> {
         unsafe { ai_string_to_string(&(*self.bone_ptr.as_ptr()).mName) }
     }
 
+    /// Get the name of the bone (zero-copy, lossy UTF-8).
+    pub fn name_str(&self) -> std::borrow::Cow<'_, str> {
+        unsafe { ai_string_to_str(&(*self.bone_ptr.as_ptr()).mName) }
+    }
+
     /// Get the number of vertex weights for this bone
     pub fn num_weights(&self) -> usize {
         unsafe { (*self.bone_ptr.as_ptr()).mNumWeights as usize }
@@ -96,29 +101,34 @@ impl<'a> Bone<'a> {
 
     /// Get the vertex weights for this bone
     pub fn weights(&self) -> Vec<VertexWeight> {
+        self.weights_iter().collect()
+    }
+
+    /// Get the raw vertex weight array (zero-copy).
+    pub fn weights_raw(&self) -> Option<&'a [sys::aiVertexWeight]> {
         unsafe {
             let bone = &*self.bone_ptr.as_ptr();
             if bone.mWeights.is_null() || bone.mNumWeights == 0 {
-                return Vec::new();
+                None
+            } else {
+                Some(std::slice::from_raw_parts(
+                    bone.mWeights,
+                    bone.mNumWeights as usize,
+                ))
             }
-
-            let weights_slice =
-                std::slice::from_raw_parts(bone.mWeights, bone.mNumWeights as usize);
-            weights_slice.iter().map(VertexWeight::from).collect()
         }
+    }
+
+    /// Iterate vertex weights without allocation.
+    pub fn weights_iter(&self) -> impl Iterator<Item = VertexWeight> + '_ {
+        self.weights_raw()
+            .into_iter()
+            .flat_map(|ws| ws.iter().map(VertexWeight::from))
     }
 
     /// Get a specific vertex weight by index
     pub fn weight(&self, index: usize) -> Option<VertexWeight> {
-        if index >= self.num_weights() {
-            return None;
-        }
-
-        unsafe {
-            let bone = &*self.bone_ptr.as_ptr();
-            let weight = &*bone.mWeights.add(index);
-            Some(VertexWeight::from(weight))
-        }
+        self.weights_raw()?.get(index).map(VertexWeight::from)
     }
 
     /// Get the offset matrix for this bone
@@ -131,62 +141,60 @@ impl<'a> Bone<'a> {
 
     /// Get weights that affect a specific vertex
     pub fn weights_for_vertex(&self, vertex_id: u32) -> Vec<VertexWeight> {
-        self.weights()
-            .into_iter()
+        self.weights_iter()
             .filter(|w| w.vertex_id == vertex_id)
             .collect()
     }
 
     /// Get weights above a certain threshold
     pub fn significant_weights(&self, threshold: f32) -> Vec<VertexWeight> {
-        self.weights()
-            .into_iter()
+        self.weights_iter()
             .filter(|w| w.is_significant(threshold))
             .collect()
     }
 
     /// Get the total weight for all vertices (should typically be close to the number of affected vertices)
     pub fn total_weight(&self) -> f32 {
-        self.weights().iter().map(|w| w.weight).sum()
+        self.weights_iter().map(|w| w.weight).sum()
     }
 
     /// Get the maximum weight value
     pub fn max_weight(&self) -> f32 {
-        self.weights().iter().map(|w| w.weight).fold(0.0, f32::max)
+        self.weights_iter().map(|w| w.weight).fold(0.0, f32::max)
     }
 
     /// Get the minimum weight value
     pub fn min_weight(&self) -> f32 {
-        self.weights()
-            .iter()
+        self.weights_iter()
             .map(|w| w.weight)
             .fold(f32::INFINITY, f32::min)
     }
 
     /// Get the average weight value
     pub fn average_weight(&self) -> f32 {
-        let weights = self.weights();
-        if weights.is_empty() {
-            0.0
-        } else {
-            weights.iter().map(|w| w.weight).sum::<f32>() / weights.len() as f32
+        let Some(ws) = self.weights_raw() else {
+            return 0.0;
+        };
+        if ws.is_empty() {
+            return 0.0;
         }
+        let sum: f32 = ws.iter().map(|w| w.mWeight).sum();
+        sum / (ws.len() as f32)
     }
 
     /// Get the list of vertex IDs affected by this bone
     pub fn affected_vertices(&self) -> Vec<u32> {
-        self.weights().into_iter().map(|w| w.vertex_id).collect()
+        self.weights_iter().map(|w| w.vertex_id).collect()
     }
 
     /// Check if this bone affects a specific vertex
     pub fn affects_vertex(&self, vertex_id: u32) -> bool {
-        self.weights().iter().any(|w| w.vertex_id == vertex_id)
+        self.weights_iter().any(|w| w.vertex_id == vertex_id)
     }
 
     /// Get the weight value for a specific vertex (0.0 if not affected)
     pub fn weight_for_vertex(&self, vertex_id: u32) -> f32 {
-        self.weights()
-            .iter()
+        self.weights_iter()
             .find(|w| w.vertex_id == vertex_id)
             .map(|w| w.weight)
             .unwrap_or(0.0)
@@ -197,7 +205,7 @@ impl<'a> Bone<'a> {
     /// This ensures all weights are in the range [0.0, 1.0] and can optionally
     /// normalize the total weight to 1.0 per vertex.
     pub fn normalized_weights(&self) -> Vec<VertexWeight> {
-        self.weights().into_iter().map(|w| w.normalized()).collect()
+        self.weights_iter().map(|w| w.normalized()).collect()
     }
 }
 

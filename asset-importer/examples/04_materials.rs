@@ -57,35 +57,35 @@ fn main() -> Result<(), Box<dyn Error>> {
             );
             match p.type_info {
                 PropertyTypeInfo::String => {
-                    if let Some(s) = mat.get_string_property(&p.key) {
+                    if let Some(s) = mat.get_string_property_str(&p.key) {
                         println!(" value=\"{}\"", s);
                     } else {
                         println!();
                     }
                 }
                 PropertyTypeInfo::Integer => {
-                    if let Some(v) = mat.get_property_i32_array(&p.key, p.semantic, p.index) {
+                    if let Some(v) = mat.get_property_i32_array_str(&p.key, p.semantic, p.index) {
                         println!(" ints={:?}", preview(&v[..]));
                     } else {
                         println!();
                     }
                 }
                 PropertyTypeInfo::Float => {
-                    if let Some(v) = mat.get_property_f32_array(&p.key, p.semantic, p.index) {
+                    if let Some(v) = mat.get_property_f32_array_str(&p.key, p.semantic, p.index) {
                         println!(" floats={:?}", preview(&v[..]));
                     } else {
                         println!();
                     }
                 }
                 PropertyTypeInfo::Double => {
-                    if let Some(v) = mat.get_property_f64_array(&p.key, p.semantic, p.index) {
+                    if let Some(v) = mat.get_property_f64_array_str(&p.key, p.semantic, p.index) {
                         println!(" doubles={:?}", preview(&v[..]));
                     } else {
                         println!();
                     }
                 }
                 PropertyTypeInfo::Buffer | PropertyTypeInfo::Unknown(_) => {
-                    if let Some(raw) = mat.get_property_raw(&p.key, p.semantic, p.index) {
+                    if let Some(raw) = mat.get_property_raw_str(&p.key, p.semantic, p.index) {
                         println!(" raw[{}]={:?}", raw.len(), preview(&raw));
                     } else {
                         println!();

@@ -24,7 +24,8 @@ impl<'a> Light<'a> {
     /// # Safety
     /// Caller must ensure `light_ptr` is non-null and points into a live `aiScene`.
     pub(crate) unsafe fn from_raw(light_ptr: *const sys::aiLight) -> Self {
-        let light_ptr = SharedPtr::new(light_ptr).expect("aiLight pointer is null");
+        debug_assert!(!light_ptr.is_null());
+        let light_ptr = unsafe { SharedPtr::new_unchecked(light_ptr) };
         Self {
             light_ptr,
             _marker: PhantomData,

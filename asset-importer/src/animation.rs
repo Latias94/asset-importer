@@ -20,7 +20,8 @@ impl<'a> Animation<'a> {
     /// # Safety
     /// Caller must ensure `animation_ptr` is non-null and points into a live `aiScene`.
     pub(crate) unsafe fn from_raw(animation_ptr: *const sys::aiAnimation) -> Self {
-        let animation_ptr = SharedPtr::new(animation_ptr).expect("aiAnimation pointer is null");
+        debug_assert!(!animation_ptr.is_null());
+        let animation_ptr = unsafe { SharedPtr::new_unchecked(animation_ptr) };
         Self {
             animation_ptr,
             _marker: PhantomData,
@@ -157,7 +158,8 @@ impl<'a> NodeAnimation<'a> {
     /// # Safety
     /// Caller must ensure `channel_ptr` is non-null and points into a live `aiScene`.
     pub(crate) unsafe fn from_raw(channel_ptr: *const sys::aiNodeAnim) -> Self {
-        let channel_ptr = SharedPtr::new(channel_ptr).expect("aiNodeAnim pointer is null");
+        debug_assert!(!channel_ptr.is_null());
+        let channel_ptr = unsafe { SharedPtr::new_unchecked(channel_ptr) };
         Self {
             channel_ptr,
             _marker: PhantomData,
@@ -380,7 +382,8 @@ impl<'a> MeshAnimation<'a> {
     /// # Safety
     /// Caller must ensure `channel_ptr` is non-null and points into a live `aiScene`.
     unsafe fn from_raw(channel_ptr: *const sys::aiMeshAnim) -> Self {
-        let channel_ptr = SharedPtr::new(channel_ptr).expect("aiMeshAnim pointer is null");
+        debug_assert!(!channel_ptr.is_null());
+        let channel_ptr = unsafe { SharedPtr::new_unchecked(channel_ptr) };
         Self {
             channel_ptr,
             _marker: PhantomData,
@@ -465,7 +468,8 @@ impl<'a> MorphMeshAnimation<'a> {
     /// # Safety
     /// Caller must ensure `channel_ptr` is non-null and points into a live `aiScene`.
     unsafe fn from_raw(channel_ptr: *const sys::aiMeshMorphAnim) -> Self {
-        let channel_ptr = SharedPtr::new(channel_ptr).expect("aiMeshMorphAnim pointer is null");
+        debug_assert!(!channel_ptr.is_null());
+        let channel_ptr = unsafe { SharedPtr::new_unchecked(channel_ptr) };
         Self {
             channel_ptr,
             _marker: PhantomData,

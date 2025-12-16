@@ -53,6 +53,10 @@ tokio = { version = "1.0", features = ["full"], optional = true }
 [features]
 default = ["prebuilt"]
 
+# Expose the raw `asset-importer-sys` bindings as `asset_importer::sys`.
+# Keeping this opt-in reduces the chance of users accidentally violating the safe API's immutability/threading contract.
+raw-sys = []
+
 # Math library integrations
 mint = ["dep:mint", "asset-importer-sys/mint"]
 

@@ -15,74 +15,82 @@ use crate::{
 
 /// Standard material property keys as defined by Assimp
 pub mod material_keys {
+    use std::ffi::CStr;
+
+    macro_rules! cstr {
+        ($lit:literal) => {
+            unsafe { CStr::from_bytes_with_nul_unchecked(concat!($lit, "\0").as_bytes()) }
+        };
+    }
+
     /// Material name
-    pub const NAME: &str = "?mat.name";
+    pub const NAME: &CStr = cstr!("?mat.name");
     /// Diffuse color
-    pub const COLOR_DIFFUSE: &str = "$clr.diffuse";
+    pub const COLOR_DIFFUSE: &CStr = cstr!("$clr.diffuse");
     /// Ambient color
-    pub const COLOR_AMBIENT: &str = "$clr.ambient";
+    pub const COLOR_AMBIENT: &CStr = cstr!("$clr.ambient");
     /// Specular color
-    pub const COLOR_SPECULAR: &str = "$clr.specular";
+    pub const COLOR_SPECULAR: &CStr = cstr!("$clr.specular");
     /// Emissive color
-    pub const COLOR_EMISSIVE: &str = "$clr.emissive";
+    pub const COLOR_EMISSIVE: &CStr = cstr!("$clr.emissive");
     /// Transparent color
-    pub const COLOR_TRANSPARENT: &str = "$clr.transparent";
+    pub const COLOR_TRANSPARENT: &CStr = cstr!("$clr.transparent");
     /// Reflective color
-    pub const COLOR_REFLECTIVE: &str = "$clr.reflective";
+    pub const COLOR_REFLECTIVE: &CStr = cstr!("$clr.reflective");
     /// Shininess factor
-    pub const SHININESS: &str = "$mat.shininess";
+    pub const SHININESS: &CStr = cstr!("$mat.shininess");
     /// Shininess strength
-    pub const SHININESS_STRENGTH: &str = "$mat.shinpercent";
+    pub const SHININESS_STRENGTH: &CStr = cstr!("$mat.shinpercent");
     /// Opacity
-    pub const OPACITY: &str = "$mat.opacity";
+    pub const OPACITY: &CStr = cstr!("$mat.opacity");
     /// Transparency factor
-    pub const TRANSPARENCYFACTOR: &str = "$mat.transparencyfactor";
+    pub const TRANSPARENCYFACTOR: &CStr = cstr!("$mat.transparencyfactor");
     /// Bump scaling
-    pub const BUMPSCALING: &str = "$mat.bumpscaling";
+    pub const BUMPSCALING: &CStr = cstr!("$mat.bumpscaling");
     /// Refraction index
-    pub const REFRACTI: &str = "$mat.refracti";
+    pub const REFRACTI: &CStr = cstr!("$mat.refracti");
     /// Reflectivity
-    pub const REFLECTIVITY: &str = "$mat.reflectivity";
+    pub const REFLECTIVITY: &CStr = cstr!("$mat.reflectivity");
     /// Shading model
-    pub const SHADING_MODEL: &str = "$mat.shadingm";
+    pub const SHADING_MODEL: &CStr = cstr!("$mat.shadingm");
     /// Blend function
-    pub const BLEND_FUNC: &str = "$mat.blend";
+    pub const BLEND_FUNC: &CStr = cstr!("$mat.blend");
     /// Two sided
-    pub const TWOSIDED: &str = "$mat.twosided";
+    pub const TWOSIDED: &CStr = cstr!("$mat.twosided");
 
     // PBR-related keys (from material.h)
     /// Base color factor (RGBA)
-    pub const BASE_COLOR: &str = "$clr.base";
+    pub const BASE_COLOR: &CStr = cstr!("$clr.base");
     /// Metallic factor
-    pub const METALLIC_FACTOR: &str = "$mat.metallicFactor";
+    pub const METALLIC_FACTOR: &CStr = cstr!("$mat.metallicFactor");
     /// Roughness factor
-    pub const ROUGHNESS_FACTOR: &str = "$mat.roughnessFactor";
+    pub const ROUGHNESS_FACTOR: &CStr = cstr!("$mat.roughnessFactor");
     /// Specular factor
-    pub const SPECULAR_FACTOR: &str = "$mat.specularFactor";
+    pub const SPECULAR_FACTOR: &CStr = cstr!("$mat.specularFactor");
     /// Glossiness factor (spec/gloss workflow)
-    pub const GLOSSINESS_FACTOR: &str = "$mat.glossinessFactor";
+    pub const GLOSSINESS_FACTOR: &CStr = cstr!("$mat.glossinessFactor");
     /// Sheen color factor
-    pub const SHEEN_COLOR_FACTOR: &str = "$clr.sheen.factor";
+    pub const SHEEN_COLOR_FACTOR: &CStr = cstr!("$clr.sheen.factor");
     /// Sheen roughness factor
-    pub const SHEEN_ROUGHNESS_FACTOR: &str = "$mat.sheen.roughnessFactor";
+    pub const SHEEN_ROUGHNESS_FACTOR: &CStr = cstr!("$mat.sheen.roughnessFactor");
     /// Clearcoat factor
-    pub const CLEARCOAT_FACTOR: &str = "$mat.clearcoat.factor";
+    pub const CLEARCOAT_FACTOR: &CStr = cstr!("$mat.clearcoat.factor");
     /// Clearcoat roughness factor
-    pub const CLEARCOAT_ROUGHNESS_FACTOR: &str = "$mat.clearcoat.roughnessFactor";
+    pub const CLEARCOAT_ROUGHNESS_FACTOR: &CStr = cstr!("$mat.clearcoat.roughnessFactor");
     /// Transmission factor
-    pub const TRANSMISSION_FACTOR: &str = "$mat.transmission.factor";
+    pub const TRANSMISSION_FACTOR: &CStr = cstr!("$mat.transmission.factor");
     /// Volume thickness factor
-    pub const VOLUME_THICKNESS_FACTOR: &str = "$mat.volume.thicknessFactor";
+    pub const VOLUME_THICKNESS_FACTOR: &CStr = cstr!("$mat.volume.thicknessFactor");
     /// Volume attenuation distance
-    pub const VOLUME_ATTENUATION_DISTANCE: &str = "$mat.volume.attenuationDistance";
+    pub const VOLUME_ATTENUATION_DISTANCE: &CStr = cstr!("$mat.volume.attenuationDistance");
     /// Volume attenuation color
-    pub const VOLUME_ATTENUATION_COLOR: &str = "$mat.volume.attenuationColor";
+    pub const VOLUME_ATTENUATION_COLOR: &CStr = cstr!("$mat.volume.attenuationColor");
     /// Emissive intensity
-    pub const EMISSIVE_INTENSITY: &str = "$mat.emissiveIntensity";
+    pub const EMISSIVE_INTENSITY: &CStr = cstr!("$mat.emissiveIntensity");
     /// Anisotropy factor
-    pub const ANISOTROPY_FACTOR: &str = "$mat.anisotropyFactor";
+    pub const ANISOTROPY_FACTOR: &CStr = cstr!("$mat.anisotropyFactor");
     /// Anisotropy rotation
-    pub const ANISOTROPY_ROTATION: &str = "$mat.anisotropyRotation";
+    pub const ANISOTROPY_ROTATION: &CStr = cstr!("$mat.anisotropyRotation");
 }
 
 /// A material containing properties like colors, textures, and shading parameters
@@ -91,13 +99,37 @@ pub struct Material<'a> {
     _marker: PhantomData<&'a ()>,
 }
 
+/// A borrowed-ish string result backed by an owned `aiString` (no heap allocation).
+#[derive(Debug, Clone)]
+pub struct MaterialStringRef {
+    value: sys::aiString,
+}
+
+impl MaterialStringRef {
+    /// Access as UTF-8 (lossy) without allocation.
+    pub fn as_str(&self) -> Cow<'_, str> {
+        ai_string_to_str(&self.value)
+    }
+
+    /// Borrow the underlying Assimp `aiString`.
+    pub fn as_raw(&self) -> &sys::aiString {
+        &self.value
+    }
+
+    /// Convert to an owned `String` (allocates).
+    pub fn to_string(&self) -> String {
+        ai_string_to_string(&self.value)
+    }
+}
+
 impl<'a> Material<'a> {
     /// Create a Material from a raw Assimp material pointer
     ///
     /// # Safety
     /// Caller must ensure `material_ptr` is non-null and points into a live `aiScene`.
     pub(crate) unsafe fn from_raw(material_ptr: *const sys::aiMaterial) -> Self {
-        let material_ptr = SharedPtr::new(material_ptr).expect("aiMaterial pointer is null");
+        debug_assert!(!material_ptr.is_null());
+        let material_ptr = unsafe { SharedPtr::new_unchecked(material_ptr) };
         Self {
             material_ptr,
             _marker: PhantomData,
@@ -111,19 +143,22 @@ impl<'a> Material<'a> {
 
     /// Get the name of the material
     pub fn name(&self) -> String {
-        self.get_string_property(material_keys::NAME)
-            .unwrap_or_default()
+        self.name_ref().map(|s| s.to_string()).unwrap_or_default()
     }
 
-    /// Get a string property from the material
-    pub fn get_string_property(&self, key: &str) -> Option<String> {
-        let c_key = CString::new(key).ok()?;
+    /// Get the material name (no heap allocation).
+    pub fn name_ref(&self) -> Option<MaterialStringRef> {
+        self.get_string_property_ref(material_keys::NAME)
+    }
+
+    /// Get a string property from the material (no heap allocation).
+    pub fn get_string_property_ref(&self, key: &CStr) -> Option<MaterialStringRef> {
         let mut ai_string = sys::aiString::default();
 
         let result = unsafe {
             sys::aiGetMaterialString(
                 self.material_ptr.as_ptr(),
-                c_key.as_ptr(),
+                key.as_ptr(),
                 0, // type
                 0, // index
                 &mut ai_string,
@@ -131,22 +166,32 @@ impl<'a> Material<'a> {
         };
 
         if result == sys::aiReturn::aiReturn_SUCCESS {
-            Some(ai_string_to_string(&ai_string))
+            Some(MaterialStringRef { value: ai_string })
         } else {
             None
         }
     }
 
-    /// Get a float property from the material
-    pub fn get_float_property(&self, key: &str) -> Option<f32> {
+    /// Get a string property from the material (allocates).
+    pub fn get_string_property(&self, key: &CStr) -> Option<String> {
+        self.get_string_property_ref(key).map(|s| s.to_string())
+    }
+
+    /// Get a string property from the material (allocates, convenience).
+    pub fn get_string_property_str(&self, key: &str) -> Option<String> {
         let c_key = CString::new(key).ok()?;
+        self.get_string_property(c_key.as_c_str())
+    }
+
+    /// Get a float property from the material
+    pub fn get_float_property(&self, key: &CStr) -> Option<f32> {
         let mut value = 0.0f32;
         let mut max = 1u32;
 
         let result = unsafe {
             sys::aiGetMaterialFloatArray(
                 self.material_ptr.as_ptr(),
-                c_key.as_ptr(),
+                key.as_ptr(),
                 0, // type
                 0, // index
                 &mut value,
@@ -161,16 +206,21 @@ impl<'a> Material<'a> {
         }
     }
 
-    /// Get an integer property from the material
-    pub fn get_integer_property(&self, key: &str) -> Option<i32> {
+    /// Get a float property from the material (allocates, convenience).
+    pub fn get_float_property_str(&self, key: &str) -> Option<f32> {
         let c_key = CString::new(key).ok()?;
+        self.get_float_property(c_key.as_c_str())
+    }
+
+    /// Get an integer property from the material
+    pub fn get_integer_property(&self, key: &CStr) -> Option<i32> {
         let mut value = 0i32;
         let mut max = 1u32;
 
         let result = unsafe {
             sys::aiGetMaterialIntegerArray(
                 self.material_ptr.as_ptr(),
-                c_key.as_ptr(),
+                key.as_ptr(),
                 0, // type
                 0, // index
                 &mut value,
@@ -185,9 +235,14 @@ impl<'a> Material<'a> {
         }
     }
 
-    /// Get a color property from the material
-    pub fn get_color_property(&self, key: &str) -> Option<Color4D> {
+    /// Get an integer property from the material (allocates, convenience).
+    pub fn get_integer_property_str(&self, key: &str) -> Option<i32> {
         let c_key = CString::new(key).ok()?;
+        self.get_integer_property(c_key.as_c_str())
+    }
+
+    /// Get a color property from the material
+    pub fn get_color_property(&self, key: &CStr) -> Option<Color4D> {
         let mut color = sys::aiColor4D {
             r: 0.0,
             g: 0.0,
@@ -198,7 +253,7 @@ impl<'a> Material<'a> {
         let result = unsafe {
             sys::aiGetMaterialColor(
                 self.material_ptr.as_ptr(),
-                c_key.as_ptr(),
+                key.as_ptr(),
                 0, // type
                 0, // index
                 &mut color,
@@ -210,6 +265,12 @@ impl<'a> Material<'a> {
         } else {
             None
         }
+    }
+
+    /// Get a color property from the material (allocates, convenience).
+    pub fn get_color_property_str(&self, key: &str) -> Option<Color4D> {
+        let c_key = CString::new(key).ok()?;
+        self.get_color_property(c_key.as_c_str())
     }
 
     /// Get the diffuse color
@@ -382,31 +443,29 @@ impl<'a> Material<'a> {
     /// - `index`: texture index for texture-dependent properties; 0 otherwise
     pub fn property_info(
         &self,
+        key: &CStr,
+        semantic: Option<TextureType>,
+        index: u32,
+    ) -> Option<MaterialPropertyInfo> {
+        let prop_ptr = self.property_ptr(key, semantic, index)?;
+        unsafe { Some(MaterialPropertyInfo::from_raw(&*prop_ptr)) }
+    }
+
+    /// Get raw information about a material property by key/semantic/index (allocates, convenience).
+    pub fn property_info_str(
+        &self,
         key: &str,
         semantic: Option<TextureType>,
         index: u32,
     ) -> Option<MaterialPropertyInfo> {
         let c_key = CString::new(key).ok()?;
-        let mut prop_ptr: *const sys::aiMaterialProperty = std::ptr::null();
-        let ok = unsafe {
-            sys::aiGetMaterialProperty(
-                self.material_ptr.as_ptr(),
-                c_key.as_ptr(),
-                semantic.map(|t| t.to_sys() as u32).unwrap_or(0),
-                index,
-                &mut prop_ptr,
-            ) == sys::aiReturn::aiReturn_SUCCESS
-        };
-        if !ok || prop_ptr.is_null() {
-            return None;
-        }
-        unsafe { Some(MaterialPropertyInfo::from_raw(&*prop_ptr)) }
+        self.property_info(c_key.as_c_str(), semantic, index)
     }
 
     /// Get only the property type information (aiPropertyTypeInfo) for a given key/semantic/index
     pub fn property_type(
         &self,
-        key: &str,
+        key: &CStr,
         semantic: Option<TextureType>,
         index: u32,
     ) -> Option<PropertyTypeInfo> {
@@ -414,44 +473,83 @@ impl<'a> Material<'a> {
             .map(|p| p.type_info)
     }
 
-    /// Get the raw bytes of a property (as stored by Assimp)
-    pub fn get_property_raw(
+    /// Get only the property type information (aiPropertyTypeInfo) for a given key/semantic/index (allocates, convenience).
+    pub fn property_type_str(
         &self,
         key: &str,
         semantic: Option<TextureType>,
         index: u32,
-    ) -> Option<Vec<u8>> {
-        let info = self.property_info(key, semantic, index)?;
-        // Strings should be queried via get_string_property; here we just return raw bytes
+    ) -> Option<PropertyTypeInfo> {
         let c_key = CString::new(key).ok()?;
+        self.property_type(c_key.as_c_str(), semantic, index)
+    }
+
+    fn property_ptr(
+        &self,
+        key: &CStr,
+        semantic: Option<TextureType>,
+        index: u32,
+    ) -> Option<*const sys::aiMaterialProperty> {
         let mut prop_ptr: *const sys::aiMaterialProperty = std::ptr::null();
         let ok = unsafe {
             sys::aiGetMaterialProperty(
                 self.material_ptr.as_ptr(),
-                c_key.as_ptr(),
+                key.as_ptr(),
                 semantic.map(|t| t.to_sys() as u32).unwrap_or(0),
                 index,
                 &mut prop_ptr,
             ) == sys::aiReturn::aiReturn_SUCCESS
         };
-        if !ok || prop_ptr.is_null() {
-            return None;
-        }
+        (ok && !prop_ptr.is_null()).then_some(prop_ptr)
+    }
+
+    /// Get the raw bytes of a property (as stored by Assimp)
+    pub fn get_property_raw_ref(
+        &self,
+        key: &CStr,
+        semantic: Option<TextureType>,
+        index: u32,
+    ) -> Option<&'a [u8]> {
+        let prop_ptr = self.property_ptr(key, semantic, index)?;
         unsafe {
             let prop = &*prop_ptr;
-            if prop.mData.is_null() || info.data_length == 0 {
-                return Some(Vec::new());
+            if prop.mData.is_null() || prop.mDataLength == 0 {
+                Some(&[])
+            } else {
+                Some(std::slice::from_raw_parts(
+                    prop.mData as *const u8,
+                    prop.mDataLength as usize,
+                ))
             }
-            let slice =
-                std::slice::from_raw_parts(prop.mData as *const u8, info.data_length as usize);
-            Some(slice.to_vec())
         }
+    }
+
+    /// Get the raw bytes of a property (as stored by Assimp, allocates).
+    pub fn get_property_raw(
+        &self,
+        key: &CStr,
+        semantic: Option<TextureType>,
+        index: u32,
+    ) -> Option<Vec<u8>> {
+        self.get_property_raw_ref(key, semantic, index)
+            .map(|raw| raw.to_vec())
+    }
+
+    /// Get the raw bytes of a property (as stored by Assimp, allocates, convenience).
+    pub fn get_property_raw_str(
+        &self,
+        key: &str,
+        semantic: Option<TextureType>,
+        index: u32,
+    ) -> Option<Vec<u8>> {
+        let c_key = CString::new(key).ok()?;
+        self.get_property_raw(c_key.as_c_str(), semantic, index)
     }
 
     /// Get an integer array property (converts from floats if necessary)
     pub fn get_property_i32_array(
         &self,
-        key: &str,
+        key: &CStr,
         semantic: Option<TextureType>,
         index: u32,
     ) -> Option<Vec<i32>> {
@@ -469,11 +567,10 @@ impl<'a> Material<'a> {
         let count = (info.data_length as usize) / elem_size;
         let mut out = vec![0i32; count];
         let mut max = count as u32;
-        let c_key = CString::new(key).ok()?;
         let result = unsafe {
             sys::aiGetMaterialIntegerArray(
                 self.material_ptr.as_ptr(),
-                c_key.as_ptr(),
+                key.as_ptr(),
                 semantic.map(|t| t.to_sys() as u32).unwrap_or(0),
                 index,
                 out.as_mut_ptr(),
@@ -488,10 +585,21 @@ impl<'a> Material<'a> {
         }
     }
 
+    /// Get an integer array property (converts from floats if necessary, allocates, convenience).
+    pub fn get_property_i32_array_str(
+        &self,
+        key: &str,
+        semantic: Option<TextureType>,
+        index: u32,
+    ) -> Option<Vec<i32>> {
+        let c_key = CString::new(key).ok()?;
+        self.get_property_i32_array(c_key.as_c_str(), semantic, index)
+    }
+
     /// Get a 32-bit float array property. If the property is stored as doubles, it is converted.
     pub fn get_property_f32_array(
         &self,
-        key: &str,
+        key: &CStr,
         semantic: Option<TextureType>,
         index: u32,
     ) -> Option<Vec<f32>> {
@@ -509,11 +617,10 @@ impl<'a> Material<'a> {
                 let count = (info.data_length as usize) / elem_size;
                 let mut out = vec![0f32; count];
                 let mut max = count as u32;
-                let c_key = CString::new(key).ok()?;
                 let result = unsafe {
                     sys::aiGetMaterialFloatArray(
                         self.material_ptr.as_ptr(),
-                        c_key.as_ptr(),
+                        key.as_ptr(),
                         semantic.map(|t| t.to_sys() as u32).unwrap_or(0),
                         index,
                         out.as_mut_ptr(),
@@ -532,16 +639,27 @@ impl<'a> Material<'a> {
         }
     }
 
-    /// Get a 64-bit float array property by decoding raw bytes.
-    /// If stored as f32, it will be widened; if stored as i32, it will be cast.
-    pub fn get_property_f64_array(
+    /// Get a 32-bit float array property (allocates, convenience).
+    pub fn get_property_f32_array_str(
         &self,
         key: &str,
         semantic: Option<TextureType>,
         index: u32,
+    ) -> Option<Vec<f32>> {
+        let c_key = CString::new(key).ok()?;
+        self.get_property_f32_array(c_key.as_c_str(), semantic, index)
+    }
+
+    /// Get a 64-bit float array property by decoding raw bytes.
+    /// If stored as f32, it will be widened; if stored as i32, it will be cast.
+    pub fn get_property_f64_array(
+        &self,
+        key: &CStr,
+        semantic: Option<TextureType>,
+        index: u32,
     ) -> Option<Vec<f64>> {
         let info = self.property_info(key, semantic, index)?;
-        let raw = self.get_property_raw(key, semantic, index)?;
+        let raw = self.get_property_raw_ref(key, semantic, index)?;
         match info.type_info {
             PropertyTypeInfo::Double => {
                 let sz = std::mem::size_of::<f64>();
@@ -584,6 +702,17 @@ impl<'a> Material<'a> {
             }
             _ => None,
         }
+    }
+
+    /// Get a 64-bit float array property (allocates, convenience).
+    pub fn get_property_f64_array_str(
+        &self,
+        key: &str,
+        semantic: Option<TextureType>,
+        index: u32,
+    ) -> Option<Vec<f64>> {
+        let c_key = CString::new(key).ok()?;
+        self.get_property_f64_array(c_key.as_c_str(), semantic, index)
     }
 
     /// Enumerate all properties stored in this material (raw info only)

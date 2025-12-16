@@ -61,7 +61,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     
     for mesh in scene.meshes() {
         // Zero-copy options are available:
-        // - mesh.vertices_raw(): Option<&[sys::aiVector3D]>
+        // - mesh.vertices_raw(): Option<&[asset_importer_sys::aiVector3D]>
         // - mesh.vertices_iter(): Iterator<Item = Vector3D>
         let vertices = mesh.vertices();
         println!("Mesh has {} vertices (copied)", vertices.len());
@@ -76,7 +76,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 `Scene` and all scene-backed view types (`Mesh`, `Material`, `Node`, `Texture`, etc.) are `Send + Sync`
 and can be shared across threads (e.g. behind `Arc`) for read-only access.
 
-Important: do not mutate Assimp-owned scene memory through `asset_importer::sys` while a `Scene` (or any
+Important: do not mutate Assimp-owned scene memory through raw Assimp bindings (`asset_importer::sys` with feature `raw-sys`,
+or the `asset-importer-sys` crate) while a `Scene` (or any
 borrowed view) is shared across threads. Doing so violates the crate's safety contract and may cause
 undefined behavior.
 

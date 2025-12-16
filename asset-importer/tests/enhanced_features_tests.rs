@@ -202,11 +202,11 @@ fn test_material_property_access() {
 #[test]
 fn test_material_keys_constants() {
     // Test that material key constants are valid strings
-    assert!(!material_keys::NAME.is_empty());
-    assert!(!material_keys::COLOR_DIFFUSE.is_empty());
-    assert!(!material_keys::COLOR_SPECULAR.is_empty());
-    assert!(!material_keys::SHININESS.is_empty());
-    assert!(!material_keys::OPACITY.is_empty());
+    assert!(!material_keys::NAME.to_bytes().is_empty());
+    assert!(!material_keys::COLOR_DIFFUSE.to_bytes().is_empty());
+    assert!(!material_keys::COLOR_SPECULAR.to_bytes().is_empty());
+    assert!(!material_keys::SHININESS.to_bytes().is_empty());
+    assert!(!material_keys::OPACITY.to_bytes().is_empty());
 }
 
 #[test]

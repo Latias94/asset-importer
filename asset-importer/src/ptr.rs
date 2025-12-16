@@ -24,6 +24,15 @@ impl<T> SharedPtr<T> {
         if ptr.is_null() { None } else { Some(Self(ptr)) }
     }
 
+    /// Creates a new `SharedPtr` without checking for null.
+    ///
+    /// # Safety
+    /// The caller must ensure `ptr` is non-null.
+    pub(crate) unsafe fn new_unchecked(ptr: *const T) -> Self {
+        debug_assert!(!ptr.is_null());
+        Self(ptr)
+    }
+
     /// Returns the underlying raw pointer.
     pub(crate) fn as_ptr(self) -> *const T {
         self.0

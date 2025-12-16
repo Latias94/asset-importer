@@ -43,7 +43,11 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![warn(missing_docs)]
 
+#[cfg(feature = "raw-sys")]
 pub use asset_importer_sys as sys;
+
+#[cfg(not(feature = "raw-sys"))]
+pub(crate) use asset_importer_sys as sys;
 
 // Re-export common types for convenience
 pub use crate::{
@@ -65,7 +69,8 @@ pub use crate::metadata::{Metadata, MetadataEntry, MetadataType};
 
 // Re-export material functionality
 pub use crate::material::{
-    Material, MaterialPropertyInfo, PropertyTypeInfo, TextureInfo, TextureType, material_keys,
+    Material, MaterialPropertyInfo, MaterialStringRef, PropertyTypeInfo, TextureInfo,
+    TextureInfoRef, TextureType, material_keys,
 };
 
 // Re-export texture functionality

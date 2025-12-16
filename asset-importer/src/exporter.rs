@@ -116,7 +116,8 @@ pub struct ExportBlob {
 impl ExportBlob {
     /// Create an ExportBlob from a raw Assimp blob pointer
     fn from_raw(blob_ptr: *const sys::aiExportDataBlob) -> Self {
-        let blob_ptr = SharedPtr::new(blob_ptr).expect("Export blob is null");
+        debug_assert!(!blob_ptr.is_null());
+        let blob_ptr = unsafe { SharedPtr::new_unchecked(blob_ptr) };
         Self { blob_ptr }
     }
 

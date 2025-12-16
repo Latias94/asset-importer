@@ -97,7 +97,8 @@ impl Default for MemoryInfo {
 /// `Send + Sync` and can be used with `Arc` across threads for *read-only* access.
 ///
 /// This guarantee relies on the safe API treating the imported Assimp scene as immutable.
-/// If you call into `asset_importer::sys` and mutate internal pointers yourself, you can
+/// If you call into raw Assimp bindings (`asset_importer::sys` with feature `raw-sys`, or the
+/// `asset-importer-sys` crate) and mutate internal pointers yourself, you can
 /// violate this contract and cause undefined behavior.
 pub struct Scene {
     /// Raw pointer to the Assimp scene

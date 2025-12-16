@@ -26,7 +26,8 @@ impl<'a> Mesh<'a> {
     /// # Safety
     /// Caller must ensure `mesh_ptr` is non-null and points into a live `aiScene`.
     pub(crate) unsafe fn from_raw(mesh_ptr: *const sys::aiMesh) -> Self {
-        let mesh_ptr = SharedPtr::new(mesh_ptr).expect("aiMesh pointer is null");
+        debug_assert!(!mesh_ptr.is_null());
+        let mesh_ptr = unsafe { SharedPtr::new_unchecked(mesh_ptr) };
         Self {
             mesh_ptr,
             _marker: PhantomData,
