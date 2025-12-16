@@ -10,8 +10,8 @@ use crate::{
     mesh::Mesh,
     metadata::Metadata,
     node::Node,
-    ptr::SharedPtr,
     postprocess::PostProcessSteps,
+    ptr::SharedPtr,
     sys,
     texture::{Texture, TextureIterator},
 };

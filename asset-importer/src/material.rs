@@ -2,15 +2,15 @@
 
 #![allow(clippy::unnecessary_cast)]
 
+use std::borrow::Cow;
+use std::ffi::CStr;
 use std::ffi::CString;
 use std::marker::PhantomData;
-use std::ffi::CStr;
 
 use crate::{
     ptr::SharedPtr,
     sys,
-    types::ai_string_to_string,
-    types::{Color3D, Color4D, Vector2D, Vector3D},
+    types::{Color3D, Color4D, Vector2D, Vector3D, ai_string_to_str, ai_string_to_string},
 };
 
 /// Standard material property keys as defined by Assimp
@@ -624,12 +624,13 @@ impl<'a> Material<'a> {
     /// Get the number of textures for a specific type
     pub fn texture_count(&self, texture_type: TextureType) -> usize {
         unsafe {
-            sys::aiGetMaterialTextureCount(self.material_ptr.as_ptr(), texture_type.to_sys()) as usize
+            sys::aiGetMaterialTextureCount(self.material_ptr.as_ptr(), texture_type.to_sys())
+                as usize
         }
     }
 
-    /// Get texture information for a specific type and index
-    pub fn texture(&self, texture_type: TextureType, index: usize) -> Option<TextureInfo> {
+    /// Get texture information for a specific type and index (no heap allocation).
+    pub fn texture_ref(&self, texture_type: TextureType, index: usize) -> Option<TextureInfoRef> {
         if index >= self.texture_count(texture_type) {
             return None;
         }
@@ -658,82 +659,94 @@ impl<'a> Material<'a> {
                 &mut tex_flags as *mut u32,
             );
 
-            if result == sys::aiReturn::aiReturn_SUCCESS {
-                // Prefer length-based conversion (aiString is not guaranteed to be NUL-terminated).
-                let path_str = ai_string_to_string(&path);
+            if result != sys::aiReturn::aiReturn_SUCCESS {
+                return None;
+            }
 
-                let mapping_val = mapping.assume_init();
-                let uv_index_val = uv_index.assume_init();
-                let blend_val = blend.assume_init();
-                let op_val = op.assume_init();
+            let mapping_val = mapping.assume_init();
+            let uv_index_val = uv_index.assume_init();
+            let blend_val = blend.assume_init();
+            let op_val = op.assume_init();
 
-                // Try read UV transform
-                let mut uv_transform = std::mem::MaybeUninit::<sys::aiUVTransform>::uninit();
-                let uv_key = CStr::from_bytes_with_nul_unchecked(b"$tex.uvtrafo\0");
-                let uv_ok = sys::aiGetMaterialUVTransform(
-                    self.material_ptr.as_ptr(),
-                    uv_key.as_ptr(),
-                    texture_type.to_sys() as u32,
-                    index as u32,
-                    uv_transform.as_mut_ptr(),
-                ) == sys::aiReturn::aiReturn_SUCCESS;
+            // Try read UV transform
+            let mut uv_transform = std::mem::MaybeUninit::<sys::aiUVTransform>::uninit();
+            let uv_key = CStr::from_bytes_with_nul_unchecked(b"$tex.uvtrafo\0");
+            let uv_ok = sys::aiGetMaterialUVTransform(
+                self.material_ptr.as_ptr(),
+                uv_key.as_ptr(),
+                texture_type.to_sys() as u32,
+                index as u32,
+                uv_transform.as_mut_ptr(),
+            ) == sys::aiReturn::aiReturn_SUCCESS;
 
-                let uv_transform = if uv_ok {
-                    let t = uv_transform.assume_init();
-                    Some(UVTransform {
-                        translation: Vector2D::new(t.mTranslation.x, t.mTranslation.y),
-                        scaling: Vector2D::new(t.mScaling.x, t.mScaling.y),
-                        rotation: t.mRotation,
-                    })
-                } else {
-                    None
-                };
-
-                // Try read TEXMAP_AXIS via property API ("$tex.mapaxis")
-                let axis = {
-                    let key = CStr::from_bytes_with_nul_unchecked(b"$tex.mapaxis\0");
-                    let mut prop_ptr: *const sys::aiMaterialProperty = std::ptr::null();
-                    let ok = sys::aiGetMaterialProperty(
-                        self.material_ptr.as_ptr(),
-                        key.as_ptr(),
-                        texture_type.to_sys() as u32,
-                        index as u32,
-                        &mut prop_ptr,
-                    ) == sys::aiReturn::aiReturn_SUCCESS;
-                    if ok && !prop_ptr.is_null() {
-                        let prop = &*prop_ptr;
-                        if prop.mData.is_null()
-                            || prop.mDataLength < std::mem::size_of::<sys::aiVector3D>() as u32
-                        {
-                            None
-                        } else {
-                            let v = *(prop.mData as *const sys::aiVector3D);
-                            Some(Vector3D::new(v.x, v.y, v.z))
-                        }
-                    } else {
-                        None
-                    }
-                };
-
-                Some(TextureInfo {
-                    path: path_str,
-                    mapping: TextureMapping::from_raw(mapping_val),
-                    uv_index: uv_index_val,
-                    blend_factor: blend_val,
-                    operation: TextureOperation::from_raw(op_val),
-                    map_modes: [
-                        TextureMapMode::from_raw(map_mode[0]),
-                        TextureMapMode::from_raw(map_mode[1]),
-                        TextureMapMode::from_raw(map_mode[2]),
-                    ],
-                    flags: TextureFlags::from_bits_truncate(tex_flags),
-                    uv_transform,
-                    axis,
+            let uv_transform = if uv_ok {
+                let t = uv_transform.assume_init();
+                Some(UVTransform {
+                    translation: Vector2D::new(t.mTranslation.x, t.mTranslation.y),
+                    scaling: Vector2D::new(t.mScaling.x, t.mScaling.y),
+                    rotation: t.mRotation,
                 })
             } else {
                 None
-            }
+            };
+
+            // Try read TEXMAP_AXIS via property API ("$tex.mapaxis")
+            let axis = {
+                let key = CStr::from_bytes_with_nul_unchecked(b"$tex.mapaxis\0");
+                let mut prop_ptr: *const sys::aiMaterialProperty = std::ptr::null();
+                let ok = sys::aiGetMaterialProperty(
+                    self.material_ptr.as_ptr(),
+                    key.as_ptr(),
+                    texture_type.to_sys() as u32,
+                    index as u32,
+                    &mut prop_ptr,
+                ) == sys::aiReturn::aiReturn_SUCCESS;
+                if ok && !prop_ptr.is_null() {
+                    let prop = &*prop_ptr;
+                    if prop.mData.is_null()
+                        || prop.mDataLength < std::mem::size_of::<sys::aiVector3D>() as u32
+                    {
+                        None
+                    } else {
+                        let v = *(prop.mData as *const sys::aiVector3D);
+                        Some(Vector3D::new(v.x, v.y, v.z))
+                    }
+                } else {
+                    None
+                }
+            };
+
+            Some(TextureInfoRef {
+                path,
+                mapping: TextureMapping::from_raw(mapping_val),
+                uv_index: uv_index_val,
+                blend_factor: blend_val,
+                operation: TextureOperation::from_raw(op_val),
+                map_modes: [
+                    TextureMapMode::from_raw(map_mode[0]),
+                    TextureMapMode::from_raw(map_mode[1]),
+                    TextureMapMode::from_raw(map_mode[2]),
+                ],
+                flags: TextureFlags::from_bits_truncate(tex_flags),
+                uv_transform,
+                axis,
+            })
         }
+    }
+
+    /// Iterate textures of a given type (no heap allocation).
+    pub fn texture_refs(
+        &self,
+        texture_type: TextureType,
+    ) -> impl Iterator<Item = TextureInfoRef> + '_ {
+        let count = self.texture_count(texture_type);
+        (0..count).filter_map(move |i| self.texture_ref(texture_type, i))
+    }
+
+    /// Get texture information for a specific type and index
+    pub fn texture(&self, texture_type: TextureType, index: usize) -> Option<TextureInfo> {
+        self.texture_ref(texture_type, index)
+            .map(TextureInfoRef::into_owned)
     }
 }
 
@@ -1233,6 +1246,59 @@ impl TextureMapMode {
 
 /// Information about a texture applied to a material
 #[derive(Debug, Clone)]
+pub struct TextureInfoRef {
+    path: sys::aiString,
+    /// Texture mapping mode
+    pub mapping: TextureMapping,
+    /// UV channel index
+    pub uv_index: u32,
+    /// Blend factor
+    pub blend_factor: f32,
+    /// Texture operation
+    pub operation: TextureOperation,
+    /// Texture map modes for U, V, W coordinates
+    pub map_modes: [TextureMapMode; 3],
+    /// Texture flags
+    pub flags: TextureFlags,
+    /// Optional UV transform
+    pub uv_transform: Option<UVTransform>,
+    /// Optional texture mapping axis
+    pub axis: Option<Vector3D>,
+}
+
+impl TextureInfoRef {
+    /// Texture path as UTF-8 (lossy), without allocation.
+    pub fn path_str(&self) -> Cow<'_, str> {
+        ai_string_to_str(&self.path)
+    }
+
+    /// Borrow the underlying Assimp `aiString`.
+    pub fn path_raw(&self) -> &sys::aiString {
+        &self.path
+    }
+
+    /// Convert into an owned `TextureInfo` (allocates for the path string).
+    pub fn into_owned(self) -> TextureInfo {
+        TextureInfo {
+            path: ai_string_to_string(&self.path),
+            mapping: self.mapping,
+            uv_index: self.uv_index,
+            blend_factor: self.blend_factor,
+            operation: self.operation,
+            map_modes: self.map_modes,
+            flags: self.flags,
+            uv_transform: self.uv_transform,
+            axis: self.axis,
+        }
+    }
+
+    /// Convert into an owned `TextureInfo` (allocates for the path string).
+    pub fn to_owned(&self) -> TextureInfo {
+        self.clone().into_owned()
+    }
+}
+
+/// Owned information about a texture applied to a material.
 pub struct TextureInfo {
     /// Path to the texture file
     pub path: String,

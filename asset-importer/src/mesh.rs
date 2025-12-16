@@ -10,8 +10,7 @@ use crate::{
     ptr::SharedPtr,
     sys,
     types::{
-        Color4D, Vector3D, ai_string_to_str, ai_string_to_string, from_ai_color4d,
-        from_ai_vector3d,
+        Color4D, Vector3D, ai_string_to_str, ai_string_to_string, from_ai_color4d, from_ai_vector3d,
     },
 };
 
@@ -247,6 +246,26 @@ impl<'a> Mesh<'a> {
         }
     }
 
+    /// Get the raw face array (zero-copy).
+    pub fn faces_raw(&self) -> Option<&'a [sys::aiFace]> {
+        unsafe {
+            let mesh = &*self.mesh_ptr.as_ptr();
+            if mesh.mFaces.is_null() || mesh.mNumFaces == 0 {
+                None
+            } else {
+                Some(std::slice::from_raw_parts(
+                    mesh.mFaces,
+                    mesh.mNumFaces as usize,
+                ))
+            }
+        }
+    }
+
+    /// Iterate faces without allocation.
+    pub fn faces_iter(&self) -> impl Iterator<Item = Face<'a>> + '_ {
+        self.faces()
+    }
+
     /// Get the material index for this mesh
     pub fn material_index(&self) -> usize {
         unsafe { (*self.mesh_ptr.as_ptr()).mMaterialIndex as usize }
@@ -385,16 +404,24 @@ impl<'a> Face<'a> {
         unsafe { (*self.face_ptr.as_ptr()).mNumIndices as usize }
     }
 
-    /// Get the indices of this face
-    pub fn indices(&self) -> &[u32] {
+    /// Get the raw index slice (zero-copy).
+    pub fn indices_raw(&self) -> Option<&'a [u32]> {
         unsafe {
             let face = &*self.face_ptr.as_ptr();
             if face.mIndices.is_null() || face.mNumIndices == 0 {
-                &[]
+                None
             } else {
-                std::slice::from_raw_parts(face.mIndices, face.mNumIndices as usize)
+                Some(std::slice::from_raw_parts(
+                    face.mIndices,
+                    face.mNumIndices as usize,
+                ))
             }
         }
+    }
+
+    /// Get the indices of this face.
+    pub fn indices(&self) -> &'a [u32] {
+        self.indices_raw().unwrap_or(&[])
     }
 }
 

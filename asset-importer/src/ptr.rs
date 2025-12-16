@@ -33,4 +33,3 @@ impl<T> SharedPtr<T> {
 // Safety: this is crate-internal and only used for immutable, Assimp-owned scene data.
 unsafe impl<T> Send for SharedPtr<T> {}
 unsafe impl<T> Sync for SharedPtr<T> {}
-

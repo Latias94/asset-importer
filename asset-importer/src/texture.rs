@@ -107,8 +107,8 @@ impl<'a> Texture<'a> {
     /// The caller must ensure that the pointer is valid and that the texture
     /// will not be freed while this Texture instance exists.
     pub(crate) unsafe fn from_raw(texture_ptr: *const sys::aiTexture) -> Result<Self> {
-        let texture_ptr =
-            SharedPtr::new(texture_ptr).ok_or_else(|| Error::invalid_scene("Texture pointer is null"))?;
+        let texture_ptr = SharedPtr::new(texture_ptr)
+            .ok_or_else(|| Error::invalid_scene("Texture pointer is null"))?;
 
         Ok(Self {
             texture_ptr,
@@ -164,7 +164,8 @@ impl<'a> Texture<'a> {
             } else {
                 let size = (self.width() * self.height()) as usize;
                 Ok(TextureDataRef::Texels(std::slice::from_raw_parts(
-                    texture.pcData, size,
+                    texture.pcData,
+                    size,
                 )))
             }
         }
