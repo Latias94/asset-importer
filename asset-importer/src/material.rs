@@ -4,9 +4,9 @@
 
 use std::ffi::CString;
 use std::marker::PhantomData;
-use std::ptr::NonNull;
 
 use crate::{
+    ptr::SharedPtr,
     sys,
     types::ai_string_to_string,
     types::{Color3D, Color4D, Vector2D, Vector3D},
@@ -86,12 +86,9 @@ pub mod material_keys {
 
 /// A material containing properties like colors, textures, and shading parameters
 pub struct Material<'a> {
-    material_ptr: NonNull<sys::aiMaterial>,
-    _marker: PhantomData<&'a sys::aiScene>,
+    material_ptr: SharedPtr<sys::aiMaterial>,
+    _marker: PhantomData<&'a ()>,
 }
-
-unsafe impl<'a> Send for Material<'a> {}
-unsafe impl<'a> Sync for Material<'a> {}
 
 impl<'a> Material<'a> {
     /// Create a Material from a raw Assimp material pointer
@@ -99,8 +96,7 @@ impl<'a> Material<'a> {
     /// # Safety
     /// Caller must ensure `material_ptr` is non-null and points into a live `aiScene`.
     pub(crate) unsafe fn from_raw(material_ptr: *const sys::aiMaterial) -> Self {
-        let material_ptr =
-            NonNull::new(material_ptr as *mut sys::aiMaterial).expect("aiMaterial pointer is null");
+        let material_ptr = SharedPtr::new(material_ptr).expect("aiMaterial pointer is null");
         Self {
             material_ptr,
             _marker: PhantomData,
@@ -592,7 +588,7 @@ impl<'a> Material<'a> {
     /// Enumerate all properties stored in this material (raw info only)
     pub fn all_properties(&self) -> Vec<MaterialPropertyInfo> {
         unsafe {
-            let m = self.material_ptr.as_ref();
+            let m = &*self.material_ptr.as_ptr();
             let count = m.mNumProperties as usize;
             if m.mProperties.is_null() || count == 0 {
                 return Vec::new();
@@ -627,8 +623,7 @@ impl<'a> Material<'a> {
     /// Get the number of textures for a specific type
     pub fn texture_count(&self, texture_type: TextureType) -> usize {
         unsafe {
-            sys::aiGetMaterialTextureCount(self.material_ptr.as_ptr(), texture_type.to_sys())
-                as usize
+            sys::aiGetMaterialTextureCount(self.material_ptr.as_ptr(), texture_type.to_sys()) as usize
         }
     }
 

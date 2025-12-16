@@ -1,9 +1,9 @@
 //! Light representation and utilities
 
 use std::marker::PhantomData;
-use std::ptr::NonNull;
 
 use crate::{
+    ptr::SharedPtr,
     sys,
     types::{
         Color3D, Vector2D, Vector3D, ai_string_to_string, from_ai_color3d, from_ai_vector2d,
@@ -14,12 +14,9 @@ use crate::{
 /// A light source in the scene
 #[derive(Clone, Copy)]
 pub struct Light<'a> {
-    light_ptr: NonNull<sys::aiLight>,
-    _marker: PhantomData<&'a sys::aiScene>,
+    light_ptr: SharedPtr<sys::aiLight>,
+    _marker: PhantomData<&'a ()>,
 }
-
-unsafe impl<'a> Send for Light<'a> {}
-unsafe impl<'a> Sync for Light<'a> {}
 
 impl<'a> Light<'a> {
     /// Create a Light from a raw Assimp light pointer
@@ -27,8 +24,7 @@ impl<'a> Light<'a> {
     /// # Safety
     /// Caller must ensure `light_ptr` is non-null and points into a live `aiScene`.
     pub(crate) unsafe fn from_raw(light_ptr: *const sys::aiLight) -> Self {
-        let light_ptr =
-            NonNull::new(light_ptr as *mut sys::aiLight).expect("aiLight pointer is null");
+        let light_ptr = SharedPtr::new(light_ptr).expect("aiLight pointer is null");
         Self {
             light_ptr,
             _marker: PhantomData,
@@ -42,13 +38,13 @@ impl<'a> Light<'a> {
 
     /// Get the name of the light
     pub fn name(&self) -> String {
-        unsafe { ai_string_to_string(&self.light_ptr.as_ref().mName) }
+        unsafe { ai_string_to_string(&(*self.light_ptr.as_ptr()).mName) }
     }
 
     /// Get the type of the light
     pub fn light_type(&self) -> LightType {
         unsafe {
-            let light = self.light_ptr.as_ref();
+            let light = &*self.light_ptr.as_ptr();
             LightType::from_raw(light.mType)
         }
     }
@@ -56,7 +52,7 @@ impl<'a> Light<'a> {
     /// Get the position of the light
     pub fn position(&self) -> Vector3D {
         unsafe {
-            let light = self.light_ptr.as_ref();
+            let light = &*self.light_ptr.as_ptr();
             from_ai_vector3d(light.mPosition)
         }
     }
@@ -64,7 +60,7 @@ impl<'a> Light<'a> {
     /// Get the direction of the light
     pub fn direction(&self) -> Vector3D {
         unsafe {
-            let light = self.light_ptr.as_ref();
+            let light = &*self.light_ptr.as_ptr();
             from_ai_vector3d(light.mDirection)
         }
     }
@@ -72,7 +68,7 @@ impl<'a> Light<'a> {
     /// Get the up vector of the light
     pub fn up(&self) -> Vector3D {
         unsafe {
-            let light = self.light_ptr.as_ref();
+            let light = &*self.light_ptr.as_ptr();
             from_ai_vector3d(light.mUp)
         }
     }
@@ -80,7 +76,7 @@ impl<'a> Light<'a> {
     /// Get the diffuse color of the light
     pub fn color_diffuse(&self) -> Color3D {
         unsafe {
-            let light = self.light_ptr.as_ref();
+            let light = &*self.light_ptr.as_ptr();
             from_ai_color3d(light.mColorDiffuse)
         }
     }
@@ -88,7 +84,7 @@ impl<'a> Light<'a> {
     /// Get the specular color of the light
     pub fn color_specular(&self) -> Color3D {
         unsafe {
-            let light = self.light_ptr.as_ref();
+            let light = &*self.light_ptr.as_ptr();
             from_ai_color3d(light.mColorSpecular)
         }
     }
@@ -96,40 +92,40 @@ impl<'a> Light<'a> {
     /// Get the ambient color of the light
     pub fn color_ambient(&self) -> Color3D {
         unsafe {
-            let light = self.light_ptr.as_ref();
+            let light = &*self.light_ptr.as_ptr();
             from_ai_color3d(light.mColorAmbient)
         }
     }
 
     /// Get the constant attenuation factor
     pub fn attenuation_constant(&self) -> f32 {
-        unsafe { self.light_ptr.as_ref().mAttenuationConstant }
+        unsafe { (*self.light_ptr.as_ptr()).mAttenuationConstant }
     }
 
     /// Get the linear attenuation factor
     pub fn attenuation_linear(&self) -> f32 {
-        unsafe { self.light_ptr.as_ref().mAttenuationLinear }
+        unsafe { (*self.light_ptr.as_ptr()).mAttenuationLinear }
     }
 
     /// Get the quadratic attenuation factor
     pub fn attenuation_quadratic(&self) -> f32 {
-        unsafe { self.light_ptr.as_ref().mAttenuationQuadratic }
+        unsafe { (*self.light_ptr.as_ptr()).mAttenuationQuadratic }
     }
 
     /// Get the inner cone angle for spot lights (in radians)
     pub fn angle_inner_cone(&self) -> f32 {
-        unsafe { self.light_ptr.as_ref().mAngleInnerCone }
+        unsafe { (*self.light_ptr.as_ptr()).mAngleInnerCone }
     }
 
     /// Get the outer cone angle for spot lights (in radians)
     pub fn angle_outer_cone(&self) -> f32 {
-        unsafe { self.light_ptr.as_ref().mAngleOuterCone }
+        unsafe { (*self.light_ptr.as_ptr()).mAngleOuterCone }
     }
 
     /// Get the size of the area light
     pub fn size(&self) -> Vector2D {
         unsafe {
-            let light = self.light_ptr.as_ref();
+            let light = &*self.light_ptr.as_ptr();
             from_ai_vector2d(light.mSize)
         }
     }

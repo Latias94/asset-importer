@@ -3,11 +3,11 @@
 use std::ffi::CString;
 use std::marker::PhantomData;
 use std::path::Path;
-use std::ptr::NonNull;
 
 use crate::{
     error::{Error, Result},
     io::{AssimpFileIO, FileSystem},
+    ptr::SharedPtr,
     scene::Scene,
     sys,
 };
@@ -110,25 +110,31 @@ impl ExportBuilder {
 
 /// A blob containing exported scene data
 pub struct ExportBlob {
-    blob_ptr: NonNull<sys::aiExportDataBlob>,
+    blob_ptr: SharedPtr<sys::aiExportDataBlob>,
 }
 
 impl ExportBlob {
     /// Create an ExportBlob from a raw Assimp blob pointer
     fn from_raw(blob_ptr: *const sys::aiExportDataBlob) -> Self {
-        let blob_ptr =
-            NonNull::new(blob_ptr as *mut sys::aiExportDataBlob).expect("Export blob is null");
+        let blob_ptr = SharedPtr::new(blob_ptr).expect("Export blob is null");
         Self { blob_ptr }
     }
 
     /// Get the data as a byte slice
     pub fn data(&self) -> &[u8] {
-        ExportBlobView::new(self.blob_ptr).data()
+        unsafe {
+            let blob = &*self.blob_ptr.as_ptr();
+            if blob.size == 0 || blob.data.is_null() {
+                &[]
+            } else {
+                std::slice::from_raw_parts(blob.data as *const u8, blob.size)
+            }
+        }
     }
 
     /// Get the size of the data
     pub fn size(&self) -> usize {
-        unsafe { self.blob_ptr.as_ref().size }
+        unsafe { (*self.blob_ptr.as_ptr()).size }
     }
 
     /// Get the name/hint for this blob
@@ -165,12 +171,12 @@ impl Drop for ExportBlob {
 
 /// A non-owning view into an export blob inside a blob chain.
 pub struct ExportBlobView<'a> {
-    blob_ptr: NonNull<sys::aiExportDataBlob>,
-    _marker: PhantomData<&'a sys::aiExportDataBlob>,
+    blob_ptr: SharedPtr<sys::aiExportDataBlob>,
+    _marker: PhantomData<&'a ()>,
 }
 
 impl<'a> ExportBlobView<'a> {
-    fn new(blob_ptr: NonNull<sys::aiExportDataBlob>) -> Self {
+    fn new(blob_ptr: SharedPtr<sys::aiExportDataBlob>) -> Self {
         Self {
             blob_ptr,
             _marker: PhantomData,
@@ -180,7 +186,7 @@ impl<'a> ExportBlobView<'a> {
     /// Get the data as a byte slice.
     pub fn data(&self) -> &[u8] {
         unsafe {
-            let blob = self.blob_ptr.as_ref();
+            let blob = &*self.blob_ptr.as_ptr();
             if blob.size == 0 || blob.data.is_null() {
                 &[]
             } else {
@@ -191,13 +197,13 @@ impl<'a> ExportBlobView<'a> {
 
     /// Get the size of the data.
     pub fn size(&self) -> usize {
-        unsafe { self.blob_ptr.as_ref().size }
+        unsafe { (*self.blob_ptr.as_ptr()).size }
     }
 
     /// Get the name/hint for this blob.
     pub fn name(&self) -> String {
         unsafe {
-            let blob = self.blob_ptr.as_ref();
+            let blob = &*self.blob_ptr.as_ptr();
             let name_data = blob.name.data.as_ptr();
             if blob.name.length == 0 {
                 String::new()
@@ -211,22 +217,22 @@ impl<'a> ExportBlobView<'a> {
 
     /// Check if this blob has a next blob (for multi-file exports).
     pub fn has_next(&self) -> bool {
-        unsafe { !self.blob_ptr.as_ref().next.is_null() }
+        unsafe { !(*self.blob_ptr.as_ptr()).next.is_null() }
     }
 
     /// Get the next blob in the chain.
     pub fn next(&self) -> Option<ExportBlobView<'a>> {
         unsafe {
-            let next = self.blob_ptr.as_ref().next;
-            NonNull::new(next).map(|p| ExportBlobView::new(p))
+            let next = (*self.blob_ptr.as_ptr()).next as *const sys::aiExportDataBlob;
+            SharedPtr::new(next).map(ExportBlobView::new)
         }
     }
 }
 
 /// Iterator over blobs in an export blob chain.
 pub struct ExportBlobIterator<'a> {
-    current: Option<NonNull<sys::aiExportDataBlob>>,
-    _marker: PhantomData<&'a sys::aiExportDataBlob>,
+    current: Option<SharedPtr<sys::aiExportDataBlob>>,
+    _marker: PhantomData<&'a ()>,
 }
 
 impl<'a> Iterator for ExportBlobIterator<'a> {
@@ -235,7 +241,8 @@ impl<'a> Iterator for ExportBlobIterator<'a> {
     fn next(&mut self) -> Option<Self::Item> {
         let current = self.current?;
         unsafe {
-            self.current = NonNull::new(current.as_ref().next);
+            let next = (*current.as_ptr()).next as *const sys::aiExportDataBlob;
+            self.current = SharedPtr::new(next);
         }
         Some(ExportBlobView::new(current))
     }

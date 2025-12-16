@@ -1,7 +1,5 @@
 //! Scene representation and management
 
-use std::ptr::NonNull;
-
 use crate::{
     animation::Animation,
     camera::Camera,
@@ -12,6 +10,7 @@ use crate::{
     mesh::Mesh,
     metadata::Metadata,
     node::Node,
+    ptr::SharedPtr,
     postprocess::PostProcessSteps,
     sys,
     texture::{Texture, TextureIterator},
@@ -91,10 +90,18 @@ impl Default for MemoryInfo {
     }
 }
 
-/// A 3D scene containing meshes, materials, animations, and other assets
+/// A 3D scene containing meshes, materials, animations, and other assets.
+///
+/// ## Thread safety
+/// `Scene` and all scene-backed view types (`Mesh`, `Material`, `Node`, `Texture`, etc.) are
+/// `Send + Sync` and can be used with `Arc` across threads for *read-only* access.
+///
+/// This guarantee relies on the safe API treating the imported Assimp scene as immutable.
+/// If you call into `asset_importer::sys` and mutate internal pointers yourself, you can
+/// violate this contract and cause undefined behavior.
 pub struct Scene {
     /// Raw pointer to the Assimp scene
-    scene_ptr: NonNull<sys::aiScene>,
+    scene_ptr: SharedPtr<sys::aiScene>,
     /// How to release the scene when dropped
     release_kind: SceneRelease,
 }
@@ -117,7 +124,7 @@ impl Scene {
     /// - The scene was allocated by Assimp and should be freed with aiReleaseImport
     /// - The scene pointer remains valid for the lifetime of this Scene
     pub unsafe fn from_raw_import(scene_ptr: *const sys::aiScene) -> Result<Self> {
-        let scene_ptr = NonNull::new(scene_ptr as *mut sys::aiScene).ok_or(Error::NullPointer)?;
+        let scene_ptr = SharedPtr::new(scene_ptr).ok_or(Error::NullPointer)?;
 
         Ok(Self {
             scene_ptr,
@@ -131,7 +138,7 @@ impl Scene {
     /// # Safety
     /// Caller must ensure `scene_ptr` is valid and was allocated by aiCopyScene.
     pub unsafe fn from_raw_copied(scene_ptr: *const sys::aiScene) -> Result<Self> {
-        let scene_ptr = NonNull::new(scene_ptr as *mut sys::aiScene).ok_or(Error::NullPointer)?;
+        let scene_ptr = SharedPtr::new(scene_ptr).ok_or(Error::NullPointer)?;
         Ok(Self {
             scene_ptr,
             release_kind: SceneRelease::FreeScene,
@@ -151,8 +158,7 @@ impl Scene {
                 return Err(Error::invalid_scene("Post-processing failed"));
             }
             // Update pointer; ownership/allocator unchanged
-            self.scene_ptr =
-                NonNull::new(new_ptr as *mut sys::aiScene).ok_or(Error::NullPointer)?;
+            self.scene_ptr = SharedPtr::new(new_ptr).ok_or(Error::NullPointer)?;
         }
         Ok(())
     }
@@ -251,7 +257,7 @@ impl Scene {
 
     /// Get the scene flags
     pub fn flags(&self) -> u32 {
-        unsafe { self.scene_ptr.as_ref().mFlags }
+        unsafe { (*self.scene_ptr.as_ptr()).mFlags }
     }
 
     /// Check if the scene is incomplete
@@ -314,7 +320,7 @@ impl Scene {
     /// Get the root node of the scene
     pub fn root_node(&self) -> Option<Node<'_>> {
         unsafe {
-            let scene = self.scene_ptr.as_ref();
+            let scene = &*self.scene_ptr.as_ptr();
             if scene.mRootNode.is_null() {
                 None
             } else {
@@ -325,7 +331,7 @@ impl Scene {
 
     /// Get the number of meshes in the scene
     pub fn num_meshes(&self) -> usize {
-        unsafe { self.scene_ptr.as_ref().mNumMeshes as usize }
+        unsafe { (*self.scene_ptr.as_ptr()).mNumMeshes as usize }
     }
 
     /// Get a mesh by index
@@ -335,7 +341,7 @@ impl Scene {
         }
 
         unsafe {
-            let scene = self.scene_ptr.as_ref();
+            let scene = &*self.scene_ptr.as_ptr();
             let mesh_ptr = *scene.mMeshes.add(index);
             if mesh_ptr.is_null() {
                 None
@@ -355,7 +361,7 @@ impl Scene {
 
     /// Get the number of materials in the scene
     pub fn num_materials(&self) -> usize {
-        unsafe { self.scene_ptr.as_ref().mNumMaterials as usize }
+        unsafe { (*self.scene_ptr.as_ptr()).mNumMaterials as usize }
     }
 
     /// Get a material by index
@@ -365,7 +371,7 @@ impl Scene {
         }
 
         unsafe {
-            let scene = self.scene_ptr.as_ref();
+            let scene = &*self.scene_ptr.as_ptr();
             let material_ptr = *scene.mMaterials.add(index);
             if material_ptr.is_null() {
                 None
@@ -385,7 +391,7 @@ impl Scene {
 
     /// Get the number of animations in the scene
     pub fn num_animations(&self) -> usize {
-        unsafe { self.scene_ptr.as_ref().mNumAnimations as usize }
+        unsafe { (*self.scene_ptr.as_ptr()).mNumAnimations as usize }
     }
 
     /// Get an animation by index
@@ -395,7 +401,7 @@ impl Scene {
         }
 
         unsafe {
-            let scene = self.scene_ptr.as_ref();
+            let scene = &*self.scene_ptr.as_ptr();
             let animation_ptr = *scene.mAnimations.add(index);
             if animation_ptr.is_null() {
                 None
@@ -415,7 +421,7 @@ impl Scene {
 
     /// Get the number of cameras in the scene
     pub fn num_cameras(&self) -> usize {
-        unsafe { self.scene_ptr.as_ref().mNumCameras as usize }
+        unsafe { (*self.scene_ptr.as_ptr()).mNumCameras as usize }
     }
 
     /// Get a camera by index
@@ -425,7 +431,7 @@ impl Scene {
         }
 
         unsafe {
-            let scene = self.scene_ptr.as_ref();
+            let scene = &*self.scene_ptr.as_ptr();
             let camera_ptr = *scene.mCameras.add(index);
             if camera_ptr.is_null() {
                 None
@@ -445,7 +451,7 @@ impl Scene {
 
     /// Get the number of lights in the scene
     pub fn num_lights(&self) -> usize {
-        unsafe { self.scene_ptr.as_ref().mNumLights as usize }
+        unsafe { (*self.scene_ptr.as_ptr()).mNumLights as usize }
     }
 
     /// Get a light by index
@@ -455,7 +461,7 @@ impl Scene {
         }
 
         unsafe {
-            let scene = self.scene_ptr.as_ref();
+            let scene = &*self.scene_ptr.as_ptr();
             let light_ptr = *scene.mLights.add(index);
             if light_ptr.is_null() {
                 None
@@ -484,10 +490,6 @@ impl Drop for Scene {
         }
     }
 }
-
-// Send and Sync are safe because we own the scene and Assimp doesn't use global state
-unsafe impl Send for Scene {}
-unsafe impl Sync for Scene {}
 
 /// Iterator over meshes in a scene
 pub struct MeshIterator<'a> {
@@ -604,27 +606,10 @@ impl<'a> Iterator for LightIterator<'a> {
 
 impl<'a> ExactSizeIterator for LightIterator<'a> {}
 
-// Scene iterators are safe because they only hold references to the Scene
-// and the Scene itself is Send + Sync
-unsafe impl<'a> Send for MeshIterator<'a> {}
-unsafe impl<'a> Sync for MeshIterator<'a> {}
-
-unsafe impl<'a> Send for MaterialIterator<'a> {}
-unsafe impl<'a> Sync for MaterialIterator<'a> {}
-
-unsafe impl<'a> Send for AnimationIterator<'a> {}
-unsafe impl<'a> Sync for AnimationIterator<'a> {}
-
-unsafe impl<'a> Send for CameraIterator<'a> {}
-unsafe impl<'a> Sync for CameraIterator<'a> {}
-
-unsafe impl<'a> Send for LightIterator<'a> {}
-unsafe impl<'a> Sync for LightIterator<'a> {}
-
 impl Scene {
     /// Get scene metadata
     pub fn metadata(&self) -> Result<Metadata> {
-        let scene = unsafe { self.scene_ptr.as_ref() };
+        let scene = unsafe { &*self.scene_ptr.as_ptr() };
         unsafe { Metadata::from_raw(scene.mMetaData) }
     }
 
@@ -640,7 +625,7 @@ impl Scene {
         }
 
         unsafe {
-            let scene = self.scene_ptr.as_ref();
+            let scene = &*self.scene_ptr.as_ptr();
             let texture_ptr = *scene.mTextures.add(index);
             if texture_ptr.is_null() {
                 None
@@ -653,7 +638,7 @@ impl Scene {
     /// Get an iterator over all textures in the scene
     pub fn textures(&self) -> TextureIterator<'_> {
         unsafe {
-            let scene = self.scene_ptr.as_ref();
+            let scene = &*self.scene_ptr.as_ptr();
             TextureIterator::new(scene.mTextures, self.num_textures())
         }
     }

@@ -118,6 +118,8 @@ pub mod math;
 pub mod postprocess;
 pub mod utils;
 
+mod ptr;
+
 /// Version information
 pub mod version {
     /// Version of this crate

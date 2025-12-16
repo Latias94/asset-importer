@@ -3,23 +3,20 @@
 #![allow(clippy::unnecessary_cast)]
 
 use std::marker::PhantomData;
-use std::ptr::NonNull;
 
 use crate::{
     aabb::AABB,
     bone::{Bone, BoneIterator},
+    ptr::SharedPtr,
     sys,
     types::{Color4D, Vector3D, ai_string_to_string, from_ai_color4d, from_ai_vector3d},
 };
 
 /// A mesh containing vertices, faces, and other geometric data
 pub struct Mesh<'a> {
-    mesh_ptr: NonNull<sys::aiMesh>,
-    _marker: PhantomData<&'a sys::aiScene>,
+    mesh_ptr: SharedPtr<sys::aiMesh>,
+    _marker: PhantomData<&'a ()>,
 }
-
-unsafe impl<'a> Send for Mesh<'a> {}
-unsafe impl<'a> Sync for Mesh<'a> {}
 
 impl<'a> Mesh<'a> {
     /// Create a Mesh from a raw Assimp mesh pointer
@@ -27,7 +24,7 @@ impl<'a> Mesh<'a> {
     /// # Safety
     /// Caller must ensure `mesh_ptr` is non-null and points into a live `aiScene`.
     pub(crate) unsafe fn from_raw(mesh_ptr: *const sys::aiMesh) -> Self {
-        let mesh_ptr = NonNull::new(mesh_ptr as *mut sys::aiMesh).expect("aiMesh pointer is null");
+        let mesh_ptr = SharedPtr::new(mesh_ptr).expect("aiMesh pointer is null");
         Self {
             mesh_ptr,
             _marker: PhantomData,
@@ -41,18 +38,18 @@ impl<'a> Mesh<'a> {
 
     /// Get the name of the mesh
     pub fn name(&self) -> String {
-        unsafe { ai_string_to_string(&self.mesh_ptr.as_ref().mName) }
+        unsafe { ai_string_to_string(&(*self.mesh_ptr.as_ptr()).mName) }
     }
 
     /// Get the number of vertices in the mesh
     pub fn num_vertices(&self) -> usize {
-        unsafe { self.mesh_ptr.as_ref().mNumVertices as usize }
+        unsafe { (*self.mesh_ptr.as_ptr()).mNumVertices as usize }
     }
 
     /// Get the vertices of the mesh
     pub fn vertices(&self) -> Vec<Vector3D> {
         unsafe {
-            let mesh = self.mesh_ptr.as_ref();
+            let mesh = &*self.mesh_ptr.as_ptr();
             if mesh.mVertices.is_null() {
                 Vec::new()
             } else {
@@ -66,7 +63,7 @@ impl<'a> Mesh<'a> {
     /// Get the normals of the mesh
     pub fn normals(&self) -> Option<Vec<Vector3D>> {
         unsafe {
-            let mesh = self.mesh_ptr.as_ref();
+            let mesh = &*self.mesh_ptr.as_ptr();
             if mesh.mNormals.is_null() {
                 None
             } else {
@@ -80,7 +77,7 @@ impl<'a> Mesh<'a> {
     /// Get the tangents of the mesh
     pub fn tangents(&self) -> Option<Vec<Vector3D>> {
         unsafe {
-            let mesh = self.mesh_ptr.as_ref();
+            let mesh = &*self.mesh_ptr.as_ptr();
             if mesh.mTangents.is_null() {
                 None
             } else {
@@ -94,7 +91,7 @@ impl<'a> Mesh<'a> {
     /// Get the bitangents of the mesh
     pub fn bitangents(&self) -> Option<Vec<Vector3D>> {
         unsafe {
-            let mesh = self.mesh_ptr.as_ref();
+            let mesh = &*self.mesh_ptr.as_ptr();
             if mesh.mBitangents.is_null() {
                 None
             } else {
@@ -112,7 +109,7 @@ impl<'a> Mesh<'a> {
         }
 
         unsafe {
-            let mesh = self.mesh_ptr.as_ref();
+            let mesh = &*self.mesh_ptr.as_ptr();
             let tex_coords_ptr = mesh.mTextureCoords[channel];
             if tex_coords_ptr.is_null() {
                 None
@@ -131,7 +128,7 @@ impl<'a> Mesh<'a> {
         }
 
         unsafe {
-            let mesh = self.mesh_ptr.as_ref();
+            let mesh = &*self.mesh_ptr.as_ptr();
             let colors_ptr = mesh.mColors[channel];
             if colors_ptr.is_null() {
                 None
@@ -144,7 +141,7 @@ impl<'a> Mesh<'a> {
 
     /// Get the number of faces in the mesh
     pub fn num_faces(&self) -> usize {
-        unsafe { self.mesh_ptr.as_ref().mNumFaces as usize }
+        unsafe { (*self.mesh_ptr.as_ptr()).mNumFaces as usize }
     }
 
     /// Get the faces of the mesh
@@ -158,12 +155,12 @@ impl<'a> Mesh<'a> {
 
     /// Get the material index for this mesh
     pub fn material_index(&self) -> usize {
-        unsafe { self.mesh_ptr.as_ref().mMaterialIndex as usize }
+        unsafe { (*self.mesh_ptr.as_ptr()).mMaterialIndex as usize }
     }
 
     /// Get the primitive types present in this mesh
     pub fn primitive_types(&self) -> u32 {
-        unsafe { self.mesh_ptr.as_ref().mPrimitiveTypes }
+        unsafe { (*self.mesh_ptr.as_ptr()).mPrimitiveTypes }
     }
 
     /// Check if the mesh contains points
@@ -189,14 +186,14 @@ impl<'a> Mesh<'a> {
     /// Get the axis-aligned bounding box of the mesh
     pub fn aabb(&self) -> AABB {
         unsafe {
-            let mesh = self.mesh_ptr.as_ref();
+            let mesh = &*self.mesh_ptr.as_ptr();
             AABB::from(&mesh.mAABB)
         }
     }
 
     /// Get the number of animation meshes (morph targets)
     pub fn num_anim_meshes(&self) -> usize {
-        unsafe { self.mesh_ptr.as_ref().mNumAnimMeshes as usize }
+        unsafe { (*self.mesh_ptr.as_ptr()).mNumAnimMeshes as usize }
     }
 
     /// Get an animation mesh by index
@@ -205,14 +202,13 @@ impl<'a> Mesh<'a> {
             return None;
         }
         unsafe {
-            let mesh = self.mesh_ptr.as_ref();
+            let mesh = &*self.mesh_ptr.as_ptr();
             let ptr = *mesh.mAnimMeshes.add(index);
             if ptr.is_null() {
                 None
             } else {
                 Some(AnimMesh {
-                    anim_ptr: NonNull::new(ptr as *mut sys::aiAnimMesh)
-                        .expect("aiAnimMesh pointer is null"),
+                    anim_ptr: SharedPtr::new(ptr).expect("aiAnimMesh pointer is null"),
                     _marker: PhantomData,
                 })
             }
@@ -230,7 +226,7 @@ impl<'a> Mesh<'a> {
 
     /// Get the number of bones in the mesh
     pub fn num_bones(&self) -> usize {
-        unsafe { self.mesh_ptr.as_ref().mNumBones as usize }
+        unsafe { (*self.mesh_ptr.as_ptr()).mNumBones as usize }
     }
 
     /// Get a bone by index
@@ -240,7 +236,7 @@ impl<'a> Mesh<'a> {
         }
 
         unsafe {
-            let mesh = self.mesh_ptr.as_ref();
+            let mesh = &*self.mesh_ptr.as_ptr();
             let bone_ptr = *mesh.mBones.add(index);
             if bone_ptr.is_null() {
                 None
@@ -253,7 +249,7 @@ impl<'a> Mesh<'a> {
     /// Get an iterator over all bones in the mesh
     pub fn bones(&self) -> BoneIterator<'a> {
         unsafe {
-            let mesh = self.mesh_ptr.as_ref();
+            let mesh = &*self.mesh_ptr.as_ptr();
             BoneIterator::new(mesh.mBones, self.num_bones())
         }
     }
@@ -276,7 +272,7 @@ impl<'a> Mesh<'a> {
     /// Get the mesh morphing method (if any)
     pub fn morphing_method(&self) -> MorphingMethod {
         unsafe {
-            let mesh = self.mesh_ptr.as_ref();
+            let mesh = &*self.mesh_ptr.as_ptr();
             MorphingMethod::from_sys(mesh.mMethod)
         }
     }
@@ -284,20 +280,20 @@ impl<'a> Mesh<'a> {
 
 /// A face in a mesh
 pub struct Face<'a> {
-    face_ptr: NonNull<sys::aiFace>,
-    _marker: PhantomData<&'a sys::aiScene>,
+    face_ptr: SharedPtr<sys::aiFace>,
+    _marker: PhantomData<&'a ()>,
 }
 
 impl<'a> Face<'a> {
     /// Get the number of indices in this face
     pub fn num_indices(&self) -> usize {
-        unsafe { self.face_ptr.as_ref().mNumIndices as usize }
+        unsafe { (*self.face_ptr.as_ptr()).mNumIndices as usize }
     }
 
     /// Get the indices of this face
     pub fn indices(&self) -> &[u32] {
         unsafe {
-            let face = self.face_ptr.as_ref();
+            let face = &*self.face_ptr.as_ptr();
             if face.mIndices.is_null() || face.mNumIndices == 0 {
                 &[]
             } else {
@@ -309,9 +305,9 @@ impl<'a> Face<'a> {
 
 /// Iterator over faces in a mesh
 pub struct FaceIterator<'a> {
-    mesh_ptr: NonNull<sys::aiMesh>,
+    mesh_ptr: SharedPtr<sys::aiMesh>,
     index: usize,
-    _marker: PhantomData<&'a sys::aiScene>,
+    _marker: PhantomData<&'a ()>,
 }
 
 impl<'a> Iterator for FaceIterator<'a> {
@@ -319,7 +315,7 @@ impl<'a> Iterator for FaceIterator<'a> {
 
     fn next(&mut self) -> Option<Self::Item> {
         unsafe {
-            let mesh = self.mesh_ptr.as_ref();
+            let mesh = &*self.mesh_ptr.as_ptr();
             if mesh.mFaces.is_null() || mesh.mNumFaces == 0 {
                 return None;
             }
@@ -329,7 +325,7 @@ impl<'a> Iterator for FaceIterator<'a> {
                 let face_ptr = mesh.mFaces.add(self.index);
                 self.index += 1;
                 Some(Face {
-                    face_ptr: NonNull::new(face_ptr).expect("aiFace pointer is null"),
+                    face_ptr: SharedPtr::new(face_ptr).expect("aiFace pointer is null"),
                     _marker: PhantomData,
                 })
             }
@@ -338,7 +334,7 @@ impl<'a> Iterator for FaceIterator<'a> {
 
     fn size_hint(&self) -> (usize, Option<usize>) {
         unsafe {
-            let mesh = self.mesh_ptr.as_ref();
+            let mesh = &*self.mesh_ptr.as_ptr();
             let remaining = (mesh.mNumFaces as usize).saturating_sub(self.index);
             (remaining, Some(remaining))
         }
@@ -349,24 +345,24 @@ impl<'a> ExactSizeIterator for FaceIterator<'a> {}
 
 /// An animation mesh (morph target) that replaces certain vertex streams
 pub struct AnimMesh<'a> {
-    anim_ptr: NonNull<sys::aiAnimMesh>,
-    _marker: PhantomData<&'a sys::aiScene>,
+    anim_ptr: SharedPtr<sys::aiAnimMesh>,
+    _marker: PhantomData<&'a ()>,
 }
 
 impl<'a> AnimMesh<'a> {
     /// Name of this anim mesh (if present)
     pub fn name(&self) -> String {
-        unsafe { crate::types::ai_string_to_string(&self.anim_ptr.as_ref().mName) }
+        unsafe { crate::types::ai_string_to_string(&(*self.anim_ptr.as_ptr()).mName) }
     }
     /// Number of vertices in this anim mesh
     pub fn num_vertices(&self) -> usize {
-        unsafe { self.anim_ptr.as_ref().mNumVertices as usize }
+        unsafe { (*self.anim_ptr.as_ptr()).mNumVertices as usize }
     }
 
     /// Replacement positions (if present)
     pub fn vertices(&self) -> Option<Vec<Vector3D>> {
         unsafe {
-            let m = self.anim_ptr.as_ref();
+            let m = &*self.anim_ptr.as_ptr();
             if m.mVertices.is_null() {
                 None
             } else {
@@ -379,7 +375,7 @@ impl<'a> AnimMesh<'a> {
     /// Replacement normals (if present)
     pub fn normals(&self) -> Option<Vec<Vector3D>> {
         unsafe {
-            let m = self.anim_ptr.as_ref();
+            let m = &*self.anim_ptr.as_ptr();
             if m.mNormals.is_null() {
                 None
             } else {
@@ -392,7 +388,7 @@ impl<'a> AnimMesh<'a> {
     /// Replacement tangents (if present)
     pub fn tangents(&self) -> Option<Vec<Vector3D>> {
         unsafe {
-            let m = self.anim_ptr.as_ref();
+            let m = &*self.anim_ptr.as_ptr();
             if m.mTangents.is_null() {
                 None
             } else {
@@ -405,7 +401,7 @@ impl<'a> AnimMesh<'a> {
     /// Replacement bitangents (if present)
     pub fn bitangents(&self) -> Option<Vec<Vector3D>> {
         unsafe {
-            let m = self.anim_ptr.as_ref();
+            let m = &*self.anim_ptr.as_ptr();
             if m.mBitangents.is_null() {
                 None
             } else {
@@ -421,7 +417,7 @@ impl<'a> AnimMesh<'a> {
             return None;
         }
         unsafe {
-            let m = self.anim_ptr.as_ref();
+            let m = &*self.anim_ptr.as_ptr();
             let ptr = m.mColors[channel];
             if ptr.is_null() {
                 None
@@ -438,7 +434,7 @@ impl<'a> AnimMesh<'a> {
             return None;
         }
         unsafe {
-            let m = self.anim_ptr.as_ref();
+            let m = &*self.anim_ptr.as_ptr();
             let ptr = m.mTextureCoords[channel];
             if ptr.is_null() {
                 None
@@ -451,15 +447,15 @@ impl<'a> AnimMesh<'a> {
 
     /// Weight of this anim mesh
     pub fn weight(&self) -> f32 {
-        unsafe { self.anim_ptr.as_ref().mWeight }
+        unsafe { (*self.anim_ptr.as_ptr()).mWeight }
     }
 }
 
 /// Iterator over anim meshes
 pub struct AnimMeshIterator<'a> {
-    mesh_ptr: NonNull<sys::aiMesh>,
+    mesh_ptr: SharedPtr<sys::aiMesh>,
     index: usize,
-    _marker: PhantomData<&'a sys::aiScene>,
+    _marker: PhantomData<&'a ()>,
 }
 
 impl<'a> Iterator for AnimMeshIterator<'a> {
@@ -467,7 +463,7 @@ impl<'a> Iterator for AnimMeshIterator<'a> {
 
     fn next(&mut self) -> Option<Self::Item> {
         unsafe {
-            let mesh = self.mesh_ptr.as_ref();
+            let mesh = &*self.mesh_ptr.as_ptr();
             if mesh.mAnimMeshes.is_null() || mesh.mNumAnimMeshes == 0 {
                 return None;
             }
@@ -480,8 +476,7 @@ impl<'a> Iterator for AnimMeshIterator<'a> {
                     None
                 } else {
                     Some(AnimMesh {
-                        anim_ptr: NonNull::new(ptr as *mut sys::aiAnimMesh)
-                            .expect("aiAnimMesh pointer is null"),
+                        anim_ptr: SharedPtr::new(ptr).expect("aiAnimMesh pointer is null"),
                         _marker: PhantomData,
                     })
                 }
@@ -491,7 +486,7 @@ impl<'a> Iterator for AnimMeshIterator<'a> {
 
     fn size_hint(&self) -> (usize, Option<usize>) {
         unsafe {
-            let mesh = self.mesh_ptr.as_ref();
+            let mesh = &*self.mesh_ptr.as_ptr();
             let remaining = (mesh.mNumAnimMeshes as usize).saturating_sub(self.index);
             (remaining, Some(remaining))
         }

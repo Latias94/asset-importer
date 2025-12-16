@@ -4,10 +4,10 @@
 //! which are essential for skeletal animation in 3D models.
 
 use std::marker::PhantomData;
-use std::ptr::NonNull;
 
 use crate::{
     error::{Error, Result},
+    ptr::SharedPtr,
     sys,
     types::{Matrix4x4, ai_string_to_string, from_ai_matrix4x4},
 };
@@ -59,12 +59,9 @@ impl From<&sys::aiVertexWeight> for VertexWeight {
 /// Each bone has a name, an offset matrix, and a list of vertex weights.
 #[derive(Debug)]
 pub struct Bone<'a> {
-    bone_ptr: NonNull<sys::aiBone>,
-    _marker: PhantomData<&'a sys::aiScene>,
+    bone_ptr: SharedPtr<sys::aiBone>,
+    _marker: PhantomData<&'a ()>,
 }
-
-unsafe impl<'a> Send for Bone<'a> {}
-unsafe impl<'a> Sync for Bone<'a> {}
 
 impl<'a> Bone<'a> {
     /// Create a bone wrapper from a raw Assimp bone pointer
@@ -73,8 +70,8 @@ impl<'a> Bone<'a> {
     /// The caller must ensure that the pointer is valid and that the bone
     /// will not be freed while this Bone instance exists.
     pub(crate) unsafe fn from_raw(bone_ptr: *const sys::aiBone) -> Result<Self> {
-        let bone_ptr = NonNull::new(bone_ptr as *mut sys::aiBone)
-            .ok_or_else(|| Error::invalid_scene("Bone pointer is null"))?;
+        let bone_ptr =
+            SharedPtr::new(bone_ptr).ok_or_else(|| Error::invalid_scene("Bone pointer is null"))?;
 
         Ok(Self {
             bone_ptr,
@@ -89,18 +86,18 @@ impl<'a> Bone<'a> {
 
     /// Get the name of the bone
     pub fn name(&self) -> String {
-        unsafe { ai_string_to_string(&self.bone_ptr.as_ref().mName) }
+        unsafe { ai_string_to_string(&(*self.bone_ptr.as_ptr()).mName) }
     }
 
     /// Get the number of vertex weights for this bone
     pub fn num_weights(&self) -> usize {
-        unsafe { self.bone_ptr.as_ref().mNumWeights as usize }
+        unsafe { (*self.bone_ptr.as_ptr()).mNumWeights as usize }
     }
 
     /// Get the vertex weights for this bone
     pub fn weights(&self) -> Vec<VertexWeight> {
         unsafe {
-            let bone = self.bone_ptr.as_ref();
+            let bone = &*self.bone_ptr.as_ptr();
             if bone.mWeights.is_null() || bone.mNumWeights == 0 {
                 return Vec::new();
             }
@@ -118,7 +115,7 @@ impl<'a> Bone<'a> {
         }
 
         unsafe {
-            let bone = self.bone_ptr.as_ref();
+            let bone = &*self.bone_ptr.as_ptr();
             let weight = &*bone.mWeights.add(index);
             Some(VertexWeight::from(weight))
         }
@@ -129,7 +126,7 @@ impl<'a> Bone<'a> {
     /// The offset matrix transforms vertices from mesh space to bone space.
     /// It's typically the inverse of the bone's transformation matrix in bind pose.
     pub fn offset_matrix(&self) -> Matrix4x4 {
-        unsafe { from_ai_matrix4x4(self.bone_ptr.as_ref().mOffsetMatrix) }
+        unsafe { from_ai_matrix4x4((*self.bone_ptr.as_ptr()).mOffsetMatrix) }
     }
 
     /// Get weights that affect a specific vertex
@@ -206,10 +203,10 @@ impl<'a> Bone<'a> {
 
 /// Iterator over bones in a mesh
 pub struct BoneIterator<'a> {
-    bones: *mut *mut sys::aiBone,
+    bones: Option<SharedPtr<*mut sys::aiBone>>,
     count: usize,
     index: usize,
-    _marker: PhantomData<&'a sys::aiScene>,
+    _marker: PhantomData<&'a ()>,
 }
 
 impl<'a> BoneIterator<'a> {
@@ -219,7 +216,7 @@ impl<'a> BoneIterator<'a> {
     /// The caller must ensure that the bones pointer and count are valid.
     pub(crate) unsafe fn new(bones: *mut *mut sys::aiBone, count: usize) -> Self {
         Self {
-            bones,
+            bones: SharedPtr::new(bones as *const *mut sys::aiBone),
             count,
             index: 0,
             _marker: PhantomData,
@@ -231,7 +228,8 @@ impl<'a> Iterator for BoneIterator<'a> {
     type Item = Bone<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.bones.is_null() || self.count == 0 {
+        let bones = self.bones?;
+        if self.count == 0 {
             return None;
         }
         if self.index >= self.count {
@@ -239,7 +237,7 @@ impl<'a> Iterator for BoneIterator<'a> {
         }
 
         unsafe {
-            let bone_ptr = *self.bones.add(self.index);
+            let bone_ptr = *bones.as_ptr().add(self.index);
             self.index += 1;
 
             Bone::from_raw(bone_ptr).ok()
