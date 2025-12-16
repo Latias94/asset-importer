@@ -80,6 +80,15 @@ pub enum TextureData {
     Compressed(Vec<u8>),
 }
 
+/// Borrowed view of texture data (zero-copy).
+#[derive(Debug, Clone, Copy)]
+pub enum TextureDataRef<'a> {
+    /// Uncompressed texels (when height > 0)
+    Texels(&'a [sys::aiTexel]),
+    /// Compressed raw bytes (when height == 0)
+    Compressed(&'a [u8]),
+}
+
 /// An embedded texture within a 3D model file
 ///
 /// Textures can be either:
@@ -138,6 +147,29 @@ impl<'a> Texture<'a> {
         self.height() > 0
     }
 
+    /// Get a borrowed view of the texture data (zero-copy).
+    pub fn data_ref(&self) -> Result<TextureDataRef<'a>> {
+        unsafe {
+            let texture = &*self.texture_ptr.as_ptr();
+            if texture.pcData.is_null() {
+                return Err(Error::invalid_scene("Texture data is null"));
+            }
+
+            if self.is_compressed() {
+                let size = self.width() as usize;
+                let data_ptr = texture.pcData as *const u8;
+                Ok(TextureDataRef::Compressed(std::slice::from_raw_parts(
+                    data_ptr, size,
+                )))
+            } else {
+                let size = (self.width() * self.height()) as usize;
+                Ok(TextureDataRef::Texels(std::slice::from_raw_parts(
+                    texture.pcData, size,
+                )))
+            }
+        }
+    }
+
     /// Get the format hint for the texture
     ///
     /// For uncompressed textures, this describes the channel layout (e.g., "rgba8888").
@@ -179,26 +211,11 @@ impl<'a> Texture<'a> {
 
     /// Get the texture data
     pub fn data(&self) -> Result<TextureData> {
-        unsafe {
-            let texture = &*self.texture_ptr.as_ptr();
-
-            if texture.pcData.is_null() {
-                return Err(Error::invalid_scene("Texture data is null"));
-            }
-
-            if self.is_compressed() {
-                // Compressed texture - read as raw bytes
-                let size = self.width() as usize;
-                let data_ptr = texture.pcData as *const u8;
-                let bytes = std::slice::from_raw_parts(data_ptr, size);
-                Ok(TextureData::Compressed(bytes.to_vec()))
-            } else {
-                // Uncompressed texture - read as texels
-                let size = (self.width() * self.height()) as usize;
-                let texel_slice = std::slice::from_raw_parts(texture.pcData, size);
-                let texels: Vec<Texel> = texel_slice.iter().map(Texel::from).collect();
-                Ok(TextureData::Texels(texels))
-            }
+        match self.data_ref()? {
+            TextureDataRef::Compressed(bytes) => Ok(TextureData::Compressed(bytes.to_vec())),
+            TextureDataRef::Texels(texels) => Ok(TextureData::Texels(
+                texels.iter().map(Texel::from).collect(),
+            )),
         }
     }
 

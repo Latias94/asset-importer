@@ -228,20 +228,22 @@ pub fn attach_file_stream<P: AsRef<std::path::Path>>(_path: P) -> Result<()> {
 
 /// Convenience function to enable verbose logging
 pub fn enable_verbose_logging(enable: bool) {
-    global_logger()
-        .lock()
-        .unwrap()
-        .enable_verbose_logging(enable);
+    if let Ok(mut logger) = global_logger().lock() {
+        logger.enable_verbose_logging(enable);
+    }
 }
 
 /// Check if verbose logging is enabled
 pub fn is_verbose_logging_enabled() -> bool {
-    global_logger().lock().unwrap().is_verbose_enabled()
+    global_logger()
+        .lock()
+        .map(|l| l.is_verbose_enabled())
+        .unwrap_or(false)
 }
 
 /// Get the last error message from Assimp
 pub fn get_last_error_message() -> Option<String> {
-    global_logger().lock().unwrap().get_last_error()
+    global_logger().lock().ok().and_then(|l| l.get_last_error())
 }
 
 /// Detach all log streams (both default and custom).

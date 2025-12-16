@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Zero-copy accessors**: Added `*_raw()` / `*_iter()` accessors for meshes (vertices/normals/tangents/bitangents/UVs/colors), plus `Texture::data_ref()` to borrow embedded texture bytes/texels without allocation.
+
 ### Changed
 - **Stronger lifetime safety (breaking)**: Most scene-backed view types now borrow the owning `Scene` via lifetimes to prevent use-after-free in safe code.
 - **Assimp version helpers**: `version::assimp_version()` now reports `major.minor.patch` and new helpers expose patch/branch/legal strings.

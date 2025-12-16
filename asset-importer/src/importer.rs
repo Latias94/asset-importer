@@ -297,7 +297,9 @@ impl ImportBuilder {
 
         // If a progress handler is provided, use the C++ bridge to set it.
         let scene_ptr = if use_bridge {
-            let handler = self.progress_handler.unwrap();
+            let handler = self
+                .progress_handler
+                .ok_or_else(|| Error::invalid_parameter("progress handler missing"))?;
             // Prepare property list for the bridge
             let buffers = build_rust_properties(&self.properties)?;
 
@@ -419,7 +421,9 @@ impl ImportBuilder {
 
         // Import from memory (bridge if progress specified)
         let scene_ptr = if use_bridge {
-            let handler = self.progress_handler.unwrap();
+            let handler = self
+                .progress_handler
+                .ok_or_else(|| Error::invalid_parameter("progress handler missing"))?;
             // Prepare properties
             let buffers = build_rust_properties(&self.properties)?;
 
@@ -640,7 +644,8 @@ fn build_rust_properties(props: &[(String, PropertyValue)]) -> Result<BridgeProp
             PropertyValue::Matrix(m) => {
                 p.kind = sys::aiRustPropertyKind::aiRustPropertyKind_Matrix4x4;
                 matrices.push(to_ai_matrix4x4(*m));
-                let matrix_ptr = matrices.last().expect("matrix_count out of sync with push");
+                let idx = matrices.len() - 1;
+                let matrix_ptr = unsafe { matrices.as_ptr().add(idx) };
                 p.matrix_value = (matrix_ptr as *const sys::aiMatrix4x4) as *mut std::ffi::c_void;
             }
         }

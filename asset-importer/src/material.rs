@@ -4,6 +4,7 @@
 
 use std::ffi::CString;
 use std::marker::PhantomData;
+use std::ffi::CStr;
 
 use crate::{
     ptr::SharedPtr,
@@ -668,7 +669,7 @@ impl<'a> Material<'a> {
 
                 // Try read UV transform
                 let mut uv_transform = std::mem::MaybeUninit::<sys::aiUVTransform>::uninit();
-                let uv_key = std::ffi::CString::new("$tex.uvtrafo").unwrap();
+                let uv_key = CStr::from_bytes_with_nul_unchecked(b"$tex.uvtrafo\0");
                 let uv_ok = sys::aiGetMaterialUVTransform(
                     self.material_ptr.as_ptr(),
                     uv_key.as_ptr(),
@@ -690,7 +691,7 @@ impl<'a> Material<'a> {
 
                 // Try read TEXMAP_AXIS via property API ("$tex.mapaxis")
                 let axis = {
-                    let key = std::ffi::CString::new("$tex.mapaxis").unwrap();
+                    let key = CStr::from_bytes_with_nul_unchecked(b"$tex.mapaxis\0");
                     let mut prop_ptr: *const sys::aiMaterialProperty = std::ptr::null();
                     let ok = sys::aiGetMaterialProperty(
                         self.material_ptr.as_ptr(),

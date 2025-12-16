@@ -7,7 +7,7 @@ use crate::{
     metadata::Metadata,
     ptr::SharedPtr,
     sys,
-    types::{Matrix4x4, ai_string_to_string, from_ai_matrix4x4},
+    types::{Matrix4x4, ai_string_to_str, ai_string_to_string, from_ai_matrix4x4},
 };
 
 /// A node in the scene hierarchy
@@ -38,6 +38,11 @@ impl<'a> Node<'a> {
     /// Get the name of the node
     pub fn name(&self) -> String {
         unsafe { ai_string_to_string(&(*self.node_ptr.as_ptr()).mName) }
+    }
+
+    /// Get the name of the node (zero-copy, lossy UTF-8).
+    pub fn name_str(&self) -> std::borrow::Cow<'_, str> {
+        unsafe { ai_string_to_str(&(*self.node_ptr.as_ptr()).mName) }
     }
 
     /// Get the transformation matrix of the node

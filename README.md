@@ -60,13 +60,25 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Loaded {} meshes", scene.num_meshes());
     
     for mesh in scene.meshes() {
-        let vertices = mesh.vertices(); // Returns Vec<Vector3D>
-        println!("Mesh has {} vertices", vertices.len());
+        // Zero-copy options are available:
+        // - mesh.vertices_raw(): Option<&[sys::aiVector3D]>
+        // - mesh.vertices_iter(): Iterator<Item = Vector3D>
+        let vertices = mesh.vertices();
+        println!("Mesh has {} vertices (copied)", vertices.len());
     }
     
     Ok(())
 }
 ```
+
+## Thread Safety (Send/Sync)
+
+`Scene` and all scene-backed view types (`Mesh`, `Material`, `Node`, `Texture`, etc.) are `Send + Sync`
+and can be shared across threads (e.g. behind `Arc`) for read-only access.
+
+Important: do not mutate Assimp-owned scene memory through `asset_importer::sys` while a `Scene` (or any
+borrowed view) is shared across threads. Doing so violates the crate's safety contract and may cause
+undefined behavior.
 
 ## Build Options
 
@@ -232,4 +244,3 @@ If you're working with graphics and UI in Rust, you might also be interested in:
 
 - [Assimp](https://github.com/assimp/assimp) - The underlying C++ library
 - [russimp](https://github.com/jkvargas/russimp) - Inspiration and reference
-
