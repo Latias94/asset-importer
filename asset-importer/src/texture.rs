@@ -71,6 +71,24 @@ impl From<&sys::aiTexel> for Texel {
     }
 }
 
+#[cfg(test)]
+mod layout_tests {
+    use super::Texel;
+    use crate::sys;
+
+    #[test]
+    fn test_texel_layout_matches_sys() {
+        assert_eq!(
+            std::mem::size_of::<Texel>(),
+            std::mem::size_of::<sys::aiTexel>()
+        );
+        assert_eq!(
+            std::mem::align_of::<Texel>(),
+            std::mem::align_of::<sys::aiTexel>()
+        );
+    }
+}
+
 /// Content of texture data
 #[derive(Debug, Clone)]
 pub enum TextureData {
@@ -84,7 +102,7 @@ pub enum TextureData {
 #[derive(Debug, Clone, Copy)]
 pub enum TextureDataRef<'a> {
     /// Uncompressed texels (when height > 0)
-    Texels(&'a [sys::aiTexel]),
+    Texels(&'a [Texel]),
     /// Compressed raw bytes (when height == 0)
     Compressed(&'a [u8]),
 }
@@ -164,7 +182,7 @@ impl<'a> Texture<'a> {
             } else {
                 let size = (self.width() * self.height()) as usize;
                 Ok(TextureDataRef::Texels(std::slice::from_raw_parts(
-                    texture.pcData,
+                    texture.pcData as *const Texel,
                     size,
                 )))
             }
@@ -214,9 +232,7 @@ impl<'a> Texture<'a> {
     pub fn data(&self) -> Result<TextureData> {
         match self.data_ref()? {
             TextureDataRef::Compressed(bytes) => Ok(TextureData::Compressed(bytes.to_vec())),
-            TextureDataRef::Texels(texels) => Ok(TextureData::Texels(
-                texels.iter().map(Texel::from).collect(),
-            )),
+            TextureDataRef::Texels(texels) => Ok(TextureData::Texels(texels.to_vec())),
         }
     }
 

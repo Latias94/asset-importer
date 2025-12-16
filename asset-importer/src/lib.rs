@@ -57,6 +57,9 @@ pub use crate::{
     types::*,
 };
 
+/// Zero-copy raw view types for Assimp-owned data.
+pub mod raw;
+
 #[cfg(feature = "export")]
 pub use crate::exporter::{ExportBlob, ExportBuilder, ExportFormatDesc};
 
@@ -69,8 +72,8 @@ pub use crate::metadata::{Metadata, MetadataEntry, MetadataType};
 
 // Re-export material functionality
 pub use crate::material::{
-    Material, MaterialPropertyInfo, MaterialStringRef, PropertyTypeInfo, TextureInfo,
-    TextureInfoRef, TextureType, material_keys,
+    Material, MaterialPropertyInfo, MaterialPropertyIterator, MaterialPropertyRef,
+    MaterialStringRef, PropertyTypeInfo, TextureInfo, TextureInfoRef, TextureType, material_keys,
 };
 
 // Re-export texture functionality

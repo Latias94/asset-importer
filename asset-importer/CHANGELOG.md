@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Zero-copy accessors**: Added `*_raw()` / `*_iter()` accessors for meshes (vertices/normals/tangents/bitangents/UVs/colors), plus `Texture::data_ref()` to borrow embedded texture bytes/texels without allocation.
 - **More zero-allocation views**: Added `Mesh::faces_raw()` and `Face::indices_raw()`, plus `Material::texture_ref()` / `Material::texture_refs()` with `TextureInfoRef` to query texture metadata without allocating the path `String`.
 - **More zero-copy iterators**: Added `Bone::weights_raw()` / `Bone::weights_iter()` and `Node::mesh_indices_raw()` / `Node::mesh_indices_iter()` to avoid repeated allocations in common skeletal/scene traversal code.
+- **Raw zero-copy views**: Added `asset_importer::raw` with `repr(C)` mirrors so `*_raw()` APIs no longer depend on exposing `asset_importer::sys` by default.
 
 ### Changed
 - **Stronger lifetime safety (breaking)**: Most scene-backed view types now borrow the owning `Scene` via lifetimes to prevent use-after-free in safe code.
@@ -18,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Thread-safety internals**: Centralized Assimp pointer sharing logic to reduce scattered `unsafe impl Send/Sync` across the codebase.
 - **Material property keys (breaking)**: `material_keys::*` are now `&CStr` constants, and `Material::get_*_property` APIs prefer `&CStr` with `*_str` convenience wrappers.
 - **Raw sys bindings opt-in (breaking)**: `asset_importer::sys` is now behind the `raw-sys` feature to reduce accidental safety contract violations.
+- **Zero-copy API types (breaking)**: `Mesh::vertices_raw()`/`normals_raw()`/etc and `Texture::data_ref()` now return `asset_importer::raw::*` or crate-owned types instead of `sys::*`, so users can consume zero-copy data without enabling `raw-sys`.
 
 ### Fixed
 - **Send/Sync on scene-backed views**: `Texture` and other scene-backed view types now implement `Send + Sync`, matching the multithreading guarantees promised by the crate.

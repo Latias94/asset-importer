@@ -33,6 +33,25 @@ fn test_mesh_faces_raw_and_iter() {
 }
 
 #[test]
+fn test_mesh_vertices_raw_type_is_sys_free() {
+    let model_path = Path::new("tests/models/box.obj");
+    if !model_path.exists() {
+        println!("Skipping test - model file not found: {:?}", model_path);
+        return;
+    }
+
+    let scene = Importer::new()
+        .read_file(model_path)
+        .with_post_process(PostProcessSteps::TRIANGULATE)
+        .import_file(model_path)
+        .expect("failed to import box.obj");
+
+    let mesh = scene.meshes().next().expect("scene has no meshes");
+    let raw = mesh.vertices_raw().expect("mesh has no vertices");
+    assert!(!raw.is_empty());
+}
+
+#[test]
 fn test_material_texture_ref_path() {
     let model_path = Path::new("tests/models/textured.obj");
     if !model_path.exists() {

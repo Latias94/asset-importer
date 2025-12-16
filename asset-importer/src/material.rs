@@ -111,7 +111,14 @@ impl MaterialStringRef {
         ai_string_to_str(&self.value)
     }
 
+    /// Raw bytes (without assuming NUL-termination).
+    pub fn as_bytes(&self) -> &[u8] {
+        let len = (self.value.length as usize).min(self.value.data.len());
+        unsafe { std::slice::from_raw_parts(self.value.data.as_ptr() as *const u8, len) }
+    }
+
     /// Borrow the underlying Assimp `aiString`.
+    #[cfg(feature = "raw-sys")]
     pub fn as_raw(&self) -> &sys::aiString {
         &self.value
     }
@@ -448,7 +455,7 @@ impl<'a> Material<'a> {
         index: u32,
     ) -> Option<MaterialPropertyInfo> {
         let prop_ptr = self.property_ptr(key, semantic, index)?;
-        unsafe { Some(MaterialPropertyInfo::from_raw(&*prop_ptr)) }
+        Some(MaterialPropertyRef::from_ptr(prop_ptr).into_info())
     }
 
     /// Get raw information about a material property by key/semantic/index (allocates, convenience).
@@ -717,18 +724,21 @@ impl<'a> Material<'a> {
 
     /// Enumerate all properties stored in this material (raw info only)
     pub fn all_properties(&self) -> Vec<MaterialPropertyInfo> {
+        self.properties()
+            .map(MaterialPropertyRef::into_info)
+            .collect()
+    }
+
+    /// Iterate all material properties (zero allocation for keys and raw data).
+    pub fn properties(&self) -> MaterialPropertyIterator<'a> {
         unsafe {
             let m = &*self.material_ptr.as_ptr();
-            let count = m.mNumProperties as usize;
-            if m.mProperties.is_null() || count == 0 {
-                return Vec::new();
+            MaterialPropertyIterator {
+                props: SharedPtr::new(m.mProperties as *const *mut sys::aiMaterialProperty),
+                count: m.mNumProperties as usize,
+                index: 0,
+                _marker: PhantomData,
             }
-            let props = std::slice::from_raw_parts(m.mProperties, count);
-            props
-                .iter()
-                .filter_map(|&p| p.as_ref())
-                .map(MaterialPropertyInfo::from_raw)
-                .collect()
         }
     }
 
@@ -1040,18 +1050,101 @@ pub struct MaterialPropertyInfo {
 }
 
 impl MaterialPropertyInfo {
-    fn from_raw(p: &sys::aiMaterialProperty) -> Self {
-        let key = ai_string_to_string(&p.mKey);
-        // Semantic: if non-zero / aiTextureType_NONE, treat as texture type via safe mapping
-        let semantic = TextureType::from_u32(p.mSemantic);
-
+    fn from_ref(p: MaterialPropertyRef<'_>) -> Self {
+        let semantic = p.semantic();
         Self {
-            key,
+            key: p.key_string(),
             semantic,
-            index: p.mIndex,
-            data_length: p.mDataLength,
-            type_info: PropertyTypeInfo::from_sys(p.mType),
+            index: p.index(),
+            data_length: p.data().len() as u32,
+            type_info: p.type_info(),
         }
+    }
+}
+
+/// Zero-copy view of an Assimp material property.
+#[derive(Debug, Clone, Copy)]
+pub struct MaterialPropertyRef<'a> {
+    prop_ptr: SharedPtr<sys::aiMaterialProperty>,
+    _marker: PhantomData<&'a ()>,
+}
+
+impl<'a> MaterialPropertyRef<'a> {
+    fn from_ptr(prop_ptr: *const sys::aiMaterialProperty) -> Self {
+        debug_assert!(!prop_ptr.is_null());
+        let prop_ptr = unsafe { SharedPtr::new_unchecked(prop_ptr) };
+        Self {
+            prop_ptr,
+            _marker: PhantomData,
+        }
+    }
+
+    /// Property key as UTF-8 (lossy), without allocation.
+    pub fn key_str(&self) -> Cow<'_, str> {
+        unsafe { ai_string_to_str(&(*self.prop_ptr.as_ptr()).mKey) }
+    }
+
+    /// Property key as owned `String` (allocates).
+    pub fn key_string(&self) -> String {
+        unsafe { ai_string_to_string(&(*self.prop_ptr.as_ptr()).mKey) }
+    }
+
+    /// Semantic (texture type) if texture-related.
+    pub fn semantic(&self) -> Option<TextureType> {
+        unsafe { TextureType::from_u32((*self.prop_ptr.as_ptr()).mSemantic) }
+    }
+
+    /// Texture index (0 for non-texture properties).
+    pub fn index(&self) -> u32 {
+        unsafe { (*self.prop_ptr.as_ptr()).mIndex }
+    }
+
+    /// Property type info.
+    pub fn type_info(&self) -> PropertyTypeInfo {
+        unsafe { PropertyTypeInfo::from_sys((*self.prop_ptr.as_ptr()).mType) }
+    }
+
+    /// Raw property bytes as stored by Assimp (zero-copy).
+    pub fn data(&self) -> &'a [u8] {
+        unsafe {
+            let p = &*self.prop_ptr.as_ptr();
+            if p.mData.is_null() || p.mDataLength == 0 {
+                &[]
+            } else {
+                std::slice::from_raw_parts(p.mData as *const u8, p.mDataLength as usize)
+            }
+        }
+    }
+
+    fn into_info(self) -> MaterialPropertyInfo {
+        MaterialPropertyInfo::from_ref(self)
+    }
+}
+
+/// Iterator over material properties (skips null entries).
+pub struct MaterialPropertyIterator<'a> {
+    props: Option<SharedPtr<*mut sys::aiMaterialProperty>>,
+    count: usize,
+    index: usize,
+    _marker: PhantomData<&'a ()>,
+}
+
+impl<'a> Iterator for MaterialPropertyIterator<'a> {
+    type Item = MaterialPropertyRef<'a>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let props = self.props?;
+        while self.index < self.count {
+            unsafe {
+                let ptr = *props.as_ptr().add(self.index);
+                self.index += 1;
+                if ptr.is_null() {
+                    continue;
+                }
+                return Some(MaterialPropertyRef::from_ptr(ptr));
+            }
+        }
+        None
     }
 }
 
@@ -1401,7 +1494,14 @@ impl TextureInfoRef {
         ai_string_to_str(&self.path)
     }
 
+    /// Raw bytes of the path (without assuming NUL-termination).
+    pub fn path_bytes(&self) -> &[u8] {
+        let len = (self.path.length as usize).min(self.path.data.len());
+        unsafe { std::slice::from_raw_parts(self.path.data.as_ptr() as *const u8, len) }
+    }
+
     /// Borrow the underlying Assimp `aiString`.
+    #[cfg(feature = "raw-sys")]
     pub fn path_raw(&self) -> &sys::aiString {
         &self.path
     }

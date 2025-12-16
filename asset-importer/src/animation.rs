@@ -4,7 +4,7 @@ use std::marker::PhantomData;
 
 use crate::{
     ptr::SharedPtr,
-    sys,
+    raw, sys,
     types::{Quaternion, Vector3D, ai_string_to_string},
 };
 
@@ -181,15 +181,32 @@ impl<'a> NodeAnimation<'a> {
         unsafe { (*self.channel_ptr.as_ptr()).mNumPositionKeys as usize }
     }
 
-    /// Get the position keyframes
-    pub fn position_keys(&self) -> Vec<VectorKey> {
+    /// Get the raw position keyframes (zero-copy).
+    pub fn position_keys_raw(&self) -> &'a [raw::AiVectorKey] {
         unsafe {
             let ch = &*self.channel_ptr.as_ptr();
-            std::slice::from_raw_parts(ch.mPositionKeys, ch.mNumPositionKeys as usize)
-                .iter()
-                .map(|k| VectorKey::from_sys(*k))
-                .collect()
+            if ch.mPositionKeys.is_null() || ch.mNumPositionKeys == 0 {
+                &[]
+            } else {
+                std::slice::from_raw_parts(
+                    ch.mPositionKeys as *const raw::AiVectorKey,
+                    ch.mNumPositionKeys as usize,
+                )
+            }
         }
+    }
+
+    /// Iterate position keyframes without allocation.
+    pub fn position_keys_iter(&self) -> impl Iterator<Item = VectorKey> + '_ {
+        self.position_keys_raw()
+            .iter()
+            .copied()
+            .map(VectorKey::from_raw)
+    }
+
+    /// Get the position keyframes (allocates).
+    pub fn position_keys(&self) -> Vec<VectorKey> {
+        self.position_keys_iter().collect()
     }
 
     /// Get the number of rotation keyframes
@@ -197,15 +214,32 @@ impl<'a> NodeAnimation<'a> {
         unsafe { (*self.channel_ptr.as_ptr()).mNumRotationKeys as usize }
     }
 
-    /// Get the rotation keyframes
-    pub fn rotation_keys(&self) -> Vec<QuaternionKey> {
+    /// Get the raw rotation keyframes (zero-copy).
+    pub fn rotation_keys_raw(&self) -> &'a [raw::AiQuatKey] {
         unsafe {
             let ch = &*self.channel_ptr.as_ptr();
-            std::slice::from_raw_parts(ch.mRotationKeys, ch.mNumRotationKeys as usize)
-                .iter()
-                .map(|k| QuaternionKey::from_sys(*k))
-                .collect()
+            if ch.mRotationKeys.is_null() || ch.mNumRotationKeys == 0 {
+                &[]
+            } else {
+                std::slice::from_raw_parts(
+                    ch.mRotationKeys as *const raw::AiQuatKey,
+                    ch.mNumRotationKeys as usize,
+                )
+            }
         }
+    }
+
+    /// Iterate rotation keyframes without allocation.
+    pub fn rotation_keys_iter(&self) -> impl Iterator<Item = QuaternionKey> + '_ {
+        self.rotation_keys_raw()
+            .iter()
+            .copied()
+            .map(QuaternionKey::from_raw)
+    }
+
+    /// Get the rotation keyframes (allocates).
+    pub fn rotation_keys(&self) -> Vec<QuaternionKey> {
+        self.rotation_keys_iter().collect()
     }
 
     /// Get the number of scaling keyframes
@@ -213,15 +247,32 @@ impl<'a> NodeAnimation<'a> {
         unsafe { (*self.channel_ptr.as_ptr()).mNumScalingKeys as usize }
     }
 
-    /// Get the scaling keyframes
-    pub fn scaling_keys(&self) -> Vec<VectorKey> {
+    /// Get the raw scaling keyframes (zero-copy).
+    pub fn scaling_keys_raw(&self) -> &'a [raw::AiVectorKey] {
         unsafe {
             let ch = &*self.channel_ptr.as_ptr();
-            std::slice::from_raw_parts(ch.mScalingKeys, ch.mNumScalingKeys as usize)
-                .iter()
-                .map(|k| VectorKey::from_sys(*k))
-                .collect()
+            if ch.mScalingKeys.is_null() || ch.mNumScalingKeys == 0 {
+                &[]
+            } else {
+                std::slice::from_raw_parts(
+                    ch.mScalingKeys as *const raw::AiVectorKey,
+                    ch.mNumScalingKeys as usize,
+                )
+            }
         }
+    }
+
+    /// Iterate scaling keyframes without allocation.
+    pub fn scaling_keys_iter(&self) -> impl Iterator<Item = VectorKey> + '_ {
+        self.scaling_keys_raw()
+            .iter()
+            .copied()
+            .map(VectorKey::from_raw)
+    }
+
+    /// Get the scaling keyframes (allocates).
+    pub fn scaling_keys(&self) -> Vec<VectorKey> {
+        self.scaling_keys_iter().collect()
     }
     /// Behaviour before the first key
     pub fn pre_state(&self) -> AnimBehaviour {
@@ -249,13 +300,17 @@ pub enum AnimInterpolation {
 }
 
 impl AnimInterpolation {
-    fn from_sys(v: sys::aiAnimInterpolation) -> Self {
-        match v {
-            sys::aiAnimInterpolation::aiAnimInterpolation_Step => Self::Step,
-            sys::aiAnimInterpolation::aiAnimInterpolation_Linear => Self::Linear,
-            sys::aiAnimInterpolation::aiAnimInterpolation_Spherical_Linear => Self::SphericalLinear,
-            sys::aiAnimInterpolation::aiAnimInterpolation_Cubic_Spline => Self::CubicSpline,
-            _ => Self::Unknown(v as u32),
+    fn from_raw(v: i32) -> Self {
+        match v as u32 {
+            x if x == sys::aiAnimInterpolation::aiAnimInterpolation_Step as u32 => Self::Step,
+            x if x == sys::aiAnimInterpolation::aiAnimInterpolation_Linear as u32 => Self::Linear,
+            x if x == sys::aiAnimInterpolation::aiAnimInterpolation_Spherical_Linear as u32 => {
+                Self::SphericalLinear
+            }
+            x if x == sys::aiAnimInterpolation::aiAnimInterpolation_Cubic_Spline as u32 => {
+                Self::CubicSpline
+            }
+            other => Self::Unknown(other),
         }
     }
 }
@@ -296,11 +351,11 @@ pub struct VectorKey {
 }
 
 impl VectorKey {
-    fn from_sys(k: sys::aiVectorKey) -> Self {
+    fn from_raw(k: raw::AiVectorKey) -> Self {
         Self {
             time: k.mTime,
             value: Vector3D::new(k.mValue.x, k.mValue.y, k.mValue.z),
-            interpolation: AnimInterpolation::from_sys(k.mInterpolation),
+            interpolation: AnimInterpolation::from_raw(k.mInterpolation),
         }
     }
 }
@@ -316,11 +371,11 @@ pub struct QuaternionKey {
 }
 
 impl QuaternionKey {
-    fn from_sys(k: sys::aiQuatKey) -> Self {
+    fn from_raw(k: raw::AiQuatKey) -> Self {
         Self {
             time: k.mTime,
             value: Quaternion::from_xyzw(k.mValue.x, k.mValue.y, k.mValue.z, k.mValue.w),
-            interpolation: AnimInterpolation::from_sys(k.mInterpolation),
+            interpolation: AnimInterpolation::from_raw(k.mInterpolation),
         }
     }
 }

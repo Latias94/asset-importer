@@ -46,50 +46,58 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
 
         // Raw/typed properties
-        for p in mat.all_properties().into_iter().take(64) {
+        for p in mat.properties().take(64) {
+            let key = p.key_str();
             let sem = p
-                .semantic
+                .semantic()
                 .map(|t| format!("{:?}", t))
                 .unwrap_or_else(|| "-".into());
             print!(
                 "  key='{}' sem={} idx={} len={} type={:?}",
-                p.key, sem, p.index, p.data_length, p.type_info
+                key,
+                sem,
+                p.index(),
+                p.data().len(),
+                p.type_info()
             );
-            match p.type_info {
+            match p.type_info() {
                 PropertyTypeInfo::String => {
-                    if let Some(s) = mat.get_string_property_str(&p.key) {
+                    if let Some(s) = mat.get_string_property_str(key.as_ref()) {
                         println!(" value=\"{}\"", s);
                     } else {
                         println!();
                     }
                 }
                 PropertyTypeInfo::Integer => {
-                    if let Some(v) = mat.get_property_i32_array_str(&p.key, p.semantic, p.index) {
+                    if let Some(v) =
+                        mat.get_property_i32_array_str(key.as_ref(), p.semantic(), p.index())
+                    {
                         println!(" ints={:?}", preview(&v[..]));
                     } else {
                         println!();
                     }
                 }
                 PropertyTypeInfo::Float => {
-                    if let Some(v) = mat.get_property_f32_array_str(&p.key, p.semantic, p.index) {
+                    if let Some(v) =
+                        mat.get_property_f32_array_str(key.as_ref(), p.semantic(), p.index())
+                    {
                         println!(" floats={:?}", preview(&v[..]));
                     } else {
                         println!();
                     }
                 }
                 PropertyTypeInfo::Double => {
-                    if let Some(v) = mat.get_property_f64_array_str(&p.key, p.semantic, p.index) {
+                    if let Some(v) =
+                        mat.get_property_f64_array_str(key.as_ref(), p.semantic(), p.index())
+                    {
                         println!(" doubles={:?}", preview(&v[..]));
                     } else {
                         println!();
                     }
                 }
                 PropertyTypeInfo::Buffer | PropertyTypeInfo::Unknown(_) => {
-                    if let Some(raw) = mat.get_property_raw_str(&p.key, p.semantic, p.index) {
-                        println!(" raw[{}]={:?}", raw.len(), preview(&raw));
-                    } else {
-                        println!();
-                    }
+                    let raw = p.data();
+                    println!(" raw[{}]={:?}", raw.len(), preview(raw));
                 }
             }
         }

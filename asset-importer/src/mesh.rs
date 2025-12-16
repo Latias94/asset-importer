@@ -8,10 +8,8 @@ use crate::{
     aabb::AABB,
     bone::{Bone, BoneIterator},
     ptr::SharedPtr,
-    sys,
-    types::{
-        Color4D, Vector3D, ai_string_to_str, ai_string_to_string, from_ai_color4d, from_ai_vector3d,
-    },
+    raw, sys,
+    types::{Color4D, Vector3D, ai_string_to_str, ai_string_to_string},
 };
 
 /// A mesh containing vertices, faces, and other geometric data
@@ -57,19 +55,19 @@ impl<'a> Mesh<'a> {
     /// Get the vertices of the mesh
     pub fn vertices(&self) -> Vec<Vector3D> {
         self.vertices_raw()
-            .map(|vs| vs.iter().copied().map(from_ai_vector3d).collect())
+            .map(|vs| vs.iter().map(|v| Vector3D::new(v.x, v.y, v.z)).collect())
             .unwrap_or_default()
     }
 
     /// Get the raw vertex buffer (zero-copy).
-    pub fn vertices_raw(&self) -> Option<&'a [sys::aiVector3D]> {
+    pub fn vertices_raw(&self) -> Option<&'a [raw::AiVector3D]> {
         unsafe {
             let mesh = &*self.mesh_ptr.as_ptr();
             if mesh.mVertices.is_null() {
                 None
             } else {
                 Some(std::slice::from_raw_parts(
-                    mesh.mVertices,
+                    mesh.mVertices as *const raw::AiVector3D,
                     mesh.mNumVertices as usize,
                 ))
             }
@@ -80,24 +78,24 @@ impl<'a> Mesh<'a> {
     pub fn vertices_iter(&self) -> impl Iterator<Item = Vector3D> + '_ {
         self.vertices_raw()
             .into_iter()
-            .flat_map(|vs| vs.iter().copied().map(from_ai_vector3d))
+            .flat_map(|vs| vs.iter().map(|v| Vector3D::new(v.x, v.y, v.z)))
     }
 
     /// Get the normals of the mesh
     pub fn normals(&self) -> Option<Vec<Vector3D>> {
         self.normals_raw()
-            .map(|ns| ns.iter().copied().map(from_ai_vector3d).collect())
+            .map(|ns| ns.iter().map(|v| Vector3D::new(v.x, v.y, v.z)).collect())
     }
 
     /// Get the raw normal buffer (zero-copy).
-    pub fn normals_raw(&self) -> Option<&'a [sys::aiVector3D]> {
+    pub fn normals_raw(&self) -> Option<&'a [raw::AiVector3D]> {
         unsafe {
             let mesh = &*self.mesh_ptr.as_ptr();
             if mesh.mNormals.is_null() {
                 None
             } else {
                 Some(std::slice::from_raw_parts(
-                    mesh.mNormals,
+                    mesh.mNormals as *const raw::AiVector3D,
                     mesh.mNumVertices as usize,
                 ))
             }
@@ -108,24 +106,24 @@ impl<'a> Mesh<'a> {
     pub fn normals_iter(&self) -> impl Iterator<Item = Vector3D> + '_ {
         self.normals_raw()
             .into_iter()
-            .flat_map(|ns| ns.iter().copied().map(from_ai_vector3d))
+            .flat_map(|ns| ns.iter().map(|v| Vector3D::new(v.x, v.y, v.z)))
     }
 
     /// Get the tangents of the mesh
     pub fn tangents(&self) -> Option<Vec<Vector3D>> {
         self.tangents_raw()
-            .map(|ts| ts.iter().copied().map(from_ai_vector3d).collect())
+            .map(|ts| ts.iter().map(|v| Vector3D::new(v.x, v.y, v.z)).collect())
     }
 
     /// Get the raw tangent buffer (zero-copy).
-    pub fn tangents_raw(&self) -> Option<&'a [sys::aiVector3D]> {
+    pub fn tangents_raw(&self) -> Option<&'a [raw::AiVector3D]> {
         unsafe {
             let mesh = &*self.mesh_ptr.as_ptr();
             if mesh.mTangents.is_null() {
                 None
             } else {
                 Some(std::slice::from_raw_parts(
-                    mesh.mTangents,
+                    mesh.mTangents as *const raw::AiVector3D,
                     mesh.mNumVertices as usize,
                 ))
             }
@@ -136,24 +134,24 @@ impl<'a> Mesh<'a> {
     pub fn tangents_iter(&self) -> impl Iterator<Item = Vector3D> + '_ {
         self.tangents_raw()
             .into_iter()
-            .flat_map(|ts| ts.iter().copied().map(from_ai_vector3d))
+            .flat_map(|ts| ts.iter().map(|v| Vector3D::new(v.x, v.y, v.z)))
     }
 
     /// Get the bitangents of the mesh
     pub fn bitangents(&self) -> Option<Vec<Vector3D>> {
         self.bitangents_raw()
-            .map(|bs| bs.iter().copied().map(from_ai_vector3d).collect())
+            .map(|bs| bs.iter().map(|v| Vector3D::new(v.x, v.y, v.z)).collect())
     }
 
     /// Get the raw bitangent buffer (zero-copy).
-    pub fn bitangents_raw(&self) -> Option<&'a [sys::aiVector3D]> {
+    pub fn bitangents_raw(&self) -> Option<&'a [raw::AiVector3D]> {
         unsafe {
             let mesh = &*self.mesh_ptr.as_ptr();
             if mesh.mBitangents.is_null() {
                 None
             } else {
                 Some(std::slice::from_raw_parts(
-                    mesh.mBitangents,
+                    mesh.mBitangents as *const raw::AiVector3D,
                     mesh.mNumVertices as usize,
                 ))
             }
@@ -164,17 +162,17 @@ impl<'a> Mesh<'a> {
     pub fn bitangents_iter(&self) -> impl Iterator<Item = Vector3D> + '_ {
         self.bitangents_raw()
             .into_iter()
-            .flat_map(|bs| bs.iter().copied().map(from_ai_vector3d))
+            .flat_map(|bs| bs.iter().map(|v| Vector3D::new(v.x, v.y, v.z)))
     }
 
     /// Get texture coordinates for a specific channel
     pub fn texture_coords(&self, channel: usize) -> Option<Vec<Vector3D>> {
         self.texture_coords_raw(channel)
-            .map(|uvs| uvs.iter().copied().map(from_ai_vector3d).collect())
+            .map(|uvs| uvs.iter().map(|v| Vector3D::new(v.x, v.y, v.z)).collect())
     }
 
     /// Get raw texture coordinates for a specific channel (zero-copy).
-    pub fn texture_coords_raw(&self, channel: usize) -> Option<&'a [sys::aiVector3D]> {
+    pub fn texture_coords_raw(&self, channel: usize) -> Option<&'a [raw::AiVector3D]> {
         if channel >= sys::AI_MAX_NUMBER_OF_TEXTURECOORDS as usize {
             return None;
         }
@@ -186,7 +184,7 @@ impl<'a> Mesh<'a> {
                 None
             } else {
                 Some(std::slice::from_raw_parts(
-                    tex_coords_ptr,
+                    tex_coords_ptr as *const raw::AiVector3D,
                     mesh.mNumVertices as usize,
                 ))
             }
@@ -197,17 +195,20 @@ impl<'a> Mesh<'a> {
     pub fn texture_coords_iter(&self, channel: usize) -> impl Iterator<Item = Vector3D> + '_ {
         self.texture_coords_raw(channel)
             .into_iter()
-            .flat_map(|uvs| uvs.iter().copied().map(from_ai_vector3d))
+            .flat_map(|uvs| uvs.iter().map(|v| Vector3D::new(v.x, v.y, v.z)))
     }
 
     /// Get vertex colors for a specific channel
     pub fn vertex_colors(&self, channel: usize) -> Option<Vec<Color4D>> {
-        self.vertex_colors_raw(channel)
-            .map(|cs| cs.iter().copied().map(from_ai_color4d).collect())
+        self.vertex_colors_raw(channel).map(|cs| {
+            cs.iter()
+                .map(|c| Color4D::new(c.r, c.g, c.b, c.a))
+                .collect()
+        })
     }
 
     /// Get raw vertex colors for a specific channel (zero-copy).
-    pub fn vertex_colors_raw(&self, channel: usize) -> Option<&'a [sys::aiColor4D]> {
+    pub fn vertex_colors_raw(&self, channel: usize) -> Option<&'a [raw::AiColor4D]> {
         if channel >= sys::AI_MAX_NUMBER_OF_COLOR_SETS as usize {
             return None;
         }
@@ -219,7 +220,7 @@ impl<'a> Mesh<'a> {
                 None
             } else {
                 Some(std::slice::from_raw_parts(
-                    colors_ptr,
+                    colors_ptr as *const raw::AiColor4D,
                     mesh.mNumVertices as usize,
                 ))
             }
@@ -230,7 +231,7 @@ impl<'a> Mesh<'a> {
     pub fn vertex_colors_iter(&self, channel: usize) -> impl Iterator<Item = Color4D> + '_ {
         self.vertex_colors_raw(channel)
             .into_iter()
-            .flat_map(|cs| cs.iter().copied().map(from_ai_color4d))
+            .flat_map(|cs| cs.iter().map(|c| Color4D::new(c.r, c.g, c.b, c.a)))
     }
 
     /// Get the number of faces in the mesh
@@ -248,14 +249,14 @@ impl<'a> Mesh<'a> {
     }
 
     /// Get the raw face array (zero-copy).
-    pub fn faces_raw(&self) -> Option<&'a [sys::aiFace]> {
+    pub fn faces_raw(&self) -> Option<&'a [raw::AiFace]> {
         unsafe {
             let mesh = &*self.mesh_ptr.as_ptr();
             if mesh.mFaces.is_null() || mesh.mNumFaces == 0 {
                 None
             } else {
                 Some(std::slice::from_raw_parts(
-                    mesh.mFaces,
+                    mesh.mFaces as *const raw::AiFace,
                     mesh.mNumFaces as usize,
                 ))
             }
@@ -395,7 +396,7 @@ impl<'a> Mesh<'a> {
 
 /// A face in a mesh
 pub struct Face<'a> {
-    face_ptr: SharedPtr<sys::aiFace>,
+    face_ptr: SharedPtr<raw::AiFace>,
     _marker: PhantomData<&'a ()>,
 }
 
@@ -447,7 +448,7 @@ impl<'a> Iterator for FaceIterator<'a> {
             } else {
                 let face_ptr = mesh.mFaces.add(self.index);
                 self.index += 1;
-                let face_ptr = SharedPtr::new(face_ptr)?;
+                let face_ptr = SharedPtr::new(face_ptr as *const raw::AiFace)?;
                 Some(Face {
                     face_ptr,
                     _marker: PhantomData,
@@ -486,71 +487,90 @@ impl<'a> AnimMesh<'a> {
     /// Replacement positions (if present)
     pub fn vertices(&self) -> Option<Vec<Vector3D>> {
         self.vertices_raw()
-            .map(|vs| vs.iter().copied().map(from_ai_vector3d).collect())
+            .map(|vs| vs.iter().map(|v| Vector3D::new(v.x, v.y, v.z)).collect())
     }
 
     /// Raw replacement positions (zero-copy).
-    pub fn vertices_raw(&self) -> Option<&'a [sys::aiVector3D]> {
+    pub fn vertices_raw(&self) -> Option<&'a [raw::AiVector3D]> {
         unsafe {
             let m = &*self.anim_ptr.as_ptr();
-            (!m.mVertices.is_null())
-                .then(|| std::slice::from_raw_parts(m.mVertices, m.mNumVertices as usize))
+            (!m.mVertices.is_null()).then(|| {
+                std::slice::from_raw_parts(
+                    m.mVertices as *const raw::AiVector3D,
+                    m.mNumVertices as usize,
+                )
+            })
         }
     }
 
     /// Replacement normals (if present)
     pub fn normals(&self) -> Option<Vec<Vector3D>> {
         self.normals_raw()
-            .map(|ns| ns.iter().copied().map(from_ai_vector3d).collect())
+            .map(|ns| ns.iter().map(|v| Vector3D::new(v.x, v.y, v.z)).collect())
     }
 
     /// Raw replacement normals (zero-copy).
-    pub fn normals_raw(&self) -> Option<&'a [sys::aiVector3D]> {
+    pub fn normals_raw(&self) -> Option<&'a [raw::AiVector3D]> {
         unsafe {
             let m = &*self.anim_ptr.as_ptr();
-            (!m.mNormals.is_null())
-                .then(|| std::slice::from_raw_parts(m.mNormals, m.mNumVertices as usize))
+            (!m.mNormals.is_null()).then(|| {
+                std::slice::from_raw_parts(
+                    m.mNormals as *const raw::AiVector3D,
+                    m.mNumVertices as usize,
+                )
+            })
         }
     }
 
     /// Replacement tangents (if present)
     pub fn tangents(&self) -> Option<Vec<Vector3D>> {
         self.tangents_raw()
-            .map(|ts| ts.iter().copied().map(from_ai_vector3d).collect())
+            .map(|ts| ts.iter().map(|v| Vector3D::new(v.x, v.y, v.z)).collect())
     }
 
     /// Raw replacement tangents (zero-copy).
-    pub fn tangents_raw(&self) -> Option<&'a [sys::aiVector3D]> {
+    pub fn tangents_raw(&self) -> Option<&'a [raw::AiVector3D]> {
         unsafe {
             let m = &*self.anim_ptr.as_ptr();
-            (!m.mTangents.is_null())
-                .then(|| std::slice::from_raw_parts(m.mTangents, m.mNumVertices as usize))
+            (!m.mTangents.is_null()).then(|| {
+                std::slice::from_raw_parts(
+                    m.mTangents as *const raw::AiVector3D,
+                    m.mNumVertices as usize,
+                )
+            })
         }
     }
 
     /// Replacement bitangents (if present)
     pub fn bitangents(&self) -> Option<Vec<Vector3D>> {
         self.bitangents_raw()
-            .map(|bs| bs.iter().copied().map(from_ai_vector3d).collect())
+            .map(|bs| bs.iter().map(|v| Vector3D::new(v.x, v.y, v.z)).collect())
     }
 
     /// Raw replacement bitangents (zero-copy).
-    pub fn bitangents_raw(&self) -> Option<&'a [sys::aiVector3D]> {
+    pub fn bitangents_raw(&self) -> Option<&'a [raw::AiVector3D]> {
         unsafe {
             let m = &*self.anim_ptr.as_ptr();
-            (!m.mBitangents.is_null())
-                .then(|| std::slice::from_raw_parts(m.mBitangents, m.mNumVertices as usize))
+            (!m.mBitangents.is_null()).then(|| {
+                std::slice::from_raw_parts(
+                    m.mBitangents as *const raw::AiVector3D,
+                    m.mNumVertices as usize,
+                )
+            })
         }
     }
 
     /// Replacement vertex colors for a specific channel
     pub fn vertex_colors(&self, channel: usize) -> Option<Vec<Color4D>> {
-        self.vertex_colors_raw(channel)
-            .map(|cs| cs.iter().copied().map(from_ai_color4d).collect())
+        self.vertex_colors_raw(channel).map(|cs| {
+            cs.iter()
+                .map(|c| Color4D::new(c.r, c.g, c.b, c.a))
+                .collect()
+        })
     }
 
     /// Raw replacement vertex colors for a specific channel (zero-copy).
-    pub fn vertex_colors_raw(&self, channel: usize) -> Option<&'a [sys::aiColor4D]> {
+    pub fn vertex_colors_raw(&self, channel: usize) -> Option<&'a [raw::AiColor4D]> {
         if channel >= sys::AI_MAX_NUMBER_OF_COLOR_SETS as usize {
             return None;
         }
@@ -560,7 +580,10 @@ impl<'a> AnimMesh<'a> {
             if ptr.is_null() {
                 None
             } else {
-                Some(std::slice::from_raw_parts(ptr, m.mNumVertices as usize))
+                Some(std::slice::from_raw_parts(
+                    ptr as *const raw::AiColor4D,
+                    m.mNumVertices as usize,
+                ))
             }
         }
     }
@@ -568,11 +591,11 @@ impl<'a> AnimMesh<'a> {
     /// Replacement texture coordinates for a specific channel
     pub fn texture_coords(&self, channel: usize) -> Option<Vec<Vector3D>> {
         self.texture_coords_raw(channel)
-            .map(|uvs| uvs.iter().copied().map(from_ai_vector3d).collect())
+            .map(|uvs| uvs.iter().map(|v| Vector3D::new(v.x, v.y, v.z)).collect())
     }
 
     /// Raw replacement texture coordinates for a specific channel (zero-copy).
-    pub fn texture_coords_raw(&self, channel: usize) -> Option<&'a [sys::aiVector3D]> {
+    pub fn texture_coords_raw(&self, channel: usize) -> Option<&'a [raw::AiVector3D]> {
         if channel >= sys::AI_MAX_NUMBER_OF_TEXTURECOORDS as usize {
             return None;
         }
@@ -582,7 +605,10 @@ impl<'a> AnimMesh<'a> {
             if ptr.is_null() {
                 None
             } else {
-                Some(std::slice::from_raw_parts(ptr, m.mNumVertices as usize))
+                Some(std::slice::from_raw_parts(
+                    ptr as *const raw::AiVector3D,
+                    m.mNumVertices as usize,
+                ))
             }
         }
     }

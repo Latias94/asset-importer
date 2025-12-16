@@ -8,7 +8,7 @@ use std::marker::PhantomData;
 use crate::{
     error::{Error, Result},
     ptr::SharedPtr,
-    sys,
+    raw, sys,
     types::{Matrix4x4, ai_string_to_str, ai_string_to_string, from_ai_matrix4x4},
 };
 
@@ -46,6 +46,15 @@ impl VertexWeight {
 
 impl From<&sys::aiVertexWeight> for VertexWeight {
     fn from(weight: &sys::aiVertexWeight) -> Self {
+        Self {
+            vertex_id: weight.mVertexId,
+            weight: weight.mWeight,
+        }
+    }
+}
+
+impl From<&raw::AiVertexWeight> for VertexWeight {
+    fn from(weight: &raw::AiVertexWeight) -> Self {
         Self {
             vertex_id: weight.mVertexId,
             weight: weight.mWeight,
@@ -105,14 +114,14 @@ impl<'a> Bone<'a> {
     }
 
     /// Get the raw vertex weight array (zero-copy).
-    pub fn weights_raw(&self) -> Option<&'a [sys::aiVertexWeight]> {
+    pub fn weights_raw(&self) -> Option<&'a [raw::AiVertexWeight]> {
         unsafe {
             let bone = &*self.bone_ptr.as_ptr();
             if bone.mWeights.is_null() || bone.mNumWeights == 0 {
                 None
             } else {
                 Some(std::slice::from_raw_parts(
-                    bone.mWeights,
+                    bone.mWeights as *const raw::AiVertexWeight,
                     bone.mNumWeights as usize,
                 ))
             }
