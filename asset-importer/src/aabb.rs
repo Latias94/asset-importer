@@ -17,7 +17,7 @@ use crate::{
 pub struct AABB {
     /// Minimum corner of the bounding box
     pub min: Vector3D,
-    /// Maximum corner of the bounding box  
+    /// Maximum corner of the bounding box
     pub max: Vector3D,
 }
 
@@ -215,24 +215,17 @@ impl AABB {
             return *self;
         }
 
-        // Transform all 8 corners of the AABB
-        let corners = [
-            Vector3D::new(self.min.x, self.min.y, self.min.z),
-            Vector3D::new(self.max.x, self.min.y, self.min.z),
-            Vector3D::new(self.min.x, self.max.y, self.min.z),
-            Vector3D::new(self.max.x, self.max.y, self.min.z),
-            Vector3D::new(self.min.x, self.min.y, self.max.z),
-            Vector3D::new(self.max.x, self.min.y, self.max.z),
-            Vector3D::new(self.min.x, self.max.y, self.max.z),
-            Vector3D::new(self.max.x, self.max.y, self.max.z),
-        ];
+        let mut min = glam::Vec3::splat(f32::INFINITY);
+        let mut max = glam::Vec3::splat(f32::NEG_INFINITY);
 
-        let transformed_corners: Vec<Vector3D> = corners
-            .iter()
-            .map(|&corner| matrix.transform_point3(corner))
-            .collect();
+        for corner in self.corners() {
+            let transformed = matrix.transform_point3(corner);
 
-        Self::from_points(transformed_corners)
+            min = min.min(transformed);
+            max = max.max(transformed);
+        }
+
+        AABB { min, max }
     }
 
     /// Expand the AABB by a uniform amount in all directions
