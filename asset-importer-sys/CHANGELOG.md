@@ -5,6 +5,14 @@ All notable changes to `asset-importer-sys` will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+- **Bundled Assimp updated**: Updated the `assimp` submodule to `c58496185d05c123fa84b68f1f85c3ef2936f2bb`.
+
+### Fixed
+- **macOS prebuilt runtime loading**: Prebuilt builds now copy Assimp shared libraries into `OUT_DIR` to avoid `dyld: Library not loaded @rpath/libassimp*.dylib` at runtime.
+
 ## [0.3.0] - 2025-09-19
 
 ### Changed

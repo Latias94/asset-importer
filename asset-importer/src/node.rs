@@ -1,48 +1,57 @@
 //! Scene node representation and hierarchy
 
+use std::marker::PhantomData;
+use std::ptr::NonNull;
+
 use crate::{
-    error::{Result, c_str_to_string_or_empty},
+    error::Result,
     metadata::Metadata,
     sys,
-    types::{Matrix4x4, from_ai_matrix4x4},
+    types::{Matrix4x4, ai_string_to_string, from_ai_matrix4x4},
 };
 
 /// A node in the scene hierarchy
-pub struct Node {
-    node_ptr: *const sys::aiNode,
+#[derive(Clone, Copy)]
+pub struct Node<'a> {
+    node_ptr: NonNull<sys::aiNode>,
+    _marker: PhantomData<&'a sys::aiScene>,
 }
 
-impl Node {
+impl<'a> Node<'a> {
     /// Create a Node from a raw Assimp node pointer
-    pub(crate) fn from_raw(node_ptr: *const sys::aiNode) -> Self {
-        Self { node_ptr }
+    ///
+    /// # Safety
+    /// Caller must ensure `node_ptr` is non-null and points into a live `aiScene`.
+    pub(crate) unsafe fn from_raw(node_ptr: *const sys::aiNode) -> Self {
+        let node_ptr = NonNull::new(node_ptr as *mut sys::aiNode).expect("aiNode pointer is null");
+        Self {
+            node_ptr,
+            _marker: PhantomData,
+        }
     }
 
     /// Get the raw node pointer
     pub fn as_raw(&self) -> *const sys::aiNode {
-        self.node_ptr
+        self.node_ptr.as_ptr()
     }
 
     /// Get the name of the node
     pub fn name(&self) -> String {
-        unsafe {
-            let node = &*self.node_ptr;
-            c_str_to_string_or_empty(node.mName.data.as_ptr())
-        }
+        unsafe { ai_string_to_string(&self.node_ptr.as_ref().mName) }
     }
 
     /// Get the transformation matrix of the node
     pub fn transformation(&self) -> Matrix4x4 {
         unsafe {
-            let node = &*self.node_ptr;
+            let node = self.node_ptr.as_ref();
             from_ai_matrix4x4(node.mTransformation)
         }
     }
 
     /// Get the parent node
-    pub fn parent(&self) -> Option<Node> {
+    pub fn parent(&self) -> Option<Node<'a>> {
         unsafe {
-            let node = &*self.node_ptr;
+            let node = self.node_ptr.as_ref();
             if node.mParent.is_null() {
                 None
             } else {
@@ -53,17 +62,17 @@ impl Node {
 
     /// Get the number of child nodes
     pub fn num_children(&self) -> usize {
-        unsafe { (*self.node_ptr).mNumChildren as usize }
+        unsafe { self.node_ptr.as_ref().mNumChildren as usize }
     }
 
     /// Get a child node by index
-    pub fn child(&self, index: usize) -> Option<Node> {
+    pub fn child(&self, index: usize) -> Option<Node<'a>> {
         if index >= self.num_children() {
             return None;
         }
 
         unsafe {
-            let node = &*self.node_ptr;
+            let node = self.node_ptr.as_ref();
             let child_ptr = *node.mChildren.add(index);
             if child_ptr.is_null() {
                 None
@@ -74,16 +83,17 @@ impl Node {
     }
 
     /// Get an iterator over all child nodes
-    pub fn children(&self) -> NodeIterator {
+    pub fn children(&self) -> NodeIterator<'a> {
         NodeIterator {
             node_ptr: self.node_ptr,
             index: 0,
+            _marker: PhantomData,
         }
     }
 
     /// Get the number of meshes attached to this node
     pub fn num_meshes(&self) -> usize {
-        unsafe { (*self.node_ptr).mNumMeshes as usize }
+        unsafe { self.node_ptr.as_ref().mNumMeshes as usize }
     }
 
     /// Get a mesh index by index
@@ -93,21 +103,22 @@ impl Node {
         }
 
         unsafe {
-            let node = &*self.node_ptr;
+            let node = self.node_ptr.as_ref();
             Some(*node.mMeshes.add(index) as usize)
         }
     }
 
     /// Get an iterator over all mesh indices
-    pub fn mesh_indices(&self) -> MeshIndexIterator {
+    pub fn mesh_indices(&self) -> MeshIndexIterator<'a> {
         MeshIndexIterator {
             node_ptr: self.node_ptr,
             index: 0,
+            _marker: PhantomData,
         }
     }
 
     /// Find a child node by name (recursive search)
-    pub fn find_node(&self, name: &str) -> Option<Node> {
+    pub fn find_node(&self, name: &str) -> Option<Node<'a>> {
         if self.name() == name {
             return Some(*self);
         }
@@ -122,26 +133,19 @@ impl Node {
     }
 }
 
-impl Clone for Node {
-    fn clone(&self) -> Self {
-        *self
-    }
-}
-
-impl Copy for Node {}
-
 /// Iterator over child nodes
-pub struct NodeIterator {
-    node_ptr: *const sys::aiNode,
+pub struct NodeIterator<'a> {
+    node_ptr: NonNull<sys::aiNode>,
     index: usize,
+    _marker: PhantomData<&'a sys::aiScene>,
 }
 
-impl Iterator for NodeIterator {
-    type Item = Node;
+impl<'a> Iterator for NodeIterator<'a> {
+    type Item = Node<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
         unsafe {
-            let node = &*self.node_ptr;
+            let node = self.node_ptr.as_ref();
             if self.index >= node.mNumChildren as usize {
                 None
             } else {
@@ -158,42 +162,28 @@ impl Iterator for NodeIterator {
 
     fn size_hint(&self) -> (usize, Option<usize>) {
         unsafe {
-            let node = &*self.node_ptr;
+            let node = self.node_ptr.as_ref();
             let remaining = (node.mNumChildren as usize).saturating_sub(self.index);
             (remaining, Some(remaining))
         }
     }
 }
 
-impl ExactSizeIterator for NodeIterator {}
-
-// Send and Sync are safe because:
-// 1. Node only holds a pointer to data owned by the Scene
-// 2. The Scene manages the lifetime of all Assimp data
-// 3. Assimp doesn't use global state and is thread-safe for read operations
-// 4. The pointer remains valid as long as the Scene exists
-unsafe impl Send for Node {}
-unsafe impl Sync for Node {}
-
-// Node iterators are also safe for the same reasons
-unsafe impl Send for NodeIterator {}
-unsafe impl Sync for NodeIterator {}
-
-unsafe impl Send for MeshIndexIterator {}
-unsafe impl Sync for MeshIndexIterator {}
+impl<'a> ExactSizeIterator for NodeIterator<'a> {}
 
 /// Iterator over mesh indices in a node
-pub struct MeshIndexIterator {
-    node_ptr: *const sys::aiNode,
+pub struct MeshIndexIterator<'a> {
+    node_ptr: NonNull<sys::aiNode>,
     index: usize,
+    _marker: PhantomData<&'a sys::aiScene>,
 }
 
-impl Iterator for MeshIndexIterator {
+impl<'a> Iterator for MeshIndexIterator<'a> {
     type Item = usize;
 
     fn next(&mut self) -> Option<Self::Item> {
         unsafe {
-            let node = &*self.node_ptr;
+            let node = self.node_ptr.as_ref();
             if self.index >= node.mNumMeshes as usize {
                 None
             } else {
@@ -206,20 +196,20 @@ impl Iterator for MeshIndexIterator {
 
     fn size_hint(&self) -> (usize, Option<usize>) {
         unsafe {
-            let node = &*self.node_ptr;
+            let node = self.node_ptr.as_ref();
             let remaining = (node.mNumMeshes as usize).saturating_sub(self.index);
             (remaining, Some(remaining))
         }
     }
 }
 
-impl ExactSizeIterator for MeshIndexIterator {}
+impl<'a> ExactSizeIterator for MeshIndexIterator<'a> {}
 
-impl Node {
+impl<'a> Node<'a> {
     /// Get node metadata
     pub fn metadata(&self) -> Result<Metadata> {
         unsafe {
-            let node = &*self.node_ptr;
+            let node = self.node_ptr.as_ref();
             Metadata::from_raw(node.mMetaData)
         }
     }

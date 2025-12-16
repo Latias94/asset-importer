@@ -1,7 +1,9 @@
 //! Scene export functionality
 
 use std::ffi::CString;
+use std::marker::PhantomData;
 use std::path::Path;
+use std::ptr::NonNull;
 
 use crate::{
     error::{Error, Result},
@@ -67,7 +69,7 @@ impl ExportBuilder {
                     scene.as_raw(),
                     c_format.as_ptr(),
                     c_path.as_ptr(),
-                    &mut file_io,
+                    file_io.as_mut_ptr(),
                     self.preprocessing,
                 )
             }
@@ -108,34 +110,96 @@ impl ExportBuilder {
 
 /// A blob containing exported scene data
 pub struct ExportBlob {
-    blob_ptr: *const sys::aiExportDataBlob,
+    blob_ptr: NonNull<sys::aiExportDataBlob>,
 }
 
 impl ExportBlob {
     /// Create an ExportBlob from a raw Assimp blob pointer
     fn from_raw(blob_ptr: *const sys::aiExportDataBlob) -> Self {
+        let blob_ptr =
+            NonNull::new(blob_ptr as *mut sys::aiExportDataBlob).expect("Export blob is null");
         Self { blob_ptr }
     }
 
     /// Get the data as a byte slice
     pub fn data(&self) -> &[u8] {
-        unsafe {
-            let blob = &*self.blob_ptr;
-            std::slice::from_raw_parts(blob.data as *const u8, blob.size)
-        }
+        ExportBlobView::new(self.blob_ptr).data()
     }
 
     /// Get the size of the data
     pub fn size(&self) -> usize {
-        unsafe { (*self.blob_ptr).size }
+        unsafe { self.blob_ptr.as_ref().size }
     }
 
     /// Get the name/hint for this blob
     pub fn name(&self) -> String {
+        ExportBlobView::new(self.blob_ptr).name()
+    }
+
+    /// Check if this blob has a next blob (for multi-file exports)
+    pub fn has_next(&self) -> bool {
+        ExportBlobView::new(self.blob_ptr).has_next()
+    }
+
+    /// Get the next blob in the chain
+    pub fn next(&self) -> Option<ExportBlobView<'_>> {
+        ExportBlobView::new(self.blob_ptr).next()
+    }
+
+    /// Iterate over all blobs in the chain (primary + auxiliaries).
+    pub fn iter(&self) -> ExportBlobIterator<'_> {
+        ExportBlobIterator {
+            current: Some(self.blob_ptr),
+            _marker: PhantomData,
+        }
+    }
+}
+
+impl Drop for ExportBlob {
+    fn drop(&mut self) {
         unsafe {
-            let blob = &*self.blob_ptr;
+            sys::aiReleaseExportBlob(self.blob_ptr.as_ptr());
+        }
+    }
+}
+
+/// A non-owning view into an export blob inside a blob chain.
+pub struct ExportBlobView<'a> {
+    blob_ptr: NonNull<sys::aiExportDataBlob>,
+    _marker: PhantomData<&'a sys::aiExportDataBlob>,
+}
+
+impl<'a> ExportBlobView<'a> {
+    fn new(blob_ptr: NonNull<sys::aiExportDataBlob>) -> Self {
+        Self {
+            blob_ptr,
+            _marker: PhantomData,
+        }
+    }
+
+    /// Get the data as a byte slice.
+    pub fn data(&self) -> &[u8] {
+        unsafe {
+            let blob = self.blob_ptr.as_ref();
+            if blob.size == 0 || blob.data.is_null() {
+                &[]
+            } else {
+                std::slice::from_raw_parts(blob.data as *const u8, blob.size)
+            }
+        }
+    }
+
+    /// Get the size of the data.
+    pub fn size(&self) -> usize {
+        unsafe { self.blob_ptr.as_ref().size }
+    }
+
+    /// Get the name/hint for this blob.
+    pub fn name(&self) -> String {
+        unsafe {
+            let blob = self.blob_ptr.as_ref();
             let name_data = blob.name.data.as_ptr();
-            if name_data.is_null() || blob.name.length == 0 {
+            if blob.name.length == 0 {
                 String::new()
             } else {
                 std::ffi::CStr::from_ptr(name_data)
@@ -145,39 +209,37 @@ impl ExportBlob {
         }
     }
 
-    /// Check if this blob has a next blob (for multi-file exports)
+    /// Check if this blob has a next blob (for multi-file exports).
     pub fn has_next(&self) -> bool {
-        unsafe { !(*self.blob_ptr).next.is_null() }
+        unsafe { !self.blob_ptr.as_ref().next.is_null() }
     }
 
-    /// Get the next blob in the chain
-    pub fn next(&self) -> Option<ExportBlob> {
+    /// Get the next blob in the chain.
+    pub fn next(&self) -> Option<ExportBlobView<'a>> {
         unsafe {
-            let blob = &*self.blob_ptr;
-            if blob.next.is_null() {
-                None
-            } else {
-                Some(ExportBlob::from_raw(blob.next))
-            }
+            let next = self.blob_ptr.as_ref().next;
+            NonNull::new(next).map(|p| ExportBlobView::new(p))
         }
     }
 }
 
-impl Drop for ExportBlob {
-    fn drop(&mut self) {
-        unsafe {
-            sys::aiReleaseExportBlob(self.blob_ptr);
-        }
-    }
+/// Iterator over blobs in an export blob chain.
+pub struct ExportBlobIterator<'a> {
+    current: Option<NonNull<sys::aiExportDataBlob>>,
+    _marker: PhantomData<&'a sys::aiExportDataBlob>,
 }
 
-// Send and Sync are safe because:
-// 1. ExportBlob owns the data through the blob_ptr
-// 2. The blob data is immutable after creation
-// 3. Assimp doesn't use global state and is thread-safe for read operations
-// 4. The pointer remains valid until Drop is called
-unsafe impl Send for ExportBlob {}
-unsafe impl Sync for ExportBlob {}
+impl<'a> Iterator for ExportBlobIterator<'a> {
+    type Item = ExportBlobView<'a>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let current = self.current?;
+        unsafe {
+            self.current = NonNull::new(current.as_ref().next);
+        }
+        Some(ExportBlobView::new(current))
+    }
+}
 
 /// Description of an export format
 #[derive(Debug, Clone)]

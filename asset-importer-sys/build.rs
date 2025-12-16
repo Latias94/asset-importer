@@ -490,6 +490,13 @@ fn extract_prebuilt_package(
         copy_windows_dlls(extract_dir);
     }
 
+    // On Unix-like platforms, make sure the runtime shared library is discoverable.
+    // `cc` adds OUT_DIR to the native search path for the C++ bridge; copying the shared
+    // library there allows tests/binaries to run without extra env vars.
+    if !config.is_windows() && link_type != "static" {
+        copy_unix_shared_libs_to_out_dir(config, extract_dir);
+    }
+
     // Link system dependencies
     link_system_dependencies(config);
 
@@ -1065,6 +1072,44 @@ fn copy_windows_dlls(dst: &std::path::Path) {
                     }
                 }
             }
+        }
+    }
+}
+
+fn copy_unix_shared_libs_to_out_dir(config: &BuildConfig, src_root: &std::path::Path) {
+    use std::fs;
+
+    let out_dir = &config.out_dir;
+    let candidate_dirs = [
+        src_root.join("lib"),
+        src_root.join("lib64"),
+        src_root.join("bin"),
+    ];
+
+    for dir in &candidate_dirs {
+        if !dir.exists() {
+            continue;
+        }
+        let Ok(read) = fs::read_dir(dir) else {
+            continue;
+        };
+        for entry in read.flatten() {
+            let path = entry.path();
+            let Some(name) = path.file_name().and_then(|s| s.to_str()) else {
+                continue;
+            };
+            let lower = name.to_ascii_lowercase();
+            if !lower.contains("assimp") {
+                continue;
+            }
+            let is_shared = lower.ends_with(".dylib") || lower.contains(".so");
+            if !is_shared {
+                continue;
+            }
+
+            let dst = out_dir.join(name);
+            // Best-effort copy; if it fails we'll let the runtime loader complain.
+            let _ = fs::copy(&path, &dst);
         }
     }
 }

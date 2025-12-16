@@ -3,7 +3,11 @@
 //! This module provides safe Rust wrappers around Assimp's metadata functionality,
 //! allowing you to access additional information stored in 3D models.
 
-use crate::{error::Result, sys, types::Vector3D};
+use crate::{
+    error::Result,
+    sys,
+    types::{ai_string_to_string, Vector3D},
+};
 
 /// Common metadata keys used across different file formats
 pub mod common_metadata {
@@ -232,11 +236,12 @@ impl Metadata {
             let entry_ptr = unsafe { metadata.mValues.add(i as usize) };
 
             if !entry_ptr.is_null() {
-                let key_cstr = unsafe { std::ffi::CStr::from_ptr(key_ai_string.data.as_ptr()) };
-                if let Ok(key) = key_cstr.to_str() {
-                    if let Ok(entry) = unsafe { Self::parse_metadata_entry(&*entry_ptr) } {
-                        entries.insert(key.to_string(), entry);
-                    }
+                let key = ai_string_to_string(key_ai_string);
+                if key.is_empty() {
+                    continue;
+                }
+                if let Ok(entry) = unsafe { Self::parse_metadata_entry(&*entry_ptr) } {
+                    entries.insert(key, entry);
                 }
             }
         }
@@ -275,13 +280,7 @@ impl Metadata {
             }
             sys::aiMetadataType::AI_AISTRING => {
                 let ai_string = unsafe { &*(entry.mData as *const sys::aiString) };
-                let c_str = unsafe { std::ffi::CStr::from_ptr(ai_string.data.as_ptr()) };
-                let string = c_str.to_str().map_err(|_| {
-                    crate::error::Error::invalid_parameter(
-                        "Invalid UTF-8 in metadata string".to_string(),
-                    )
-                })?;
-                Ok(MetadataEntry::String(string.to_string()))
+                Ok(MetadataEntry::String(ai_string_to_string(ai_string)))
             }
             sys::aiMetadataType::AI_AIVECTOR3D => {
                 let vector = unsafe { &*(entry.mData as *const sys::aiVector3D) };

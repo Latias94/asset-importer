@@ -4,10 +4,14 @@
 //! including support for embedded textures that are stored directly within
 //! model files.
 
+use std::marker::PhantomData;
+use std::ptr::NonNull;
+
 use crate::{
     error::{Error, Result},
     sys,
 };
+use crate::types::ai_string_to_string;
 
 /// A texel (texture element) in ARGB8888 format
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -82,27 +86,30 @@ pub enum TextureData {
 /// 1. Uncompressed - stored as raw ARGB8888 texel data
 /// 2. Compressed - stored in a standard format like PNG, JPEG, etc.
 #[derive(Debug)]
-pub struct Texture {
-    texture_ptr: *const sys::aiTexture,
+pub struct Texture<'a> {
+    texture_ptr: NonNull<sys::aiTexture>,
+    _marker: PhantomData<&'a sys::aiScene>,
 }
 
-impl Texture {
+impl<'a> Texture<'a> {
     /// Create a texture wrapper from a raw Assimp texture pointer
     ///
     /// # Safety
     /// The caller must ensure that the pointer is valid and that the texture
     /// will not be freed while this Texture instance exists.
     pub(crate) unsafe fn from_raw(texture_ptr: *const sys::aiTexture) -> Result<Self> {
-        if texture_ptr.is_null() {
-            return Err(Error::invalid_scene("Texture pointer is null"));
-        }
+        let texture_ptr = NonNull::new(texture_ptr as *mut sys::aiTexture)
+            .ok_or_else(|| Error::invalid_scene("Texture pointer is null"))?;
 
-        Ok(Self { texture_ptr })
+        Ok(Self {
+            texture_ptr,
+            _marker: PhantomData,
+        })
     }
 
     /// Get the raw texture pointer
     pub fn as_raw(&self) -> *const sys::aiTexture {
-        self.texture_ptr
+        self.texture_ptr.as_ptr()
     }
 
     /// Get the width of the texture
@@ -110,7 +117,7 @@ impl Texture {
     /// For uncompressed textures, this is the width in pixels.
     /// For compressed textures, this is the size of the compressed data in bytes.
     pub fn width(&self) -> u32 {
-        unsafe { (*self.texture_ptr).mWidth }
+        unsafe { self.texture_ptr.as_ref().mWidth }
     }
 
     /// Get the height of the texture
@@ -118,7 +125,7 @@ impl Texture {
     /// For uncompressed textures, this is the height in pixels.
     /// For compressed textures, this is 0.
     pub fn height(&self) -> u32 {
-        unsafe { (*self.texture_ptr).mHeight }
+        unsafe { self.texture_ptr.as_ref().mHeight }
     }
 
     /// Check if this is a compressed texture
@@ -137,7 +144,7 @@ impl Texture {
     /// For compressed textures, this is the file extension (e.g., "jpg", "png").
     pub fn format_hint(&self) -> String {
         unsafe {
-            let hint = &(*self.texture_ptr).achFormatHint;
+            let hint = &self.texture_ptr.as_ref().achFormatHint;
             // Find the null terminator
             let len = hint.iter().position(|&c| c == 0).unwrap_or(hint.len());
             // Convert i8 to u8 for string conversion
@@ -149,16 +156,11 @@ impl Texture {
     /// Get the original filename of the texture
     pub fn filename(&self) -> Option<String> {
         unsafe {
-            let ai_string = &(*self.texture_ptr).mFilename;
+            let ai_string = &self.texture_ptr.as_ref().mFilename;
             if ai_string.length == 0 {
                 return None;
             }
-
-            let slice = std::slice::from_raw_parts(
-                ai_string.data.as_ptr() as *const u8,
-                ai_string.length as usize,
-            );
-            Some(String::from_utf8_lossy(slice).to_string())
+            Some(ai_string_to_string(ai_string))
         }
     }
 
@@ -178,7 +180,7 @@ impl Texture {
     /// Get the texture data
     pub fn data(&self) -> Result<TextureData> {
         unsafe {
-            let texture = &*self.texture_ptr;
+            let texture = self.texture_ptr.as_ref();
 
             if texture.pcData.is_null() {
                 return Err(Error::invalid_scene("Texture data is null"));
@@ -240,13 +242,14 @@ impl Texture {
 }
 
 /// Iterator over textures in a scene
-pub struct TextureIterator {
+pub struct TextureIterator<'a> {
     textures: *mut *mut sys::aiTexture,
     count: usize,
     index: usize,
+    _marker: PhantomData<&'a sys::aiScene>,
 }
 
-impl TextureIterator {
+impl<'a> TextureIterator<'a> {
     /// Create a new texture iterator
     ///
     /// # Safety
@@ -256,12 +259,13 @@ impl TextureIterator {
             textures,
             count,
             index: 0,
+            _marker: PhantomData,
         }
     }
 }
 
-impl Iterator for TextureIterator {
-    type Item = Texture;
+impl<'a> Iterator for TextureIterator<'a> {
+    type Item = Texture<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.index >= self.count {
@@ -282,20 +286,10 @@ impl Iterator for TextureIterator {
     }
 }
 
-impl ExactSizeIterator for TextureIterator {
+impl<'a> ExactSizeIterator for TextureIterator<'a> {
     fn len(&self) -> usize {
         self.count.saturating_sub(self.index)
     }
 }
 
-// Send and Sync are safe because:
-// 1. Texture only holds a pointer to data owned by the Scene
-// 2. The Scene manages the lifetime of all Assimp data
-// 3. Assimp doesn't use global state and is thread-safe for read operations
-// 4. The pointer remains valid as long as the Scene exists
-unsafe impl Send for Texture {}
-unsafe impl Sync for Texture {}
-
-// TextureIterator is also safe for the same reasons
-unsafe impl Send for TextureIterator {}
-unsafe impl Sync for TextureIterator {}
+// Auto-traits (Send/Sync) are derived from the contained pointers and lifetimes.

@@ -312,7 +312,7 @@ impl Scene {
     }
 
     /// Get the root node of the scene
-    pub fn root_node(&self) -> Option<Node> {
+    pub fn root_node(&self) -> Option<Node<'_>> {
         unsafe {
             let scene = self.scene_ptr.as_ref();
             if scene.mRootNode.is_null() {
@@ -329,7 +329,7 @@ impl Scene {
     }
 
     /// Get a mesh by index
-    pub fn mesh(&self, index: usize) -> Option<Mesh> {
+    pub fn mesh(&self, index: usize) -> Option<Mesh<'_>> {
         if index >= self.num_meshes() {
             return None;
         }
@@ -359,7 +359,7 @@ impl Scene {
     }
 
     /// Get a material by index
-    pub fn material(&self, index: usize) -> Option<Material> {
+    pub fn material(&self, index: usize) -> Option<Material<'_>> {
         if index >= self.num_materials() {
             return None;
         }
@@ -389,7 +389,7 @@ impl Scene {
     }
 
     /// Get an animation by index
-    pub fn animation(&self, index: usize) -> Option<Animation> {
+    pub fn animation(&self, index: usize) -> Option<Animation<'_>> {
         if index >= self.num_animations() {
             return None;
         }
@@ -419,7 +419,7 @@ impl Scene {
     }
 
     /// Get a camera by index
-    pub fn camera(&self, index: usize) -> Option<Camera> {
+    pub fn camera(&self, index: usize) -> Option<Camera<'_>> {
         if index >= self.num_cameras() {
             return None;
         }
@@ -449,7 +449,7 @@ impl Scene {
     }
 
     /// Get a light by index
-    pub fn light(&self, index: usize) -> Option<Light> {
+    pub fn light(&self, index: usize) -> Option<Light<'_>> {
         if index >= self.num_lights() {
             return None;
         }
@@ -496,7 +496,7 @@ pub struct MeshIterator<'a> {
 }
 
 impl<'a> Iterator for MeshIterator<'a> {
-    type Item = Mesh;
+    type Item = Mesh<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
         let mesh = self.scene.mesh(self.index)?;
@@ -519,7 +519,7 @@ pub struct MaterialIterator<'a> {
 }
 
 impl<'a> Iterator for MaterialIterator<'a> {
-    type Item = Material;
+    type Item = Material<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
         let material = self.scene.material(self.index)?;
@@ -542,7 +542,7 @@ pub struct AnimationIterator<'a> {
 }
 
 impl<'a> Iterator for AnimationIterator<'a> {
-    type Item = Animation;
+    type Item = Animation<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
         let animation = self.scene.animation(self.index)?;
@@ -565,7 +565,7 @@ pub struct CameraIterator<'a> {
 }
 
 impl<'a> Iterator for CameraIterator<'a> {
-    type Item = Camera;
+    type Item = Camera<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
         let camera = self.scene.camera(self.index)?;
@@ -588,7 +588,7 @@ pub struct LightIterator<'a> {
 }
 
 impl<'a> Iterator for LightIterator<'a> {
-    type Item = Light;
+    type Item = Light<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
         let light = self.scene.light(self.index)?;
@@ -634,7 +634,7 @@ impl Scene {
     }
 
     /// Get a texture by index
-    pub fn texture(&self, index: usize) -> Option<Texture> {
+    pub fn texture(&self, index: usize) -> Option<Texture<'_>> {
         if index >= self.num_textures() {
             return None;
         }
@@ -651,7 +651,7 @@ impl Scene {
     }
 
     /// Get an iterator over all textures in the scene
-    pub fn textures(&self) -> TextureIterator {
+    pub fn textures(&self) -> TextureIterator<'_> {
         unsafe {
             let scene = self.scene_ptr.as_ref();
             TextureIterator::new(scene.mTextures, self.num_textures())
@@ -664,7 +664,7 @@ impl Scene {
     }
 
     /// Find a texture by filename
-    pub fn find_texture_by_filename(&self, filename: &str) -> Option<Texture> {
+    pub fn find_texture_by_filename(&self, filename: &str) -> Option<Texture<'_>> {
         self.textures().find(|texture| {
             texture
                 .filename()
@@ -674,21 +674,21 @@ impl Scene {
     }
 
     /// Get all compressed textures
-    pub fn compressed_textures(&self) -> Vec<Texture> {
+    pub fn compressed_textures(&self) -> Vec<Texture<'_>> {
         self.textures()
             .filter(|texture| texture.is_compressed())
             .collect()
     }
 
     /// Get all uncompressed textures
-    pub fn uncompressed_textures(&self) -> Vec<Texture> {
+    pub fn uncompressed_textures(&self) -> Vec<Texture<'_>> {
         self.textures()
             .filter(|texture| texture.is_uncompressed())
             .collect()
     }
 
     /// Get embedded texture by filename hint (e.g. "*0", "*1")
-    pub fn embedded_texture_by_name(&self, name: &str) -> Option<Texture> {
+    pub fn embedded_texture_by_name(&self, name: &str) -> Option<Texture<'_>> {
         let c = std::ffi::CString::new(name).ok()?;
         unsafe {
             let tex = sys::aiGetEmbeddedTexture(self.scene_ptr.as_ptr(), c.as_ptr());

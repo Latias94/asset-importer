@@ -34,6 +34,7 @@
 //! ```
 
 use crate::sys;
+use std::borrow::Cow;
 
 // Re-export glam types as our primary math types
 pub use glam::{
@@ -49,6 +50,26 @@ pub type Color4D = Vector4D;
 
 // Conversion functions between Assimp C types and glam types
 // We use functions instead of From implementations to avoid orphan rule issues
+
+/// Convert Assimp `aiString` to a UTF-8 string (lossy).
+///
+/// Assimp stores the length explicitly; do not assume the buffer is NUL-terminated.
+#[inline]
+pub fn ai_string_to_str(value: &sys::aiString) -> Cow<'_, str> {
+    let len = (value.length as usize).min(value.data.len());
+    if len == 0 {
+        return Cow::Borrowed("");
+    }
+    let bytes =
+        unsafe { std::slice::from_raw_parts(value.data.as_ptr() as *const u8, len) };
+    String::from_utf8_lossy(bytes)
+}
+
+/// Convert Assimp `aiString` to an owned UTF-8 string (lossy).
+#[inline]
+pub fn ai_string_to_string(value: &sys::aiString) -> String {
+    ai_string_to_str(value).into_owned()
+}
 
 /// Convert aiVector3D to glam Vec3
 #[inline]

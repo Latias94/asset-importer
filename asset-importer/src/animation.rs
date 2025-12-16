@@ -1,44 +1,52 @@
 //! Animation data structures and utilities
 
+use std::marker::PhantomData;
+use std::ptr::NonNull;
+
 use crate::{
-    error::c_str_to_string_or_empty,
     sys,
-    types::{Quaternion, Vector3D},
+    types::{Quaternion, Vector3D, ai_string_to_string},
 };
 
 /// An animation containing keyframes for various properties
-pub struct Animation {
-    animation_ptr: *const sys::aiAnimation,
+pub struct Animation<'a> {
+    animation_ptr: NonNull<sys::aiAnimation>,
+    _marker: PhantomData<&'a sys::aiScene>,
 }
 
-impl Animation {
+impl<'a> Animation<'a> {
     /// Create an Animation from a raw Assimp animation pointer
-    pub(crate) fn from_raw(animation_ptr: *const sys::aiAnimation) -> Self {
-        Self { animation_ptr }
+    ///
+    /// # Safety
+    /// Caller must ensure `animation_ptr` is non-null and points into a live `aiScene`.
+    pub(crate) unsafe fn from_raw(animation_ptr: *const sys::aiAnimation) -> Self {
+        let animation_ptr = NonNull::new(animation_ptr as *mut sys::aiAnimation)
+            .expect("aiAnimation pointer is null");
+        Self {
+            animation_ptr,
+            _marker: PhantomData,
+        }
     }
 
     /// Get the raw animation pointer
     pub fn as_raw(&self) -> *const sys::aiAnimation {
-        self.animation_ptr
+        self.animation_ptr.as_ptr()
     }
 
     /// Get the name of the animation
     pub fn name(&self) -> String {
-        unsafe {
-            let animation = &*self.animation_ptr;
-            c_str_to_string_or_empty(animation.mName.data.as_ptr())
-        }
+        unsafe { ai_string_to_string(&self.animation_ptr.as_ref().mName) }
     }
 
     /// Get the duration of the animation in ticks
     pub fn duration(&self) -> f64 {
-        unsafe { (*self.animation_ptr).mDuration }
+        unsafe { self.animation_ptr.as_ref().mDuration }
     }
 
     /// Get the ticks per second for this animation
     pub fn ticks_per_second(&self) -> f64 {
         unsafe {
-            let tps = (*self.animation_ptr).mTicksPerSecond;
+            let tps = self.animation_ptr.as_ref().mTicksPerSecond;
             if tps != 0.0 { tps } else { 25.0 } // Default to 25 FPS
         }
     }
@@ -50,17 +58,17 @@ impl Animation {
 
     /// Get the number of node animation channels
     pub fn num_channels(&self) -> usize {
-        unsafe { (*self.animation_ptr).mNumChannels as usize }
+        unsafe { self.animation_ptr.as_ref().mNumChannels as usize }
     }
 
     /// Get a node animation channel by index
-    pub fn channel(&self, index: usize) -> Option<NodeAnimation> {
+    pub fn channel(&self, index: usize) -> Option<NodeAnimation<'a>> {
         if index >= self.num_channels() {
             return None;
         }
 
         unsafe {
-            let animation = &*self.animation_ptr;
+            let animation = self.animation_ptr.as_ref();
             let channel_ptr = *animation.mChannels.add(index);
             if channel_ptr.is_null() {
                 None
@@ -71,103 +79,112 @@ impl Animation {
     }
 
     /// Get an iterator over all node animation channels
-    pub fn channels(&self) -> NodeAnimationIterator {
+    pub fn channels(&self) -> NodeAnimationIterator<'a> {
         NodeAnimationIterator {
             animation_ptr: self.animation_ptr,
             index: 0,
+            _marker: PhantomData,
         }
     }
 
     /// Get the number of mesh animation channels (vertex anim via aiAnimMesh)
     pub fn num_mesh_channels(&self) -> usize {
-        unsafe { (*self.animation_ptr).mNumMeshChannels as usize }
+        unsafe { self.animation_ptr.as_ref().mNumMeshChannels as usize }
     }
 
     /// Get a mesh animation channel
-    pub fn mesh_channel(&self, index: usize) -> Option<MeshAnimation> {
+    pub fn mesh_channel(&self, index: usize) -> Option<MeshAnimation<'a>> {
         if index >= self.num_mesh_channels() {
             return None;
         }
         unsafe {
-            let ptr = *(*self.animation_ptr).mMeshChannels.add(index);
+            let ptr = *self.animation_ptr.as_ref().mMeshChannels.add(index);
             if ptr.is_null() {
                 None
             } else {
-                Some(MeshAnimation { channel_ptr: ptr })
+                Some(MeshAnimation::from_raw(ptr))
             }
         }
     }
 
     /// Iterate mesh animation channels
-    pub fn mesh_channels(&self) -> MeshAnimationIterator {
+    pub fn mesh_channels(&self) -> MeshAnimationIterator<'a> {
         MeshAnimationIterator {
             animation_ptr: self.animation_ptr,
             index: 0,
+            _marker: PhantomData,
         }
     }
 
     /// Get the number of morph mesh animation channels
     pub fn num_morph_mesh_channels(&self) -> usize {
-        unsafe { (*self.animation_ptr).mNumMorphMeshChannels as usize }
+        unsafe { self.animation_ptr.as_ref().mNumMorphMeshChannels as usize }
     }
 
     /// Get a morph mesh animation channel
-    pub fn morph_mesh_channel(&self, index: usize) -> Option<MorphMeshAnimation> {
+    pub fn morph_mesh_channel(&self, index: usize) -> Option<MorphMeshAnimation<'a>> {
         if index >= self.num_morph_mesh_channels() {
             return None;
         }
         unsafe {
-            let ptr = *(*self.animation_ptr).mMorphMeshChannels.add(index);
+            let ptr = *self.animation_ptr.as_ref().mMorphMeshChannels.add(index);
             if ptr.is_null() {
                 None
             } else {
-                Some(MorphMeshAnimation { channel_ptr: ptr })
+                Some(MorphMeshAnimation::from_raw(ptr))
             }
         }
     }
 
     /// Iterate morph mesh animation channels
-    pub fn morph_mesh_channels(&self) -> MorphMeshAnimationIterator {
+    pub fn morph_mesh_channels(&self) -> MorphMeshAnimationIterator<'a> {
         MorphMeshAnimationIterator {
             animation_ptr: self.animation_ptr,
             index: 0,
+            _marker: PhantomData,
         }
     }
 }
 
 /// Animation data for a single node
-pub struct NodeAnimation {
-    channel_ptr: *const sys::aiNodeAnim,
+pub struct NodeAnimation<'a> {
+    channel_ptr: NonNull<sys::aiNodeAnim>,
+    _marker: PhantomData<&'a sys::aiScene>,
 }
 
-impl NodeAnimation {
+impl<'a> NodeAnimation<'a> {
     /// Create a NodeAnimation from a raw Assimp node animation pointer
-    pub(crate) fn from_raw(channel_ptr: *const sys::aiNodeAnim) -> Self {
-        Self { channel_ptr }
+    ///
+    /// # Safety
+    /// Caller must ensure `channel_ptr` is non-null and points into a live `aiScene`.
+    pub(crate) unsafe fn from_raw(channel_ptr: *const sys::aiNodeAnim) -> Self {
+        let channel_ptr =
+            NonNull::new(channel_ptr as *mut sys::aiNodeAnim).expect("aiNodeAnim pointer is null");
+        Self {
+            channel_ptr,
+            _marker: PhantomData,
+        }
     }
 
     /// Get the raw channel pointer
     pub fn as_raw(&self) -> *const sys::aiNodeAnim {
-        self.channel_ptr
+        self.channel_ptr.as_ptr()
     }
 
     /// Get the name of the node this animation affects
     pub fn node_name(&self) -> String {
-        unsafe {
-            let channel = &*self.channel_ptr;
-            c_str_to_string_or_empty(channel.mNodeName.data.as_ptr())
-        }
+        unsafe { ai_string_to_string(&self.channel_ptr.as_ref().mNodeName) }
     }
 
     /// Get the number of position keyframes
     pub fn num_position_keys(&self) -> usize {
-        unsafe { (*self.channel_ptr).mNumPositionKeys as usize }
+        unsafe { self.channel_ptr.as_ref().mNumPositionKeys as usize }
     }
 
     /// Get the position keyframes
     pub fn position_keys(&self) -> Vec<VectorKey> {
         unsafe {
-            let ch = &*self.channel_ptr;
+            let ch = self.channel_ptr.as_ref();
             std::slice::from_raw_parts(ch.mPositionKeys, ch.mNumPositionKeys as usize)
                 .iter()
                 .map(|k| VectorKey::from_sys(*k))
@@ -177,13 +194,13 @@ impl NodeAnimation {
 
     /// Get the number of rotation keyframes
     pub fn num_rotation_keys(&self) -> usize {
-        unsafe { (*self.channel_ptr).mNumRotationKeys as usize }
+        unsafe { self.channel_ptr.as_ref().mNumRotationKeys as usize }
     }
 
     /// Get the rotation keyframes
     pub fn rotation_keys(&self) -> Vec<QuaternionKey> {
         unsafe {
-            let ch = &*self.channel_ptr;
+            let ch = self.channel_ptr.as_ref();
             std::slice::from_raw_parts(ch.mRotationKeys, ch.mNumRotationKeys as usize)
                 .iter()
                 .map(|k| QuaternionKey::from_sys(*k))
@@ -193,13 +210,13 @@ impl NodeAnimation {
 
     /// Get the number of scaling keyframes
     pub fn num_scaling_keys(&self) -> usize {
-        unsafe { (*self.channel_ptr).mNumScalingKeys as usize }
+        unsafe { self.channel_ptr.as_ref().mNumScalingKeys as usize }
     }
 
     /// Get the scaling keyframes
     pub fn scaling_keys(&self) -> Vec<VectorKey> {
         unsafe {
-            let ch = &*self.channel_ptr;
+            let ch = self.channel_ptr.as_ref();
             std::slice::from_raw_parts(ch.mScalingKeys, ch.mNumScalingKeys as usize)
                 .iter()
                 .map(|k| VectorKey::from_sys(*k))
@@ -208,11 +225,11 @@ impl NodeAnimation {
     }
     /// Behaviour before the first key
     pub fn pre_state(&self) -> AnimBehaviour {
-        unsafe { AnimBehaviour::from_sys((*self.channel_ptr).mPreState) }
+        unsafe { AnimBehaviour::from_sys(self.channel_ptr.as_ref().mPreState) }
     }
     /// Behaviour after the last key
     pub fn post_state(&self) -> AnimBehaviour {
-        unsafe { AnimBehaviour::from_sys((*self.channel_ptr).mPostState) }
+        unsafe { AnimBehaviour::from_sys(self.channel_ptr.as_ref().mPostState) }
     }
 }
 
@@ -309,17 +326,18 @@ impl QuaternionKey {
 }
 
 /// Iterator over node animation channels
-pub struct NodeAnimationIterator {
-    animation_ptr: *const sys::aiAnimation,
+pub struct NodeAnimationIterator<'a> {
+    animation_ptr: NonNull<sys::aiAnimation>,
     index: usize,
+    _marker: PhantomData<&'a sys::aiScene>,
 }
 
-impl Iterator for NodeAnimationIterator {
-    type Item = NodeAnimation;
+impl<'a> Iterator for NodeAnimationIterator<'a> {
+    type Item = NodeAnimation<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
         unsafe {
-            let animation = &*self.animation_ptr;
+            let animation = self.animation_ptr.as_ref();
             if self.index >= animation.mNumChannels as usize {
                 None
             } else {
@@ -336,14 +354,14 @@ impl Iterator for NodeAnimationIterator {
 
     fn size_hint(&self) -> (usize, Option<usize>) {
         unsafe {
-            let animation = &*self.animation_ptr;
+            let animation = self.animation_ptr.as_ref();
             let remaining = (animation.mNumChannels as usize).saturating_sub(self.index);
             (remaining, Some(remaining))
         }
     }
 }
 
-impl ExactSizeIterator for NodeAnimationIterator {}
+impl<'a> ExactSizeIterator for NodeAnimationIterator<'a> {}
 
 /// Mesh animation key
 #[repr(C)]
@@ -355,44 +373,57 @@ pub struct MeshKey {
 }
 
 /// Mesh animation of a specific mesh (aiMeshAnim)
-pub struct MeshAnimation {
-    channel_ptr: *const sys::aiMeshAnim,
+pub struct MeshAnimation<'a> {
+    channel_ptr: NonNull<sys::aiMeshAnim>,
+    _marker: PhantomData<&'a sys::aiScene>,
 }
 
-impl MeshAnimation {
+impl<'a> MeshAnimation<'a> {
+    /// # Safety
+    /// Caller must ensure `channel_ptr` is non-null and points into a live `aiScene`.
+    unsafe fn from_raw(channel_ptr: *const sys::aiMeshAnim) -> Self {
+        let channel_ptr =
+            NonNull::new(channel_ptr as *mut sys::aiMeshAnim).expect("aiMeshAnim pointer is null");
+        Self {
+            channel_ptr,
+            _marker: PhantomData,
+        }
+    }
+
     /// Get the name of this mesh animation channel
     pub fn name(&self) -> String {
         unsafe {
-            let ch = &*self.channel_ptr;
-            c_str_to_string_or_empty(ch.mName.data.as_ptr())
+            let ch = self.channel_ptr.as_ref();
+            ai_string_to_string(&ch.mName)
         }
     }
 
     /// Get the number of animation keys
     pub fn num_keys(&self) -> usize {
-        unsafe { (*self.channel_ptr).mNumKeys as usize }
+        unsafe { self.channel_ptr.as_ref().mNumKeys as usize }
     }
 
     /// Get the array of animation keys
     pub fn keys(&self) -> &[MeshKey] {
         unsafe {
-            let ch = &*self.channel_ptr;
+            let ch = self.channel_ptr.as_ref();
             std::slice::from_raw_parts(ch.mKeys as *const MeshKey, ch.mNumKeys as usize)
         }
     }
 }
 
 /// Iterator over mesh animation channels
-pub struct MeshAnimationIterator {
-    animation_ptr: *const sys::aiAnimation,
+pub struct MeshAnimationIterator<'a> {
+    animation_ptr: NonNull<sys::aiAnimation>,
     index: usize,
+    _marker: PhantomData<&'a sys::aiScene>,
 }
 
-impl Iterator for MeshAnimationIterator {
-    type Item = MeshAnimation;
+impl<'a> Iterator for MeshAnimationIterator<'a> {
+    type Item = MeshAnimation<'a>;
     fn next(&mut self) -> Option<Self::Item> {
         unsafe {
-            let anim = &*self.animation_ptr;
+            let anim = self.animation_ptr.as_ref();
             if self.index >= anim.mNumMeshChannels as usize {
                 None
             } else {
@@ -401,21 +432,21 @@ impl Iterator for MeshAnimationIterator {
                 if ptr.is_null() {
                     None
                 } else {
-                    Some(MeshAnimation { channel_ptr: ptr })
+                    Some(MeshAnimation::from_raw(ptr))
                 }
             }
         }
     }
     fn size_hint(&self) -> (usize, Option<usize>) {
         unsafe {
-            let anim = &*self.animation_ptr;
+            let anim = self.animation_ptr.as_ref();
             let remaining = (anim.mNumMeshChannels as usize).saturating_sub(self.index);
             (remaining, Some(remaining))
         }
     }
 }
 
-impl ExactSizeIterator for MeshAnimationIterator {}
+impl<'a> ExactSizeIterator for MeshAnimationIterator<'a> {}
 
 /// Morph mesh key (weights for multiple targets)
 pub struct MorphMeshKey<'a> {
@@ -428,19 +459,31 @@ pub struct MorphMeshKey<'a> {
 }
 
 /// Morph mesh animation channel (aiMeshMorphAnim)
-pub struct MorphMeshAnimation {
-    channel_ptr: *const sys::aiMeshMorphAnim,
+pub struct MorphMeshAnimation<'a> {
+    channel_ptr: NonNull<sys::aiMeshMorphAnim>,
+    _marker: PhantomData<&'a sys::aiScene>,
 }
 
-impl MorphMeshAnimation {
+impl<'a> MorphMeshAnimation<'a> {
+    /// # Safety
+    /// Caller must ensure `channel_ptr` is non-null and points into a live `aiScene`.
+    unsafe fn from_raw(channel_ptr: *const sys::aiMeshMorphAnim) -> Self {
+        let channel_ptr = NonNull::new(channel_ptr as *mut sys::aiMeshMorphAnim)
+            .expect("aiMeshMorphAnim pointer is null");
+        Self {
+            channel_ptr,
+            _marker: PhantomData,
+        }
+    }
+
     /// Get the name of this morph mesh animation channel
     pub fn name(&self) -> String {
-        unsafe { c_str_to_string_or_empty((*self.channel_ptr).mName.data.as_ptr()) }
+        unsafe { ai_string_to_string(&self.channel_ptr.as_ref().mName) }
     }
 
     /// Get the number of animation keys
     pub fn num_keys(&self) -> usize {
-        unsafe { (*self.channel_ptr).mNumKeys as usize }
+        unsafe { self.channel_ptr.as_ref().mNumKeys as usize }
     }
 
     /// Get a specific animation key by index
@@ -449,7 +492,7 @@ impl MorphMeshAnimation {
             return None;
         }
         unsafe {
-            let ch = &*self.channel_ptr;
+            let ch = self.channel_ptr.as_ref();
             let key = &*ch.mKeys.add(index);
             let n = key.mNumValuesAndWeights as usize;
             if key.mValues.is_null() || key.mWeights.is_null() {
@@ -467,16 +510,17 @@ impl MorphMeshAnimation {
 }
 
 /// Iterator over morph mesh animation channels
-pub struct MorphMeshAnimationIterator {
-    animation_ptr: *const sys::aiAnimation,
+pub struct MorphMeshAnimationIterator<'a> {
+    animation_ptr: NonNull<sys::aiAnimation>,
     index: usize,
+    _marker: PhantomData<&'a sys::aiScene>,
 }
 
-impl Iterator for MorphMeshAnimationIterator {
-    type Item = MorphMeshAnimation;
+impl<'a> Iterator for MorphMeshAnimationIterator<'a> {
+    type Item = MorphMeshAnimation<'a>;
     fn next(&mut self) -> Option<Self::Item> {
         unsafe {
-            let anim = &*self.animation_ptr;
+            let anim = self.animation_ptr.as_ref();
             if self.index >= anim.mNumMorphMeshChannels as usize {
                 None
             } else {
@@ -485,45 +529,20 @@ impl Iterator for MorphMeshAnimationIterator {
                 if ptr.is_null() {
                     None
                 } else {
-                    Some(MorphMeshAnimation { channel_ptr: ptr })
+                    Some(MorphMeshAnimation::from_raw(ptr))
                 }
             }
         }
     }
     fn size_hint(&self) -> (usize, Option<usize>) {
         unsafe {
-            let anim = &*self.animation_ptr;
+            let anim = self.animation_ptr.as_ref();
             let remaining = (anim.mNumMorphMeshChannels as usize).saturating_sub(self.index);
             (remaining, Some(remaining))
         }
     }
 }
 
-impl ExactSizeIterator for MorphMeshAnimationIterator {}
+impl<'a> ExactSizeIterator for MorphMeshAnimationIterator<'a> {}
 
-// Send and Sync are safe because:
-// 1. All animation types only hold pointers to data owned by the Scene
-// 2. The Scene manages the lifetime of all Assimp data
-// 3. Assimp doesn't use global state and is thread-safe for read operations
-// 4. The pointers remain valid as long as the Scene exists
-unsafe impl Send for Animation {}
-unsafe impl Sync for Animation {}
-
-unsafe impl Send for NodeAnimation {}
-unsafe impl Sync for NodeAnimation {}
-
-unsafe impl Send for MeshAnimation {}
-unsafe impl Sync for MeshAnimation {}
-
-unsafe impl Send for MorphMeshAnimation {}
-unsafe impl Sync for MorphMeshAnimation {}
-
-// Iterators are also safe for the same reasons
-unsafe impl Send for NodeAnimationIterator {}
-unsafe impl Sync for NodeAnimationIterator {}
-
-unsafe impl Send for MeshAnimationIterator {}
-unsafe impl Sync for MeshAnimationIterator {}
-
-unsafe impl Send for MorphMeshAnimationIterator {}
-unsafe impl Sync for MorphMeshAnimationIterator {}
+// Auto-traits (Send/Sync) are derived from the contained pointers and lifetimes.

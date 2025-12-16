@@ -1,39 +1,51 @@
 //! Light representation and utilities
 
+use std::marker::PhantomData;
+use std::ptr::NonNull;
+
 use crate::{
-    error::c_str_to_string_or_empty,
     sys,
-    types::{Color3D, Vector2D, Vector3D, from_ai_color3d, from_ai_vector2d, from_ai_vector3d},
+    types::{
+        Color3D, Vector2D, Vector3D, ai_string_to_string, from_ai_color3d, from_ai_vector2d,
+        from_ai_vector3d,
+    },
 };
 
 /// A light source in the scene
-pub struct Light {
-    light_ptr: *const sys::aiLight,
+#[derive(Clone, Copy)]
+pub struct Light<'a> {
+    light_ptr: NonNull<sys::aiLight>,
+    _marker: PhantomData<&'a sys::aiScene>,
 }
 
-impl Light {
+impl<'a> Light<'a> {
     /// Create a Light from a raw Assimp light pointer
-    pub(crate) fn from_raw(light_ptr: *const sys::aiLight) -> Self {
-        Self { light_ptr }
+    ///
+    /// # Safety
+    /// Caller must ensure `light_ptr` is non-null and points into a live `aiScene`.
+    pub(crate) unsafe fn from_raw(light_ptr: *const sys::aiLight) -> Self {
+        let light_ptr =
+            NonNull::new(light_ptr as *mut sys::aiLight).expect("aiLight pointer is null");
+        Self {
+            light_ptr,
+            _marker: PhantomData,
+        }
     }
 
     /// Get the raw light pointer
     pub fn as_raw(&self) -> *const sys::aiLight {
-        self.light_ptr
+        self.light_ptr.as_ptr()
     }
 
     /// Get the name of the light
     pub fn name(&self) -> String {
-        unsafe {
-            let light = &*self.light_ptr;
-            c_str_to_string_or_empty(light.mName.data.as_ptr())
-        }
+        unsafe { ai_string_to_string(&self.light_ptr.as_ref().mName) }
     }
 
     /// Get the type of the light
     pub fn light_type(&self) -> LightType {
         unsafe {
-            let light = &*self.light_ptr;
+            let light = self.light_ptr.as_ref();
             LightType::from_raw(light.mType)
         }
     }
@@ -41,7 +53,7 @@ impl Light {
     /// Get the position of the light
     pub fn position(&self) -> Vector3D {
         unsafe {
-            let light = &*self.light_ptr;
+            let light = self.light_ptr.as_ref();
             from_ai_vector3d(light.mPosition)
         }
     }
@@ -49,7 +61,7 @@ impl Light {
     /// Get the direction of the light
     pub fn direction(&self) -> Vector3D {
         unsafe {
-            let light = &*self.light_ptr;
+            let light = self.light_ptr.as_ref();
             from_ai_vector3d(light.mDirection)
         }
     }
@@ -57,7 +69,7 @@ impl Light {
     /// Get the up vector of the light
     pub fn up(&self) -> Vector3D {
         unsafe {
-            let light = &*self.light_ptr;
+            let light = self.light_ptr.as_ref();
             from_ai_vector3d(light.mUp)
         }
     }
@@ -65,7 +77,7 @@ impl Light {
     /// Get the diffuse color of the light
     pub fn color_diffuse(&self) -> Color3D {
         unsafe {
-            let light = &*self.light_ptr;
+            let light = self.light_ptr.as_ref();
             from_ai_color3d(light.mColorDiffuse)
         }
     }
@@ -73,7 +85,7 @@ impl Light {
     /// Get the specular color of the light
     pub fn color_specular(&self) -> Color3D {
         unsafe {
-            let light = &*self.light_ptr;
+            let light = self.light_ptr.as_ref();
             from_ai_color3d(light.mColorSpecular)
         }
     }
@@ -81,40 +93,40 @@ impl Light {
     /// Get the ambient color of the light
     pub fn color_ambient(&self) -> Color3D {
         unsafe {
-            let light = &*self.light_ptr;
+            let light = self.light_ptr.as_ref();
             from_ai_color3d(light.mColorAmbient)
         }
     }
 
     /// Get the constant attenuation factor
     pub fn attenuation_constant(&self) -> f32 {
-        unsafe { (*self.light_ptr).mAttenuationConstant }
+        unsafe { self.light_ptr.as_ref().mAttenuationConstant }
     }
 
     /// Get the linear attenuation factor
     pub fn attenuation_linear(&self) -> f32 {
-        unsafe { (*self.light_ptr).mAttenuationLinear }
+        unsafe { self.light_ptr.as_ref().mAttenuationLinear }
     }
 
     /// Get the quadratic attenuation factor
     pub fn attenuation_quadratic(&self) -> f32 {
-        unsafe { (*self.light_ptr).mAttenuationQuadratic }
+        unsafe { self.light_ptr.as_ref().mAttenuationQuadratic }
     }
 
     /// Get the inner cone angle for spot lights (in radians)
     pub fn angle_inner_cone(&self) -> f32 {
-        unsafe { (*self.light_ptr).mAngleInnerCone }
+        unsafe { self.light_ptr.as_ref().mAngleInnerCone }
     }
 
     /// Get the outer cone angle for spot lights (in radians)
     pub fn angle_outer_cone(&self) -> f32 {
-        unsafe { (*self.light_ptr).mAngleOuterCone }
+        unsafe { self.light_ptr.as_ref().mAngleOuterCone }
     }
 
     /// Get the size of the area light
     pub fn size(&self) -> Vector2D {
         unsafe {
-            let light = &*self.light_ptr;
+            let light = self.light_ptr.as_ref();
             from_ai_vector2d(light.mSize)
         }
     }
@@ -151,19 +163,3 @@ impl LightType {
         }
     }
 }
-
-impl Clone for Light {
-    fn clone(&self) -> Self {
-        *self
-    }
-}
-
-impl Copy for Light {}
-
-// Send and Sync are safe because:
-// 1. Light only holds a pointer to data owned by the Scene
-// 2. The Scene manages the lifetime of all Assimp data
-// 3. Assimp doesn't use global state and is thread-safe for read operations
-// 4. The pointer remains valid as long as the Scene exists
-unsafe impl Send for Light {}
-unsafe impl Sync for Light {}

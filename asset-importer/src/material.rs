@@ -3,9 +3,12 @@
 #![allow(clippy::unnecessary_cast)]
 
 use std::ffi::CString;
+use std::marker::PhantomData;
+use std::ptr::NonNull;
 
 use crate::{
     sys,
+    types::ai_string_to_string,
     types::{Color3D, Color4D, Vector2D, Vector3D},
 };
 
@@ -82,19 +85,28 @@ pub mod material_keys {
 }
 
 /// A material containing properties like colors, textures, and shading parameters
-pub struct Material {
-    material_ptr: *const sys::aiMaterial,
+pub struct Material<'a> {
+    material_ptr: NonNull<sys::aiMaterial>,
+    _marker: PhantomData<&'a sys::aiScene>,
 }
 
-impl Material {
+impl<'a> Material<'a> {
     /// Create a Material from a raw Assimp material pointer
-    pub(crate) fn from_raw(material_ptr: *const sys::aiMaterial) -> Self {
-        Self { material_ptr }
+    ///
+    /// # Safety
+    /// Caller must ensure `material_ptr` is non-null and points into a live `aiScene`.
+    pub(crate) unsafe fn from_raw(material_ptr: *const sys::aiMaterial) -> Self {
+        let material_ptr =
+            NonNull::new(material_ptr as *mut sys::aiMaterial).expect("aiMaterial pointer is null");
+        Self {
+            material_ptr,
+            _marker: PhantomData,
+        }
     }
 
     /// Get the raw material pointer
     pub fn as_raw(&self) -> *const sys::aiMaterial {
-        self.material_ptr
+        self.material_ptr.as_ptr()
     }
 
     /// Get the name of the material
@@ -110,7 +122,7 @@ impl Material {
 
         let result = unsafe {
             sys::aiGetMaterialString(
-                self.material_ptr,
+                self.material_ptr.as_ptr(),
                 c_key.as_ptr(),
                 0, // type
                 0, // index
@@ -119,16 +131,7 @@ impl Material {
         };
 
         if result == sys::aiReturn::aiReturn_SUCCESS {
-            // Convert aiString to Rust String
-            let len = ai_string.length as usize;
-            if len > 0 && len < ai_string.data.len() {
-                let bytes: &[u8] = unsafe {
-                    std::slice::from_raw_parts(ai_string.data.as_ptr() as *const u8, len)
-                };
-                String::from_utf8(bytes.to_vec()).ok()
-            } else {
-                None
-            }
+            Some(ai_string_to_string(&ai_string))
         } else {
             None
         }
@@ -142,7 +145,7 @@ impl Material {
 
         let result = unsafe {
             sys::aiGetMaterialFloatArray(
-                self.material_ptr,
+                self.material_ptr.as_ptr(),
                 c_key.as_ptr(),
                 0, // type
                 0, // index
@@ -166,7 +169,7 @@ impl Material {
 
         let result = unsafe {
             sys::aiGetMaterialIntegerArray(
-                self.material_ptr,
+                self.material_ptr.as_ptr(),
                 c_key.as_ptr(),
                 0, // type
                 0, // index
@@ -194,7 +197,7 @@ impl Material {
 
         let result = unsafe {
             sys::aiGetMaterialColor(
-                self.material_ptr,
+                self.material_ptr.as_ptr(),
                 c_key.as_ptr(),
                 0, // type
                 0, // index
@@ -387,7 +390,7 @@ impl Material {
         let mut prop_ptr: *const sys::aiMaterialProperty = std::ptr::null();
         let ok = unsafe {
             sys::aiGetMaterialProperty(
-                self.material_ptr,
+                self.material_ptr.as_ptr(),
                 c_key.as_ptr(),
                 semantic.map(|t| t.to_sys() as u32).unwrap_or(0),
                 index,
@@ -424,7 +427,7 @@ impl Material {
         let mut prop_ptr: *const sys::aiMaterialProperty = std::ptr::null();
         let ok = unsafe {
             sys::aiGetMaterialProperty(
-                self.material_ptr,
+                self.material_ptr.as_ptr(),
                 c_key.as_ptr(),
                 semantic.map(|t| t.to_sys() as u32).unwrap_or(0),
                 index,
@@ -469,7 +472,7 @@ impl Material {
         let c_key = CString::new(key).ok()?;
         let result = unsafe {
             sys::aiGetMaterialIntegerArray(
-                self.material_ptr,
+                self.material_ptr.as_ptr(),
                 c_key.as_ptr(),
                 semantic.map(|t| t.to_sys() as u32).unwrap_or(0),
                 index,
@@ -509,7 +512,7 @@ impl Material {
                 let c_key = CString::new(key).ok()?;
                 let result = unsafe {
                     sys::aiGetMaterialFloatArray(
-                        self.material_ptr,
+                        self.material_ptr.as_ptr(),
                         c_key.as_ptr(),
                         semantic.map(|t| t.to_sys() as u32).unwrap_or(0),
                         index,
@@ -586,7 +589,7 @@ impl Material {
     /// Enumerate all properties stored in this material (raw info only)
     pub fn all_properties(&self) -> Vec<MaterialPropertyInfo> {
         unsafe {
-            let m = &*self.material_ptr;
+            let m = self.material_ptr.as_ref();
             let count = m.mNumProperties as usize;
             if m.mProperties.is_null() || count == 0 {
                 return Vec::new();
@@ -620,7 +623,10 @@ impl Material {
 
     /// Get the number of textures for a specific type
     pub fn texture_count(&self, texture_type: TextureType) -> usize {
-        unsafe { sys::aiGetMaterialTextureCount(self.material_ptr, texture_type.to_sys()) as usize }
+        unsafe {
+            sys::aiGetMaterialTextureCount(self.material_ptr.as_ptr(), texture_type.to_sys())
+                as usize
+        }
     }
 
     /// Get texture information for a specific type and index
@@ -641,7 +647,7 @@ impl Material {
             let mut tex_flags: u32 = 0;
 
             let result = sys::aiGetMaterialTexture(
-                self.material_ptr,
+                self.material_ptr.as_ptr(),
                 texture_type.to_sys(),
                 index as u32,
                 &mut path,
@@ -654,9 +660,8 @@ impl Material {
             );
 
             if result == sys::aiReturn::aiReturn_SUCCESS {
-                let path_str = std::ffi::CStr::from_ptr(path.data.as_ptr())
-                    .to_string_lossy()
-                    .into_owned();
+                // Prefer length-based conversion (aiString is not guaranteed to be NUL-terminated).
+                let path_str = ai_string_to_string(&path);
 
                 let mapping_val = mapping.assume_init();
                 let uv_index_val = uv_index.assume_init();
@@ -667,7 +672,7 @@ impl Material {
                 let mut uv_transform = std::mem::MaybeUninit::<sys::aiUVTransform>::uninit();
                 let uv_key = std::ffi::CString::new("$tex.uvtrafo").unwrap();
                 let uv_ok = sys::aiGetMaterialUVTransform(
-                    self.material_ptr,
+                    self.material_ptr.as_ptr(),
                     uv_key.as_ptr(),
                     texture_type.to_sys() as u32,
                     index as u32,
@@ -690,7 +695,7 @@ impl Material {
                     let key = std::ffi::CString::new("$tex.mapaxis").unwrap();
                     let mut prop_ptr: *const sys::aiMaterialProperty = std::ptr::null();
                     let ok = sys::aiGetMaterialProperty(
-                        self.material_ptr,
+                        self.material_ptr.as_ptr(),
                         key.as_ptr(),
                         texture_type.to_sys() as u32,
                         index as u32,
@@ -895,18 +900,7 @@ pub struct MaterialPropertyInfo {
 
 impl MaterialPropertyInfo {
     fn from_raw(p: &sys::aiMaterialProperty) -> Self {
-        // Convert key
-        let key = unsafe {
-            if p.mKey.length == 0 {
-                String::new()
-            } else {
-                let bytes = std::slice::from_raw_parts(
-                    p.mKey.data.as_ptr() as *const u8,
-                    p.mKey.length as usize,
-                );
-                String::from_utf8_lossy(bytes).into_owned()
-            }
-        };
+        let key = ai_string_to_string(&p.mKey);
         // Semantic: if non-zero / aiTextureType_NONE, treat as texture type via safe mapping
         let semantic = TextureType::from_u32(p.mSemantic);
 
@@ -1007,7 +1001,7 @@ pub enum PbrWorkflow {
     Unknown,
 }
 
-impl Material {
+impl<'a> Material<'a> {
     /// Determine PBR workflow based on present factors
     pub fn pbr_workflow(&self) -> PbrWorkflow {
         if self.metallic_factor().is_some() || self.roughness_factor().is_some() {
@@ -1285,10 +1279,4 @@ bitflags::bitflags! {
     }
 }
 
-// Send and Sync are safe because:
-// 1. Material only holds a pointer to data owned by the Scene
-// 2. The Scene manages the lifetime of all Assimp data
-// 3. Assimp doesn't use global state and is thread-safe for read operations
-// 4. The pointer remains valid as long as the Scene exists
-unsafe impl Send for Material {}
-unsafe impl Sync for Material {}
+// Auto-traits (Send/Sync) are derived from the contained pointers and lifetimes.

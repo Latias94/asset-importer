@@ -3,10 +3,13 @@
 //! This module provides functionality for working with bones and vertex weights,
 //! which are essential for skeletal animation in 3D models.
 
+use std::marker::PhantomData;
+use std::ptr::NonNull;
+
 use crate::{
     error::{Error, Result},
     sys,
-    types::Matrix4x4,
+    types::{ai_string_to_string, from_ai_matrix4x4, Matrix4x4},
 };
 
 /// A vertex weight that associates a vertex with a bone
@@ -55,54 +58,46 @@ impl From<&sys::aiVertexWeight> for VertexWeight {
 /// Bones define how vertices are transformed during animation.
 /// Each bone has a name, an offset matrix, and a list of vertex weights.
 #[derive(Debug)]
-pub struct Bone {
-    bone_ptr: *const sys::aiBone,
+pub struct Bone<'a> {
+    bone_ptr: NonNull<sys::aiBone>,
+    _marker: PhantomData<&'a sys::aiScene>,
 }
 
-impl Bone {
+impl<'a> Bone<'a> {
     /// Create a bone wrapper from a raw Assimp bone pointer
     ///
     /// # Safety
     /// The caller must ensure that the pointer is valid and that the bone
     /// will not be freed while this Bone instance exists.
     pub(crate) unsafe fn from_raw(bone_ptr: *const sys::aiBone) -> Result<Self> {
-        if bone_ptr.is_null() {
-            return Err(Error::invalid_scene("Bone pointer is null"));
-        }
+        let bone_ptr = NonNull::new(bone_ptr as *mut sys::aiBone)
+            .ok_or_else(|| Error::invalid_scene("Bone pointer is null"))?;
 
-        Ok(Self { bone_ptr })
+        Ok(Self {
+            bone_ptr,
+            _marker: PhantomData,
+        })
     }
 
     /// Get the raw bone pointer
     pub fn as_raw(&self) -> *const sys::aiBone {
-        self.bone_ptr
+        self.bone_ptr.as_ptr()
     }
 
     /// Get the name of the bone
     pub fn name(&self) -> String {
-        unsafe {
-            let ai_string = &(*self.bone_ptr).mName;
-            if ai_string.length == 0 {
-                return String::new();
-            }
-
-            let slice = std::slice::from_raw_parts(
-                ai_string.data.as_ptr() as *const u8,
-                ai_string.length as usize,
-            );
-            String::from_utf8_lossy(slice).to_string()
-        }
+        unsafe { ai_string_to_string(&self.bone_ptr.as_ref().mName) }
     }
 
     /// Get the number of vertex weights for this bone
     pub fn num_weights(&self) -> usize {
-        unsafe { (*self.bone_ptr).mNumWeights as usize }
+        unsafe { self.bone_ptr.as_ref().mNumWeights as usize }
     }
 
     /// Get the vertex weights for this bone
     pub fn weights(&self) -> Vec<VertexWeight> {
         unsafe {
-            let bone = &*self.bone_ptr;
+            let bone = self.bone_ptr.as_ref();
             if bone.mWeights.is_null() || bone.mNumWeights == 0 {
                 return Vec::new();
             }
@@ -120,7 +115,7 @@ impl Bone {
         }
 
         unsafe {
-            let bone = &*self.bone_ptr;
+            let bone = self.bone_ptr.as_ref();
             let weight = &*bone.mWeights.add(index);
             Some(VertexWeight::from(weight))
         }
@@ -131,15 +126,7 @@ impl Bone {
     /// The offset matrix transforms vertices from mesh space to bone space.
     /// It's typically the inverse of the bone's transformation matrix in bind pose.
     pub fn offset_matrix(&self) -> Matrix4x4 {
-        unsafe {
-            let matrix = &(*self.bone_ptr).mOffsetMatrix;
-            Matrix4x4::from_cols_array_2d(&[
-                [matrix.a1, matrix.a2, matrix.a3, matrix.a4],
-                [matrix.b1, matrix.b2, matrix.b3, matrix.b4],
-                [matrix.c1, matrix.c2, matrix.c3, matrix.c4],
-                [matrix.d1, matrix.d2, matrix.d3, matrix.d4],
-            ])
-        }
+        unsafe { from_ai_matrix4x4(self.bone_ptr.as_ref().mOffsetMatrix) }
     }
 
     /// Get weights that affect a specific vertex
@@ -215,13 +202,14 @@ impl Bone {
 }
 
 /// Iterator over bones in a mesh
-pub struct BoneIterator {
+pub struct BoneIterator<'a> {
     bones: *mut *mut sys::aiBone,
     count: usize,
     index: usize,
+    _marker: PhantomData<&'a sys::aiScene>,
 }
 
-impl BoneIterator {
+impl<'a> BoneIterator<'a> {
     /// Create a new bone iterator
     ///
     /// # Safety
@@ -231,14 +219,18 @@ impl BoneIterator {
             bones,
             count,
             index: 0,
+            _marker: PhantomData,
         }
     }
 }
 
-impl Iterator for BoneIterator {
-    type Item = Bone;
+impl<'a> Iterator for BoneIterator<'a> {
+    type Item = Bone<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
+        if self.bones.is_null() || self.count == 0 {
+            return None;
+        }
         if self.index >= self.count {
             return None;
         }
@@ -257,7 +249,7 @@ impl Iterator for BoneIterator {
     }
 }
 
-impl ExactSizeIterator for BoneIterator {
+impl<'a> ExactSizeIterator for BoneIterator<'a> {
     fn len(&self) -> usize {
         self.count.saturating_sub(self.index)
     }
@@ -269,7 +261,9 @@ pub mod utils {
     use std::collections::HashMap;
 
     /// Normalize vertex weights so that the total weight per vertex equals 1.0
-    pub fn normalize_vertex_weights(bones: &[Bone]) -> HashMap<u32, Vec<(usize, f32)>> {
+    pub fn normalize_vertex_weights<'scene>(
+        bones: &[Bone<'scene>],
+    ) -> HashMap<u32, Vec<(usize, f32)>> {
         let mut vertex_weights: HashMap<u32, Vec<(usize, f32)>> = HashMap::new();
 
         // Collect all weights per vertex
@@ -296,12 +290,15 @@ pub mod utils {
     }
 
     /// Find bones by name
-    pub fn find_bones_by_name<'a>(bones: &'a [Bone], name: &str) -> Vec<&'a Bone> {
+    pub fn find_bones_by_name<'a, 'scene>(
+        bones: &'a [Bone<'scene>],
+        name: &str,
+    ) -> Vec<&'a Bone<'scene>> {
         bones.iter().filter(|bone| bone.name() == name).collect()
     }
 
     /// Get the maximum number of bones affecting any single vertex
-    pub fn max_bones_per_vertex(bones: &[Bone]) -> usize {
+    pub fn max_bones_per_vertex<'scene>(bones: &[Bone<'scene>]) -> usize {
         let mut vertex_bone_count: HashMap<u32, usize> = HashMap::new();
 
         for bone in bones {
@@ -314,7 +311,7 @@ pub mod utils {
     }
 
     /// Filter out bones with weights below a threshold
-    pub fn filter_significant_bones(bones: &[Bone], threshold: f32) -> Vec<usize> {
+    pub fn filter_significant_bones<'scene>(bones: &[Bone<'scene>], threshold: f32) -> Vec<usize> {
         bones
             .iter()
             .enumerate()
@@ -323,15 +320,3 @@ pub mod utils {
             .collect()
     }
 }
-
-// Send and Sync are safe because:
-// 1. Bone only holds a pointer to data owned by the Scene
-// 2. The Scene manages the lifetime of all Assimp data
-// 3. Assimp doesn't use global state and is thread-safe for read operations
-// 4. The pointer remains valid as long as the Scene exists
-unsafe impl Send for Bone {}
-unsafe impl Sync for Bone {}
-
-// BoneIterator is also safe for the same reasons
-unsafe impl Send for BoneIterator {}
-unsafe impl Sync for BoneIterator {}

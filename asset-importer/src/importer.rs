@@ -285,19 +285,21 @@ impl ImportBuilder {
         };
 
         // Create custom file I/O if specified
-        let file_io = self
+        let mut file_io = self
             .file_system
             .as_ref()
             .map(|fs| AssimpFileIO::new(fs.clone()).create_ai_file_io());
-        let file_io_ptr: *mut sys::aiFileIO = file_io
-            .as_ref()
-            .map_or(std::ptr::null_mut(), |io| io as *const _ as *mut _);
+        let file_io_ptr_mut: *mut sys::aiFileIO = file_io
+            .as_mut()
+            .map_or(std::ptr::null_mut(), |io| io.as_mut_ptr());
+        let file_io_ptr_const: *const sys::aiFileIO =
+            file_io.as_ref().map_or(std::ptr::null(), |io| io.as_ptr());
 
         // If a progress handler is provided, use the C++ bridge to set it.
         let scene_ptr = if use_bridge {
             let handler = self.progress_handler.unwrap();
             // Prepare property list for the bridge
-            let (ffi_props, _name_bufs, _value_str_bufs) = build_rust_properties(&self.properties)?;
+            let buffers = build_rust_properties(&self.properties)?;
 
             // Prepare progress callback state
             extern "C" fn progress_cb(
@@ -326,9 +328,9 @@ impl ImportBuilder {
                 sys::aiImportFileExWithProgressRust(
                     c_path.as_ptr(),
                     self.post_process.as_raw(),
-                    file_io_ptr,
-                    ffi_props.as_ptr(),
-                    ffi_props.len(),
+                    file_io_ptr_const,
+                    buffers.ffi_props.as_ptr(),
+                    buffers.ffi_props.len(),
                     Some(progress_cb),
                     user_ptr,
                 )
@@ -341,9 +343,9 @@ impl ImportBuilder {
         } else {
             // Fallback to C API paths
             unsafe {
-                if property_store.is_null() && file_io_ptr.is_null() {
+                if property_store.is_null() && file_io_ptr_mut.is_null() {
                     sys::aiImportFile(c_path.as_ptr(), self.post_process.as_raw())
-                } else if file_io_ptr.is_null() {
+                } else if file_io_ptr_mut.is_null() {
                     sys::aiImportFileExWithProperties(
                         c_path.as_ptr(),
                         self.post_process.as_raw(),
@@ -351,12 +353,16 @@ impl ImportBuilder {
                         property_store,
                     )
                 } else if property_store.is_null() {
-                    sys::aiImportFileEx(c_path.as_ptr(), self.post_process.as_raw(), file_io_ptr)
+                    sys::aiImportFileEx(
+                        c_path.as_ptr(),
+                        self.post_process.as_raw(),
+                        file_io_ptr_mut,
+                    )
                 } else {
                     sys::aiImportFileExWithProperties(
                         c_path.as_ptr(),
                         self.post_process.as_raw(),
-                        file_io_ptr,
+                        file_io_ptr_mut,
                         property_store,
                     )
                 }
@@ -415,7 +421,7 @@ impl ImportBuilder {
         let scene_ptr = if use_bridge {
             let handler = self.progress_handler.unwrap();
             // Prepare properties
-            let (ffi_props, _name_bufs, _value_str_bufs) = build_rust_properties(&self.properties)?;
+            let buffers = build_rust_properties(&self.properties)?;
 
             extern "C" fn progress_cb(
                 percentage: f32,
@@ -444,8 +450,8 @@ impl ImportBuilder {
                     data.len() as u32,
                     self.post_process.as_raw(),
                     hint_ptr,
-                    ffi_props.as_ptr(),
-                    ffi_props.len(),
+                    buffers.ffi_props.as_ptr(),
+                    buffers.ffi_props.len(),
                     Some(progress_cb),
                     user_ptr,
                 )
@@ -581,12 +587,23 @@ impl ImportBuilder {
 }
 
 // Build property array for the C++ bridge. Returns (ffi_props, name_bufs, value_str_bufs)
-fn build_rust_properties(
-    props: &[(String, PropertyValue)],
-) -> Result<(Vec<sys::aiRustProperty>, Vec<CString>, Vec<CString>)> {
+struct BridgePropertyBuffers {
+    ffi_props: Vec<sys::aiRustProperty>,
+    _name_bufs: Vec<CString>,
+    _value_str_bufs: Vec<CString>,
+    _matrices: Vec<sys::aiMatrix4x4>,
+}
+
+fn build_rust_properties(props: &[(String, PropertyValue)]) -> Result<BridgePropertyBuffers> {
+    let matrix_count = props
+        .iter()
+        .filter(|(_, v)| matches!(v, PropertyValue::Matrix(_)))
+        .count();
+
     let mut ffi_props = Vec::with_capacity(props.len());
     let mut name_bufs: Vec<CString> = Vec::with_capacity(props.len());
     let mut value_str_bufs: Vec<CString> = Vec::new();
+    let mut matrices: Vec<sys::aiMatrix4x4> = Vec::with_capacity(matrix_count);
 
     for (name, value) in props {
         let c_name = CString::new(name.as_str())
@@ -622,8 +639,9 @@ fn build_rust_properties(
             }
             PropertyValue::Matrix(m) => {
                 p.kind = sys::aiRustPropertyKind::aiRustPropertyKind_Matrix4x4;
-                let matrix = Box::new(to_ai_matrix4x4(*m));
-                p.matrix_value = Box::into_raw(matrix) as *mut std::ffi::c_void;
+                matrices.push(to_ai_matrix4x4(*m));
+                let matrix_ptr = matrices.last().expect("matrix_count out of sync with push");
+                p.matrix_value = (matrix_ptr as *const sys::aiMatrix4x4) as *mut std::ffi::c_void;
             }
         }
 
@@ -631,7 +649,12 @@ fn build_rust_properties(
         ffi_props.push(p);
     }
 
-    Ok((ffi_props, name_bufs, value_str_bufs))
+    Ok(BridgePropertyBuffers {
+        ffi_props,
+        _name_bufs: name_bufs,
+        _value_str_bufs: value_str_bufs,
+        _matrices: matrices,
+    })
 }
 
 impl Default for ImportBuilder {

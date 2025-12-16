@@ -285,6 +285,49 @@ pub struct AssimpFileIO {
     file_system: Arc<Mutex<dyn FileSystem>>,
 }
 
+/// Owned aiFileIO wrapper which frees its `UserData` on drop.
+///
+/// Assimp does not take ownership of `aiFileIO::UserData`, so the creator must
+/// ensure it is released after the import/export call completes.
+pub struct OwnedAiFileIO {
+    file_io: sys::aiFileIO,
+}
+
+impl OwnedAiFileIO {
+    fn new(file_system: Arc<Mutex<dyn FileSystem>>) -> Self {
+        let user_data = Box::into_raw(Box::new(file_system)) as *mut c_char;
+        Self {
+            file_io: sys::aiFileIO {
+                OpenProc: Some(file_open_proc),
+                CloseProc: Some(file_close_proc),
+                UserData: user_data,
+            },
+        }
+    }
+
+    /// Get a const pointer to the underlying `aiFileIO`.
+    pub fn as_ptr(&self) -> *const sys::aiFileIO {
+        &self.file_io as *const _
+    }
+
+    /// Get a mutable pointer to the underlying `aiFileIO`.
+    pub fn as_mut_ptr(&mut self) -> *mut sys::aiFileIO {
+        &mut self.file_io as *mut _
+    }
+}
+
+impl Drop for OwnedAiFileIO {
+    fn drop(&mut self) {
+        unsafe {
+            let ptr = self.file_io.UserData as *mut Arc<Mutex<dyn FileSystem>>;
+            if !ptr.is_null() {
+                drop(Box::from_raw(ptr));
+                self.file_io.UserData = ptr::null_mut();
+            }
+        }
+    }
+}
+
 impl AssimpFileIO {
     /// Create a new Assimp file I/O wrapper
     pub fn new(file_system: Arc<Mutex<dyn FileSystem>>) -> Self {
@@ -292,12 +335,8 @@ impl AssimpFileIO {
     }
 
     /// Create the aiFileIO structure for use with Assimp
-    pub fn create_ai_file_io(&self) -> sys::aiFileIO {
-        sys::aiFileIO {
-            OpenProc: Some(file_open_proc),
-            CloseProc: Some(file_close_proc),
-            UserData: Box::into_raw(Box::new(self.file_system.clone())) as *mut c_char,
-        }
+    pub fn create_ai_file_io(&self) -> OwnedAiFileIO {
+        OwnedAiFileIO::new(self.file_system.clone())
     }
 }
 
@@ -385,7 +424,7 @@ extern "C" fn file_read_proc(
     size: usize,
     count: usize,
 ) -> usize {
-    if file.is_null() || buffer.is_null() {
+    if file.is_null() || buffer.is_null() || size == 0 || count == 0 {
         return 0;
     }
 
@@ -413,12 +452,16 @@ extern "C" fn file_write_proc(
     size: usize,
     count: usize,
 ) -> usize {
-    if file.is_null() || buffer.is_null() {
+    if file.is_null() || buffer.is_null() || size == 0 || count == 0 {
         return 0;
     }
 
     unsafe {
-        let wrapper = &mut *((*file).UserData as *mut FileWrapper);
+        let wrapper_ptr = (*file).UserData as *mut FileWrapper;
+        if wrapper_ptr.is_null() {
+            return 0;
+        }
+        let wrapper = &mut *wrapper_ptr;
         let total_bytes = size * count;
 
         if total_bytes == 0 {
@@ -514,7 +557,18 @@ extern "C" fn file_seek_proc(
 
 /// C callback for flushing files (no-op for read-only streams)
 extern "C" fn file_flush_proc(_file: *mut sys::aiFile) {
-    // No-op for read-only file streams
+    if _file.is_null() {
+        return;
+    }
+
+    unsafe {
+        let wrapper_ptr = (*_file).UserData as *mut FileWrapper;
+        if wrapper_ptr.is_null() {
+            return;
+        }
+        let wrapper = &mut *wrapper_ptr;
+        let _ = wrapper.stream.flush();
+    }
 }
 
 #[cfg(test)]

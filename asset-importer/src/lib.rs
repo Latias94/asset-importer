@@ -125,10 +125,12 @@ pub mod version {
 
     /// Version of the underlying Assimp library
     pub fn assimp_version() -> String {
-        let major = assimp_version_major();
-        let minor = assimp_version_minor();
-        let revision = assimp_version_revision();
-        format!("{}.{}.{}", major, minor, revision)
+        format!(
+            "{}.{}.{}",
+            assimp_version_major(),
+            assimp_version_minor(),
+            assimp_version_patch()
+        )
     }
 
     /// Major version of Assimp
@@ -141,6 +143,11 @@ pub mod version {
         unsafe { crate::sys::aiGetVersionMinor() }
     }
 
+    /// Patch version of Assimp
+    pub fn assimp_version_patch() -> u32 {
+        unsafe { crate::sys::aiGetVersionPatch() }
+    }
+
     /// Revision of Assimp
     pub fn assimp_version_revision() -> u32 {
         unsafe { crate::sys::aiGetVersionRevision() }
@@ -148,19 +155,22 @@ pub mod version {
 
     /// Version string reported by Assimp
     pub fn assimp_version_string() -> String {
-        // Note: aiGetVersionString is not available in the current bindings
-        // Use the version components to construct a version string
-        format!(
-            "{}.{}.{}",
-            assimp_version_major(),
-            assimp_version_minor(),
-            assimp_version_revision()
-        )
+        assimp_version()
     }
 
     /// Compile flags used to build Assimp
     pub fn assimp_compile_flags() -> u32 {
         unsafe { crate::sys::aiGetCompileFlags() }
+    }
+
+    /// Branch name of the Assimp runtime
+    pub fn assimp_branch_name() -> String {
+        unsafe { crate::error::c_str_to_string_or_empty(crate::sys::aiGetBranchName()) }
+    }
+
+    /// Legal/license string for the Assimp runtime
+    pub fn assimp_legal_string() -> String {
+        unsafe { crate::error::c_str_to_string_or_empty(crate::sys::aiGetLegalString()) }
     }
 }
 
@@ -263,11 +273,15 @@ mod tests {
 
         let major = version::assimp_version_major();
         let minor = version::assimp_version_minor();
+        let patch = version::assimp_version_patch();
         let revision = version::assimp_version_revision();
 
         // Assimp should be at least version 5.0
         assert!(major >= 5);
-        println!("Assimp version: {}.{}.{}", major, minor, revision);
+        println!(
+            "Assimp version: {}.{}.{} (revision {})",
+            major, minor, patch, revision
+        );
     }
 
     #[test]
