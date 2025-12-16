@@ -15,6 +15,9 @@ pub struct Camera<'a> {
     _marker: PhantomData<&'a sys::aiScene>,
 }
 
+unsafe impl<'a> Send for Camera<'a> {}
+unsafe impl<'a> Sync for Camera<'a> {}
+
 impl<'a> Camera<'a> {
     /// Create a Camera from a raw Assimp camera pointer
     ///

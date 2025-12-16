@@ -18,6 +18,9 @@ pub struct Light<'a> {
     _marker: PhantomData<&'a sys::aiScene>,
 }
 
+unsafe impl<'a> Send for Light<'a> {}
+unsafe impl<'a> Sync for Light<'a> {}
+
 impl<'a> Light<'a> {
     /// Create a Light from a raw Assimp light pointer
     ///

@@ -90,6 +90,9 @@ pub struct Material<'a> {
     _marker: PhantomData<&'a sys::aiScene>,
 }
 
+unsafe impl<'a> Send for Material<'a> {}
+unsafe impl<'a> Sync for Material<'a> {}
+
 impl<'a> Material<'a> {
     /// Create a Material from a raw Assimp material pointer
     ///

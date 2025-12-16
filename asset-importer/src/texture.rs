@@ -91,6 +91,9 @@ pub struct Texture<'a> {
     _marker: PhantomData<&'a sys::aiScene>,
 }
 
+unsafe impl<'a> Send for Texture<'a> {}
+unsafe impl<'a> Sync for Texture<'a> {}
+
 impl<'a> Texture<'a> {
     /// Create a texture wrapper from a raw Assimp texture pointer
     ///

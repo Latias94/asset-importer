@@ -14,6 +14,9 @@ pub struct Animation<'a> {
     _marker: PhantomData<&'a sys::aiScene>,
 }
 
+unsafe impl<'a> Send for Animation<'a> {}
+unsafe impl<'a> Sync for Animation<'a> {}
+
 impl<'a> Animation<'a> {
     /// Create an Animation from a raw Assimp animation pointer
     ///

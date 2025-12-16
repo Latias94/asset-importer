@@ -17,6 +17,9 @@ pub struct Node<'a> {
     _marker: PhantomData<&'a sys::aiScene>,
 }
 
+unsafe impl<'a> Send for Node<'a> {}
+unsafe impl<'a> Sync for Node<'a> {}
+
 impl<'a> Node<'a> {
     /// Create a Node from a raw Assimp node pointer
     ///

@@ -63,6 +63,9 @@ pub struct Bone<'a> {
     _marker: PhantomData<&'a sys::aiScene>,
 }
 
+unsafe impl<'a> Send for Bone<'a> {}
+unsafe impl<'a> Sync for Bone<'a> {}
+
 impl<'a> Bone<'a> {
     /// Create a bone wrapper from a raw Assimp bone pointer
     ///

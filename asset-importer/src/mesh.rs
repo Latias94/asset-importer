@@ -18,6 +18,9 @@ pub struct Mesh<'a> {
     _marker: PhantomData<&'a sys::aiScene>,
 }
 
+unsafe impl<'a> Send for Mesh<'a> {}
+unsafe impl<'a> Sync for Mesh<'a> {}
+
 impl<'a> Mesh<'a> {
     /// Create a Mesh from a raw Assimp mesh pointer
     ///

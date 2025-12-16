@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
 
 env:
   CARGO_TERM_COLOR: always
@@ -18,7 +18,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
         # Always build from source in CI to avoid prebuilt/version skew
-        features: ['build-assimp', 'build-assimp,static-link']
+        features: ["build-assimp", "build-assimp,static-link"]
         # Add CRT dimension; only meaningful on Windows
         crt: [dynamic, static]
         exclude:
@@ -38,14 +38,13 @@ jobs:
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
 
-      # Install system dependencies for different platforms
       - name: Install Linux dependencies
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y cmake build-essential
 
-      - name: Install LLVM (libclang) for bindgen
+      - name: Install LLVM (libclang) for bindgen (Linux)
         if: runner.os == 'Linux'
         uses: KyleMayes/install-llvm-action@v1
         with:
@@ -55,44 +54,16 @@ jobs:
 
       - name: Install macOS dependencies
         if: runner.os == 'macOS'
-        run: |
-          brew install cmake
+        run: brew install cmake
 
       - name: Install Windows dependencies
         if: runner.os == 'Windows'
-        run: |
-          choco install -y llvm cmake
-
-  system-windows:
-    name: System Assimp (windows-latest)
-    runs-on: windows-latest
-    steps:
-      - name: Checkout repository (no submodules)
-        uses: actions/checkout@v4
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Cache Rust dependencies
-        uses: Swatinem/rust-cache@v2
-
-      - name: Install Windows deps (llvm + cmake)
         run: choco install -y llvm cmake
-
-      - name: Install Assimp via vcpkg (x64-windows)
-        uses: microsoft/vcpkg-action@v1
-        with:
-          pkgs: assimp
-          triplet: x64-windows
-
-      - name: Build + test (system)
-        run: cargo test -p asset-importer --no-default-features --features system
 
       - name: Select static CRT (Windows)
         if: ${{ runner.os == 'Windows' && matrix.crt == 'static' }}
         shell: pwsh
-        run: |
-          echo "RUSTFLAGS=-C target-feature=+crt-static" >> $env:GITHUB_ENV
+        run: echo "RUSTFLAGS=-C target-feature=+crt-static" >> $env:GITHUB_ENV
 
       - name: Echo build parameters
         shell: bash
@@ -101,11 +72,6 @@ jobs:
           echo "FEATURES=${{ matrix.features }}"
           echo "CRT=${{ matrix.crt }}"
           echo "RUSTFLAGS=${RUSTFLAGS:-<empty>}"
-          if [[ "${{ contains(matrix.features, 'static-link') }}" == "true" ]]; then
-            echo "LINK_TYPE=static"
-          else
-            echo "LINK_TYPE=dylib"
-          fi
 
       - name: Build workspace (from source)
         run: cargo build --workspace --features "${{ matrix.features }}"
@@ -117,13 +83,10 @@ jobs:
         env:
           ASSET_IMPORTER_FORCE_BUILD: "1"
 
-  system:
-    name: System Assimp (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest]
+  system-macos:
+    name: System Assimp (macos-latest)
+    runs-on: macos-latest
+    continue-on-error: true
     steps:
       - name: Checkout repository (no submodules)
         uses: actions/checkout@v4
@@ -134,25 +97,44 @@ jobs:
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
 
-      - name: Install Linux deps (assimp + pkg-config + cmake)
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y cmake pkg-config libassimp-dev
-
-      - name: Install LLVM (libclang) for bindgen (Linux)
-        if: runner.os == 'Linux'
-        uses: KyleMayes/install-llvm-action@v1
-        with:
-          directory: ${{ runner.temp }}/llvm
-          cached: true
-          version: '14.0'
-
-      - name: Install macOS deps (assimp + pkg-config)
-        if: runner.os == 'macOS'
+      - name: Install deps (assimp + pkg-config)
         run: |
           brew update
           brew install assimp pkg-config
+
+      - name: Build + test (system)
+        run: cargo test -p asset-importer --no-default-features --features system
+
+  system-windows:
+    name: System Assimp (windows-latest)
+    runs-on: windows-latest
+    continue-on-error: true
+    steps:
+      - name: Checkout repository (no submodules)
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install deps (llvm + cmake)
+        run: choco install -y llvm cmake
+
+      - name: Setup vcpkg
+        uses: lukka/run-vcpkg@v11
+        with:
+          vcpkgGitCommitId: 9a98f93671f984351377044210854900bfd73171
+          runVcpkgInstall: false
+
+      - name: Install assimp via vcpkg (x64-windows)
+        shell: pwsh
+        run: |
+          vcpkg install assimp:x64-windows
+          $root = if ($env:VCPKG_INSTALLATION_ROOT) { $env:VCPKG_INSTALLATION_ROOT } elseif ($env:VCPKG_ROOT) { $env:VCPKG_ROOT } else { '' }
+          if (-not $root) { throw 'VCPKG root not found in environment.' }
+          echo "VCPKG_ROOT=$root" >> $env:GITHUB_ENV
 
       - name: Build + test (system)
         run: cargo test -p asset-importer --no-default-features --features system

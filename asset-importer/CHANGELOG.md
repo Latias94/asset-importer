@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Assimp version helpers**: `version::assimp_version()` now reports `major.minor.patch` and new helpers expose patch/branch/legal strings.
 
 ### Fixed
+- **Send/Sync on scene-backed views**: `Texture` and other scene-backed view types now implement `Send + Sync`, matching the multithreading guarantees promised by the crate.
 - **FFI property memory leak**: Matrix properties passed through the C++ bridge no longer leak memory.
 - **Custom IO leaks**: Assimp `aiFileIO` user-data is now released via RAII, fixing leaks when using a custom `FileSystem`.
 - **Export blob ownership**: Export blob iteration no longer risks double-free by mixing owned and borrowed nodes.
