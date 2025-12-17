@@ -39,6 +39,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **NUL-handling (breaking)**: APIs that accept `&str` but must pass a C string (`Material::get_*_property_str`, `Scene::embedded_texture_by_name`, `get_importer_desc`) now return `Result<...>` instead of silently treating embedded NUL bytes as "not found".
 - **Mint/glam integrations (breaking)**: `glam` is now an optional feature; mint conversions use standard `From`/`Into` (the `07_mint_integration` example now requires `--features mint`).
 - **Docs (breaking feature flags)**: Updated README and examples to consistently use mutually exclusive build modes (e.g. `--no-default-features --features build-assimp`).
+- **Custom IO performance**: `MemoryFileSystem::open()` now returns a read-only stream backed by a shared `Arc<[u8]>` buffer (no per-open byte cloning).
 - **Extension support API (breaking)**: `is_extension_supported()` now returns `Result<bool>` instead of silently treating embedded NUL bytes as unsupported.
 - **Examples build gating**: `model_loading_demo` is now behind the `demo` feature to avoid compiling heavy windowing/OpenGL deps during `cargo test`.
 - **Raw pointers opt-in (breaking)**: `Scene::as_raw()` (and similar `as_raw()` accessors on scene-backed view types) now require the `raw-sys` feature; the default API stays sys-free.

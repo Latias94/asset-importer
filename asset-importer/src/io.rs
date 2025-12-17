@@ -162,7 +162,7 @@ impl FileStream for StdFileStream {
 /// Memory-based file system for testing or embedded resources
 #[derive(Debug)]
 pub struct MemoryFileSystem {
-    files: std::collections::HashMap<String, Vec<u8>>,
+    files: std::collections::HashMap<String, Arc<[u8]>>,
 }
 
 impl MemoryFileSystem {
@@ -175,6 +175,11 @@ impl MemoryFileSystem {
 
     /// Add a file to the memory file system
     pub fn add_file<S: Into<String>>(&mut self, path: S, data: Vec<u8>) {
+        self.files.insert(path.into(), Arc::from(data));
+    }
+
+    /// Add a file from a shared byte buffer.
+    pub fn add_file_shared<S: Into<String>>(&mut self, path: S, data: Arc<[u8]>) {
         self.files.insert(path.into(), data);
     }
 
@@ -197,13 +202,61 @@ impl FileSystem for MemoryFileSystem {
 
     fn open(&self, path: &str) -> Result<Box<dyn FileStream>> {
         if let Some(data) = self.files.get(path) {
-            Ok(Box::new(MemoryFileStream::new(data.clone())))
+            Ok(Box::new(ReadOnlyMemoryFileStream::new(data.clone())))
         } else {
             Err(crate::error::Error::file_error(format!(
                 "File not found: {}",
                 path
             )))
         }
+    }
+}
+
+/// Read-only memory file stream backed by a shared byte buffer.
+#[derive(Clone)]
+pub struct ReadOnlyMemoryFileStream {
+    data: Arc<[u8]>,
+    position: usize,
+}
+
+impl ReadOnlyMemoryFileStream {
+    /// Create a new read-only memory file stream.
+    pub fn new(data: Arc<[u8]>) -> Self {
+        Self { data, position: 0 }
+    }
+}
+
+impl FileStream for ReadOnlyMemoryFileStream {
+    fn read(&mut self, buffer: &mut [u8]) -> Result<usize> {
+        let available = self.data.len().saturating_sub(self.position);
+        let to_read = buffer.len().min(available);
+
+        if to_read > 0 {
+            buffer[..to_read].copy_from_slice(&self.data[self.position..self.position + to_read]);
+            self.position += to_read;
+        }
+
+        Ok(to_read)
+    }
+
+    fn tell(&self) -> Result<u64> {
+        Ok(self.position as u64)
+    }
+
+    fn seek(&mut self, position: u64) -> Result<()> {
+        let position = usize::try_from(position)
+            .map_err(|_| crate::error::Error::io_error("Seek position too large".to_string()))?;
+        if position > self.data.len() {
+            return Err(crate::error::Error::io_error(
+                "Seek position beyond end of file".to_string(),
+            ));
+        }
+        self.position = position;
+        Ok(())
+    }
+
+    fn size(&self) -> Result<u64> {
+        Ok(self.data.len() as u64)
     }
 }
 
