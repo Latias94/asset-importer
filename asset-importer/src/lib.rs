@@ -187,7 +187,10 @@ pub mod version {
 
 /// Check if a file extension is supported for import
 pub fn is_extension_supported(extension: &str) -> bool {
-    let c_extension = std::ffi::CString::new(extension).unwrap_or_default();
+    let Ok(c_extension) = std::ffi::CString::new(extension) else {
+        // An interior NUL would truncate the string at the C boundary; treat as unsupported.
+        return false;
+    };
     unsafe { crate::sys::aiIsExtensionSupported(c_extension.as_ptr()) != 0 }
 }
 

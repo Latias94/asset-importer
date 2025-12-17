@@ -12,6 +12,7 @@ use crate::{
     scene::Scene,
     sys,
 };
+use std::borrow::Cow;
 
 /// A texel (texture element) in ARGB8888 format
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -210,15 +211,25 @@ impl Texture {
     ///
     /// For uncompressed textures, this describes the channel layout (e.g., "rgba8888").
     /// For compressed textures, this is the file extension (e.g., "jpg", "png").
-    pub fn format_hint(&self) -> String {
+    pub fn format_hint_bytes(&self) -> &[u8] {
         unsafe {
             let hint = &(*self.texture_ptr.as_ptr()).achFormatHint;
             // Find the null terminator
             let len = hint.iter().position(|&c| c == 0).unwrap_or(hint.len());
-            // Convert i8 to u8 for string conversion
-            let hint_bytes: Vec<u8> = hint[..len].iter().map(|&c| c as u8).collect();
-            String::from_utf8_lossy(&hint_bytes).to_string()
+            ffi::slice_from_ptr_len(self, hint.as_ptr() as *const u8, len)
         }
+    }
+
+    /// Get the format hint as UTF-8 (lossy) without allocation.
+    pub fn format_hint_str(&self) -> Cow<'_, str> {
+        String::from_utf8_lossy(self.format_hint_bytes())
+    }
+
+    /// Get the format hint for the texture (allocates).
+    ///
+    /// Prefer [`Texture::format_hint_str`] for a zero-allocation option.
+    pub fn format_hint(&self) -> String {
+        self.format_hint_str().into_owned()
     }
 
     /// Get the original filename of the texture
@@ -232,6 +243,14 @@ impl Texture {
         }
     }
 
+    /// Get the original filename of the texture as UTF-8 (lossy) without allocation.
+    pub fn filename_str(&self) -> Option<Cow<'_, str>> {
+        unsafe {
+            let ai_string = &(*self.texture_ptr.as_ptr()).mFilename;
+            (ai_string.length != 0).then(|| crate::types::ai_string_to_str(ai_string))
+        }
+    }
+
     /// Check if the texture format matches a given string
     ///
     /// This is useful for compressed textures to check the format.
@@ -241,8 +260,7 @@ impl Texture {
             return false;
         }
 
-        let hint = self.format_hint();
-        hint.eq_ignore_ascii_case(format)
+        self.format_hint_str().as_ref().eq_ignore_ascii_case(format)
     }
 
     /// Get the texture data
