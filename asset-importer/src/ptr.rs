@@ -18,6 +18,44 @@
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct SharedPtr<T>(*const T);
 
+/// Marker trait: types that are safe to share across threads as *read-only* when wrapped
+/// by `SharedPtr`.
+///
+/// # Safety
+/// Implementors must guarantee that values reachable through pointers of this type will only be
+/// accessed immutably through this crate's safe API when shared across threads. If the underlying
+/// memory can be mutated concurrently (or exposed for mutation elsewhere), marking it as a shared
+/// target can violate Rust aliasing rules and cause undefined behavior.
+pub(crate) unsafe trait SharedPtrTarget {}
+
+// Scene-backed Assimp structs we expose through the safe API.
+unsafe impl SharedPtrTarget for crate::sys::aiScene {}
+unsafe impl SharedPtrTarget for crate::sys::aiNode {}
+unsafe impl SharedPtrTarget for crate::sys::aiMesh {}
+unsafe impl SharedPtrTarget for crate::sys::aiMaterial {}
+unsafe impl SharedPtrTarget for crate::sys::aiMaterialProperty {}
+unsafe impl SharedPtrTarget for crate::sys::aiAnimation {}
+unsafe impl SharedPtrTarget for crate::sys::aiNodeAnim {}
+unsafe impl SharedPtrTarget for crate::sys::aiMeshAnim {}
+unsafe impl SharedPtrTarget for crate::sys::aiMeshMorphAnim {}
+unsafe impl SharedPtrTarget for crate::sys::aiMeshMorphKey {}
+unsafe impl SharedPtrTarget for crate::sys::aiCamera {}
+unsafe impl SharedPtrTarget for crate::sys::aiLight {}
+unsafe impl SharedPtrTarget for crate::sys::aiTexture {}
+unsafe impl SharedPtrTarget for crate::sys::aiAnimMesh {}
+unsafe impl SharedPtrTarget for crate::sys::aiBone {}
+
+// Export-side blob chain (safe to share as read-only; ownership is handled elsewhere).
+unsafe impl SharedPtrTarget for crate::sys::aiExportDataBlob {}
+
+// Crate-owned raw view types (backed by Assimp scene memory).
+unsafe impl SharedPtrTarget for crate::raw::AiFace {}
+
+// Pointer arrays in Assimp use `T**` layouts; treat the pointer elements as shareable only
+// when the pointee type itself is a valid shared target.
+unsafe impl<T: SharedPtrTarget> SharedPtrTarget for *const T {}
+unsafe impl<T: SharedPtrTarget> SharedPtrTarget for *mut T {}
+
 impl<T> SharedPtr<T> {
     /// Creates a new `SharedPtr` if `ptr` is non-null.
     pub(crate) fn new(ptr: *const T) -> Option<Self> {
@@ -39,6 +77,7 @@ impl<T> SharedPtr<T> {
     }
 }
 
-// Safety: this is crate-internal and only used for immutable, Assimp-owned scene data.
-unsafe impl<T> Send for SharedPtr<T> {}
-unsafe impl<T> Sync for SharedPtr<T> {}
+// Safety: only allow cross-thread sharing for targets explicitly marked as safe to share
+// as read-only through this crate's API.
+unsafe impl<T: SharedPtrTarget> Send for SharedPtr<T> {}
+unsafe impl<T: SharedPtrTarget> Sync for SharedPtr<T> {}
