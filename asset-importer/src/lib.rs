@@ -108,7 +108,8 @@ pub use crate::animation::Animation;
 
 // Re-export importer description functionality
 pub use crate::importer_desc::{
-    ImporterDesc, ImporterFlags, get_all_importer_descs, get_importer_desc,
+    ImporterDesc, ImporterDescIterator, ImporterFlags, get_all_importer_descs,
+    get_all_importer_descs_iter, get_importer_desc, get_importer_desc_cstr,
 };
 
 // Core modules
@@ -203,17 +204,89 @@ pub mod version {
     }
 }
 
-/// Check if a file extension is supported for import
-pub fn is_extension_supported(extension: &str) -> bool {
-    let Ok(c_extension) = std::ffi::CString::new(extension) else {
-        // An interior NUL would truncate the string at the C boundary; treat as unsupported.
-        return false;
-    };
-    unsafe { crate::sys::aiIsExtensionSupported(c_extension.as_ptr()) != 0 }
+/// Check if a file extension is supported for import.
+pub fn is_extension_supported(extension: &str) -> crate::Result<bool> {
+    let c_extension = std::ffi::CString::new(extension).map_err(|_| {
+        crate::Error::invalid_parameter("file extension contains NUL byte".to_string())
+    })?;
+    Ok(unsafe { crate::sys::aiIsExtensionSupported(c_extension.as_ptr()) != 0 })
 }
 
-/// Get a list of all supported import file extensions
-pub fn get_import_extensions() -> Vec<String> {
+const FALLBACK_IMPORT_EXTENSIONS: [&str; 15] = [
+    ".obj", ".fbx", ".dae", ".gltf", ".glb", ".3ds", ".blend", ".x", ".ply", ".stl", ".md2",
+    ".md3", ".md5", ".ase", ".ifc",
+];
+
+/// An allocation-minimized import extension list.
+///
+/// This keeps the raw Assimp extension list string and provides an iterator over `&str` views
+/// (e.g. `".obj"`), avoiding per-extension allocations.
+#[derive(Debug, Clone)]
+pub struct ImportExtensions {
+    raw: Option<String>,
+}
+
+#[derive(Debug)]
+enum ImportExtensionsIterInner<'a> {
+    Assimp(std::str::Split<'a, char>),
+    Fallback(std::slice::Iter<'a, &'static str>),
+}
+
+/// Iterator over supported import extensions.
+#[derive(Debug)]
+pub struct ImportExtensionsIter<'a> {
+    inner: ImportExtensionsIterInner<'a>,
+}
+
+impl<'a> Iterator for ImportExtensionsIter<'a> {
+    type Item = &'a str;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        loop {
+            match &mut self.inner {
+                ImportExtensionsIterInner::Assimp(split) => {
+                    let ext = split.next()?;
+                    let trimmed = ext.trim();
+                    if trimmed.starts_with("*.") && trimmed.len() > 1 {
+                        return Some(&trimmed[1..]);
+                    }
+                }
+                ImportExtensionsIterInner::Fallback(iter) => {
+                    let s: &'static str = *iter.next()?;
+                    return Some(s);
+                }
+            }
+        }
+    }
+}
+
+impl ImportExtensions {
+    /// Raw Assimp extension list, if available (e.g. `"*.3ds;*.obj;*.dae"`).
+    pub fn raw_assimp_list(&self) -> Option<&str> {
+        self.raw.as_deref()
+    }
+
+    /// Iterate extensions as `".ext"` strings (without allocation).
+    pub fn iter(&self) -> ImportExtensionsIter<'_> {
+        if let Some(s) = self.raw.as_deref() {
+            ImportExtensionsIter {
+                inner: ImportExtensionsIterInner::Assimp(s.split(';')),
+            }
+        } else {
+            ImportExtensionsIter {
+                inner: ImportExtensionsIterInner::Fallback(FALLBACK_IMPORT_EXTENSIONS.iter()),
+            }
+        }
+    }
+
+    /// Collect into owned `String`s.
+    pub fn to_vec(&self) -> Vec<String> {
+        self.iter().map(str::to_string).collect()
+    }
+}
+
+/// Get all supported import file extensions (allocation-minimized).
+pub fn get_import_extensions_list() -> ImportExtensions {
     let mut ai_string = crate::sys::aiString {
         length: 0,
         data: [0; 1024],
@@ -223,62 +296,69 @@ pub fn get_import_extensions() -> Vec<String> {
         crate::sys::aiGetExtensionList(&mut ai_string);
     }
 
-    // Convert aiString to Rust String
-    let extension_list = if ai_string.length > 0 {
-        crate::types::ai_string_to_string(&ai_string)
+    if ai_string.length > 0 {
+        ImportExtensions {
+            raw: Some(crate::types::ai_string_to_string(&ai_string)),
+        }
     } else {
-        // Fallback to hardcoded list if the function fails
-        return vec![
-            ".obj".to_string(),
-            ".fbx".to_string(),
-            ".dae".to_string(),
-            ".gltf".to_string(),
-            ".glb".to_string(),
-            ".3ds".to_string(),
-            ".blend".to_string(),
-            ".x".to_string(),
-            ".ply".to_string(),
-            ".stl".to_string(),
-            ".md2".to_string(),
-            ".md3".to_string(),
-            ".md5".to_string(),
-            ".ase".to_string(),
-            ".ifc".to_string(),
-        ];
-    };
+        ImportExtensions { raw: None }
+    }
+}
 
-    // Parse the extension list (format: "*.3ds;*.obj;*.dae")
-    extension_list
-        .split(';')
-        .filter_map(|ext| {
-            let trimmed = ext.trim();
-            if trimmed.starts_with("*.") {
-                Some(trimmed[1..].to_string()) // Remove the '*' prefix
-            } else {
-                None
-            }
-        })
-        .collect()
+/// Get a list of all supported import file extensions (allocates).
+pub fn get_import_extensions() -> Vec<String> {
+    get_import_extensions_list().to_vec()
 }
 
 /// Get a list of all supported export formats
 #[cfg(feature = "export")]
 pub fn get_export_formats() -> Vec<crate::exporter::ExportFormatDesc> {
-    let count = unsafe { sys::aiGetExportFormatCount() };
-    let mut formats = Vec::with_capacity(count);
+    get_export_formats_iter().collect()
+}
 
-    for i in 0..count {
-        unsafe {
-            let desc_ptr = sys::aiGetExportFormatDescription(i);
-            if !desc_ptr.is_null() {
+/// Iterate supported export formats without allocating a `Vec`.
+///
+/// Each yielded item is still an owned `ExportFormatDesc` (it contains copied strings).
+#[cfg(feature = "export")]
+pub fn get_export_formats_iter() -> ExportFormatDescIterator {
+    ExportFormatDescIterator {
+        index: 0,
+        count: unsafe { sys::aiGetExportFormatCount() },
+    }
+}
+
+/// Iterator over Assimp export format descriptions.
+#[cfg(feature = "export")]
+pub struct ExportFormatDescIterator {
+    index: usize,
+    count: usize,
+}
+
+#[cfg(feature = "export")]
+impl Iterator for ExportFormatDescIterator {
+    type Item = crate::exporter::ExportFormatDesc;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        while self.index < self.count {
+            let i = self.index;
+            self.index += 1;
+            unsafe {
+                let desc_ptr = sys::aiGetExportFormatDescription(i);
+                if desc_ptr.is_null() {
+                    continue;
+                }
                 let desc = crate::exporter::ExportFormatDesc::from_raw(&*desc_ptr);
-                formats.push(desc);
                 sys::aiReleaseExportFormatDescription(desc_ptr);
+                return Some(desc);
             }
         }
+        None
     }
 
-    formats
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let remaining = self.count.saturating_sub(self.index);
+        (0, Some(remaining))
+    }
 }
 
 /// Enable verbose logging for debugging
@@ -313,13 +393,13 @@ mod tests {
     #[test]
     fn test_extension_support() {
         // These formats should definitely be supported
-        assert!(is_extension_supported("obj"));
-        assert!(is_extension_supported("fbx"));
-        assert!(is_extension_supported("dae"));
-        assert!(is_extension_supported("gltf"));
+        assert!(is_extension_supported("obj").unwrap());
+        assert!(is_extension_supported("fbx").unwrap());
+        assert!(is_extension_supported("dae").unwrap());
+        assert!(is_extension_supported("gltf").unwrap());
 
         // This should not be supported
-        assert!(!is_extension_supported("xyz"));
+        assert!(!is_extension_supported("xyz").unwrap());
     }
 
     #[test]

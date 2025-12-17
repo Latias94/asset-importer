@@ -317,10 +317,14 @@ impl Exporter {
         crate::get_export_formats()
     }
 
+    /// Iterate all available export formats without allocating a `Vec`.
+    pub fn get_export_formats_iter(&self) -> crate::ExportFormatDescIterator {
+        crate::get_export_formats_iter()
+    }
+
     /// Check if a format is supported for export
     pub fn is_format_supported<S: AsRef<str>>(&self, format_id: S) -> bool {
-        self.get_export_formats()
-            .iter()
+        self.get_export_formats_iter()
             .any(|desc| desc.id == format_id.as_ref())
     }
 }

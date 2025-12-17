@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Typed vectors/colors**: Added `MaterialPropertyRef::{as_f32_array,as_f64_array,as_vec2,as_vec3,as_vec4,as_color3,as_color4}` for unaligned-safe, allocation-free decoding of common float payloads.
 - **Allocation-free string properties**: Added `MaterialPropertyRef::string_ref()` to decode `aiString` payloads without heap allocation.
 - **Texture iter helpers**: Added `Scene::{compressed_textures_iter,uncompressed_textures_iter}` and `Scene::embedded_texture_by_cstr()` to avoid allocations in hot loops.
+- **More iter/list APIs**: Added `get_import_extensions_list()` (iterator-based), `get_export_formats_iter()`, and `get_all_importer_descs_iter()` to avoid `Vec` allocations in hot paths.
 
 ### Changed
 - **Scene ownership model (breaking)**: Scene-backed view types (`Mesh`, `Node`, `Material`, `Texture`, etc.) now own a cheap clone of `Scene` instead of borrowing via lifetimes, making them effectively `'static` and more ergonomic for async/multithreading.
@@ -35,6 +36,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Raw sys bindings opt-in (breaking)**: `asset_importer::sys` is now behind the `raw-sys` feature to reduce accidental safety contract violations.
 - **Build mode features (breaking)**: `prebuilt`, `build-assimp`, and `system` are now enforced as mutually exclusive; for `system` use `--no-default-features --features system`.
 - **NUL-handling (breaking)**: APIs that accept `&str` but must pass a C string (`Material::get_*_property_str`, `Scene::embedded_texture_by_name`, `get_importer_desc`) now return `Result<...>` instead of silently treating embedded NUL bytes as "not found".
+- **Extension support API (breaking)**: `is_extension_supported()` now returns `Result<bool>` instead of silently treating embedded NUL bytes as unsupported.
 - **Examples build gating**: `model_loading_demo` is now behind the `demo` feature to avoid compiling heavy windowing/OpenGL deps during `cargo test`.
 - **Raw pointers opt-in (breaking)**: `Scene::as_raw()` (and similar `as_raw()` accessors on scene-backed view types) now require the `raw-sys` feature; the default API stays sys-free.
 - **Zero-copy API types (breaking)**: `Mesh::vertices_raw()`/`normals_raw()`/etc and `Texture::data_ref()` now return `asset_importer::raw::*` or crate-owned types instead of `sys::*`, so users can consume zero-copy data without enabling `raw-sys`.

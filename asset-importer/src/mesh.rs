@@ -670,7 +670,12 @@ impl Mesh {
 
     /// Get all bone names
     pub fn bone_names(&self) -> Vec<String> {
-        self.bones().map(|bone| bone.name()).collect()
+        self.bone_names_iter().collect()
+    }
+
+    /// Iterate bone names (allocates per item, but avoids allocating a `Vec`).
+    pub fn bone_names_iter(&self) -> impl Iterator<Item = String> + '_ {
+        self.bones().map(|bone| bone.name())
     }
 
     /// Get the mesh morphing method (if any)

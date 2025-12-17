@@ -171,16 +171,30 @@ impl Bone {
 
     /// Get weights that affect a specific vertex
     pub fn weights_for_vertex(&self, vertex_id: u32) -> Vec<VertexWeight> {
+        self.weights_for_vertex_iter(vertex_id).collect()
+    }
+
+    /// Iterate weights that affect a specific vertex without allocating.
+    pub fn weights_for_vertex_iter(
+        &self,
+        vertex_id: u32,
+    ) -> impl Iterator<Item = VertexWeight> + '_ {
         self.weights_iter()
-            .filter(|w| w.vertex_id == vertex_id)
-            .collect()
+            .filter(move |w| w.vertex_id == vertex_id)
     }
 
     /// Get weights above a certain threshold
     pub fn significant_weights(&self, threshold: f32) -> Vec<VertexWeight> {
+        self.significant_weights_iter(threshold).collect()
+    }
+
+    /// Iterate weights above a threshold without allocating.
+    pub fn significant_weights_iter(
+        &self,
+        threshold: f32,
+    ) -> impl Iterator<Item = VertexWeight> + '_ {
         self.weights_iter()
-            .filter(|w| w.is_significant(threshold))
-            .collect()
+            .filter(move |w| w.is_significant(threshold))
     }
 
     /// Get the total weight for all vertices (should typically be close to the number of affected vertices)
@@ -212,7 +226,12 @@ impl Bone {
 
     /// Get the list of vertex IDs affected by this bone
     pub fn affected_vertices(&self) -> Vec<u32> {
-        self.weights_iter().map(|w| w.vertex_id).collect()
+        self.affected_vertices_iter().collect()
+    }
+
+    /// Iterate vertex IDs affected by this bone without allocating.
+    pub fn affected_vertices_iter(&self) -> impl Iterator<Item = u32> + '_ {
+        self.weights_iter().map(|w| w.vertex_id)
     }
 
     /// Check if this bone affects a specific vertex
@@ -233,7 +252,12 @@ impl Bone {
     /// This ensures all weights are in the range [0.0, 1.0] and can optionally
     /// normalize the total weight to 1.0 per vertex.
     pub fn normalized_weights(&self) -> Vec<VertexWeight> {
-        self.weights_iter().map(|w| w.normalized()).collect()
+        self.normalized_weights_iter().collect()
+    }
+
+    /// Iterate normalized weights without allocating.
+    pub fn normalized_weights_iter(&self) -> impl Iterator<Item = VertexWeight> + '_ {
+        self.weights_iter().map(|w| w.normalized())
     }
 }
 

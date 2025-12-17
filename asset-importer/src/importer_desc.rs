@@ -213,17 +213,45 @@ pub fn get_importer_desc_cstr(extension: &std::ffi::CStr) -> Option<ImporterDesc
 /// }
 /// ```
 pub fn get_all_importer_descs() -> Vec<ImporterDesc> {
-    let count = unsafe { sys::aiGetImportFormatCount() };
-    let mut out = Vec::with_capacity(count);
-    for i in 0..count {
-        unsafe {
-            let ptr = sys::aiGetImportFormatDescription(i);
-            if !ptr.is_null() {
-                out.push(ImporterDesc::from_raw(&*ptr));
+    get_all_importer_descs_iter().collect()
+}
+
+/// Iterate descriptions of all available importers without allocating a `Vec`.
+pub fn get_all_importer_descs_iter() -> ImporterDescIterator {
+    ImporterDescIterator {
+        index: 0,
+        count: unsafe { sys::aiGetImportFormatCount() },
+    }
+}
+
+/// Iterator over importer descriptions.
+pub struct ImporterDescIterator {
+    index: usize,
+    count: usize,
+}
+
+impl Iterator for ImporterDescIterator {
+    type Item = ImporterDesc;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        while self.index < self.count {
+            let i = self.index;
+            self.index += 1;
+            unsafe {
+                let ptr = sys::aiGetImportFormatDescription(i);
+                if ptr.is_null() {
+                    continue;
+                }
+                return Some(ImporterDesc::from_raw(&*ptr));
             }
         }
+        None
     }
-    out
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let remaining = self.count.saturating_sub(self.index);
+        (0, Some(remaining))
+    }
 }
 
 #[cfg(test)]

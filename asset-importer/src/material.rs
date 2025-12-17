@@ -742,9 +742,12 @@ impl Material {
 
     /// Enumerate all properties stored in this material (raw info only)
     pub fn all_properties(&self) -> Vec<MaterialPropertyInfo> {
-        self.properties()
-            .map(MaterialPropertyRef::into_info)
-            .collect()
+        self.all_properties_iter().collect()
+    }
+
+    /// Iterate properties as owned `MaterialPropertyInfo` (allocates per item, but avoids a `Vec`).
+    pub fn all_properties_iter(&self) -> impl Iterator<Item = MaterialPropertyInfo> + '_ {
+        self.properties().map(MaterialPropertyRef::into_info)
     }
 
     /// Iterate all material properties (zero allocation for keys and raw data).
