@@ -85,6 +85,9 @@ nozlib = ["asset-importer-sys/nozlib"]
 # Testing features
 tokio = ["dep:tokio"]
 
+# Example-only features
+demo = []
+
 [dev-dependencies]
 approx = "0.5"
 tokio = { version = "1.0", features = ["full"] }
@@ -93,6 +96,7 @@ tokio = { version = "1.0", features = ["full"] }
 [[example]]
 name = "model_loading_demo"
 path = "examples/model_loading_demo.rs"
+required-features = ["demo"]
 
 
 
