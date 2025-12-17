@@ -46,7 +46,7 @@ exclude = [
 asset-importer-sys = { path = "../asset-importer-sys", version = "0.3" }
 thiserror = "2.0"
 bitflags = "2.0"
-glam = "0.30"
+glam = { version = "0.30", optional = true }
 mint = { version = "0.5", optional = true }
 bytemuck = { version = "1.0", features = ["derive"], optional = true }
 tokio = { version = "1.0", features = ["full"], optional = true }
@@ -59,12 +59,11 @@ default = ["prebuilt"]
 raw-sys = []
 
 # Math library integrations
-mint = ["dep:mint", "asset-importer-sys/mint"]
 bytemuck = ["dep:bytemuck"]
-# Enable `bytemuck::{Pod, Zeroable}` for glam math types as well.
-glam-bytemuck = ["bytemuck", "glam/bytemuck"]
-# Convenience meta-feature for rendering backends: raw byte views + glam Pod.
-gpu = ["bytemuck", "glam-bytemuck"]
+glam = ["dep:glam"]
+mint = ["dep:mint", "asset-importer-sys/mint"]
+# Convenience meta-feature for rendering backends: raw byte views + glam conversion helpers.
+gpu = ["bytemuck", "glam"]
 
 # Functionality features
 export = ["asset-importer-sys/export"]
@@ -97,6 +96,11 @@ tokio = { version = "1.0", features = ["full"] }
 name = "model_loading_demo"
 path = "examples/model_loading_demo.rs"
 required-features = ["demo"]
+
+[[example]]
+name = "07_mint_integration"
+path = "examples/07_mint_integration.rs"
+required-features = ["mint"]
 
 
 

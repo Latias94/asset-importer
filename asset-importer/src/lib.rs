@@ -252,7 +252,7 @@ impl<'a> Iterator for ImportExtensionsIter<'a> {
                     }
                 }
                 ImportExtensionsIterInner::Fallback(iter) => {
-                    let s: &'static str = *iter.next()?;
+                    let s: &'static str = iter.next()?;
                     return Some(s);
                 }
             }

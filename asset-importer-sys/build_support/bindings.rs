@@ -150,6 +150,47 @@ fn run_bindgen(cfg: &BuildConfig, plan: &BuildPlan) {
         .write_to_file(&out_file)
         .expect("Couldn't write bindings.rs");
 
+    // The safe layer targets the vendored Assimp version. When building against a system-provided
+    // Assimp, fail early with a clear message if the headers are too old for our expected API
+    // surface (instead of letting downstream crates hit confusing missing-item errors).
+    #[cfg(feature = "system")]
+    if matches!(plan.method, crate::build_support::plan::BuildMethod::System) {
+        require_expected_symbols(&out_file);
+    }
+
+    #[cfg(feature = "system")]
+    fn require_expected_symbols(out_file: &std::path::Path) {
+        let contents = std::fs::read_to_string(out_file).unwrap_or_else(|e| {
+            panic!(
+                "Failed to read generated bindings {}: {}",
+                out_file.display(),
+                e
+            )
+        });
+
+        // Keep this list small and high-signal: missing any of these indicates a major API gap.
+        let required = [
+            "pub fn aiGetEmbeddedTexture",
+            "pub enum aiAnimInterpolation",
+            "mInterpolation",
+            "aiTextureType_MAYA_BASE",
+        ];
+
+        let missing = required
+            .into_iter()
+            .filter(|needle| !contents.contains(needle))
+            .collect::<Vec<_>>();
+
+        if !missing.is_empty() {
+            panic!(
+                "System Assimp headers appear to be too old for this crate.\n\
+                 Missing required symbols in generated bindings: {:?}\n\
+                 Hint: install Assimp >= 6 (matching this crate's vendored version), or use `--no-default-features --features build-assimp` (vendored build) / `--no-default-features --features prebuilt`.",
+                missing
+            );
+        }
+    }
+
     fn ensure_config_h(cfg: &BuildConfig, include_dirs: &[PathBuf]) -> Vec<PathBuf> {
         // Assimp expects <assimp/config.h> to exist. In a pure source checkout, only config.h.in is present.
         // For bindgen we can generate a minimal config.h into OUT_DIR and add it as the highest-priority include dir.

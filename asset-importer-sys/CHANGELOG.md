@@ -18,7 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **System + static-link**: `static-link` is now respected for `system` builds where supported (pkg-config `--static`; vcpkg via `*-windows-static` triplets).
 
 ### Fixed
-- **System Assimp version mismatch**: `system` builds now fail fast when discovered headers are older than Assimp 6 (including when pkg-config omits include paths), avoiding confusing missing-symbol errors during compilation.
+- **System Assimp version mismatch**: `system` builds now fail fast when discovered headers are older than Assimp 6 (including when pkg-config omits include paths), and validate the generated bindings for required symbols to avoid confusing missing-item errors during compilation.
 - **macOS prebuilt runtime loading**: Prebuilt builds now copy Assimp shared libraries into `OUT_DIR` to avoid `dyld: Library not loaded @rpath/libassimp*.dylib` at runtime.
 - **docs.rs/offline bindings skew**: Updated pregenerated bindings to match the vendored Assimp headers, avoiding missing symbol/type errors when bindgen cannot run.
 

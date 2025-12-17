@@ -66,12 +66,12 @@ jobs:
           echo "RUSTFLAGS=${RUSTFLAGS:-<empty>}"
 
       - name: Build workspace (from source)
-        run: cargo build --workspace --features "${{ matrix.features }}"
+        run: cargo build --workspace --no-default-features --features "${{ matrix.features }}"
         env:
           ASSET_IMPORTER_FORCE_BUILD: "1"
 
       - name: Run tests
-        run: cargo test --workspace --features "${{ matrix.features }}"
+        run: cargo test --workspace --no-default-features --features "${{ matrix.features }}"
         env:
           ASSET_IMPORTER_FORCE_BUILD: "1"
 
@@ -216,7 +216,7 @@ jobs:
           sudo apt-get install -y cmake build-essential
 
       - name: Run clippy
-        run: cargo clippy --workspace --all-targets --features build-assimp -- -D warnings
+        run: cargo clippy --workspace --all-targets --no-default-features --features build-assimp -- -D warnings
 
   fmt:
     name: Format
