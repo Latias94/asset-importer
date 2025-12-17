@@ -9,10 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - **Bundled Assimp updated**: Updated the `assimp` submodule to `v6.0.2` (`fb375dd8c66f1c47dd000548f44d81b47f4466df`).
+- **Windows vcpkg ergonomics**: When building with MSVC + `crt-static`, system linking now defaults to a `*-windows-static` vcpkg triplet (unless `VCPKGRS_TRIPLET` is set).
 
 ### Fixed
 - **System Assimp version mismatch**: `system` builds now fail fast when discovered headers are older than Assimp 6 (including when pkg-config omits include paths), avoiding confusing missing-symbol errors during compilation.
 - **macOS prebuilt runtime loading**: Prebuilt builds now copy Assimp shared libraries into `OUT_DIR` to avoid `dyld: Library not loaded @rpath/libassimp*.dylib` at runtime.
+- **docs.rs/offline bindings skew**: Updated pregenerated bindings to match the vendored Assimp headers, avoiding missing symbol/type errors when bindgen cannot run.
 
 ## [0.3.0] - 2025-09-19
 

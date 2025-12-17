@@ -6,13 +6,24 @@ use crate::build_support::{
 
 pub fn probe(cfg: &BuildConfig) -> BuildPlan {
     if cfg.is_windows() && cfg.is_msvc() {
-        let lib = vcpkg::Config::new()
-            .emit_includes(true)
+        let mut vcpkg_cfg = vcpkg::Config::new();
+        vcpkg_cfg.emit_includes(true);
+
+        // Match Rust's CRT choice when possible.
+        // Users can always override via VCPKGRS_TRIPLET / vcpkg env vars.
+        if cfg.use_static_crt() && std::env::var("VCPKGRS_TRIPLET").is_err() {
+            if let Some(triplet) = default_vcpkg_static_triplet(&cfg.target) {
+                vcpkg_cfg.triplet(triplet);
+            }
+        }
+
+        let lib = vcpkg_cfg
             .find_package("assimp")
             .unwrap_or_else(|e| {
                 panic!(
                     "system linking (vcpkg) failed: {e}\n\
-                     Hint: install assimp via vcpkg and set VCPKG_ROOT."
+                     Hint: install assimp via vcpkg and set VCPKG_ROOT.\n\
+                     If you're using `crt-static`, prefer a `*-windows-static` triplet (e.g. `x64-windows-static`)."
                 )
             });
 
@@ -91,6 +102,20 @@ pub fn probe(cfg: &BuildConfig) -> BuildPlan {
         link_lib: None, // pkg-config emits all rustc link flags
         link_search: Vec::new(),
         method: BuildMethod::System,
+    }
+}
+
+fn default_vcpkg_static_triplet(target: &str) -> Option<&'static str> {
+    // These are the canonical triplet names used by vcpkg for MSVC static CRT.
+    // We only pick a default when targeting MSVC; MinGW uses a different toolchain.
+    if target.starts_with("x86_64-") {
+        Some("x64-windows-static")
+    } else if target.starts_with("i686-") {
+        Some("x86-windows-static")
+    } else if target.starts_with("aarch64-") {
+        Some("arm64-windows-static")
+    } else {
+        None
     }
 }
 
