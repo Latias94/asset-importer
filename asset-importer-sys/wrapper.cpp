@@ -116,7 +116,13 @@ public:
         return true;
     }
 
-    char getOsSeparator() const override { return '/'; }
+    char getOsSeparator() const override {
+#if defined(_WIN32)
+        return '\\';
+#else
+        return '/';
+#endif
+    }
 
     Assimp::IOStream* Open(const char* pFile, const char* pMode = "rb") override {
         if (!m_fileio || !m_fileio->OpenProc) return nullptr;

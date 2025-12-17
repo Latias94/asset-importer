@@ -650,6 +650,13 @@ impl<'a> MorphMeshAnimation<'a> {
             }
             let key = &*ch.mKeys.add(index);
             let n = key.mNumValuesAndWeights as usize;
+            if n == 0 {
+                return Some(MorphMeshKey {
+                    time: key.mTime,
+                    values: &[],
+                    weights: &[],
+                });
+            }
             if key.mValues.is_null() || key.mWeights.is_null() {
                 return None;
             }
@@ -661,6 +668,18 @@ impl<'a> MorphMeshAnimation<'a> {
                 weights,
             })
         }
+    }
+}
+
+#[cfg(test)]
+mod layout_tests {
+    use super::MeshKey;
+    use crate::sys;
+
+    #[test]
+    fn test_mesh_key_layout_matches_sys() {
+        assert_eq!(std::mem::size_of::<MeshKey>(), std::mem::size_of::<sys::aiMeshKey>());
+        assert_eq!(std::mem::align_of::<MeshKey>(), std::mem::align_of::<sys::aiMeshKey>());
     }
 }
 

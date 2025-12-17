@@ -414,6 +414,12 @@ impl ImportBuilder {
 
     /// Import a scene from memory buffer
     pub fn import_from_memory(self, data: &[u8], hint: Option<&str>) -> Result<Scene> {
+        if data.len() > u32::MAX as usize {
+            return Err(Error::invalid_parameter(
+                "Memory buffer is too large (assimp C API takes u32 length)".to_string(),
+            ));
+        }
+
         let hint_cstr = if let Some(h) = hint {
             Some(CString::new(h).map_err(|_| Error::invalid_parameter("Invalid hint"))?)
         } else {

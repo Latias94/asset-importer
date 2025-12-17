@@ -32,12 +32,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`export` feature build**: Fixed `ExportBlob::data()` lifetime issue and ensured `ExportBlob` is `Send + Sync` when `export` is enabled.
 - **FFI property memory leak**: Matrix properties passed through the C++ bridge no longer leak memory.
 - **Custom IO leaks**: Assimp `aiFileIO` user-data is now released via RAII, fixing leaks when using a custom `FileSystem`.
+- **Custom IO Windows path handling**: The C++ IOSystem bridge now reports the correct OS path separator on Windows.
 - **Export blob ownership**: Export blob iteration no longer risks double-free by mixing owned and borrowed nodes.
 - **aiString conversion correctness**: `aiString` is decoded using its explicit length (no longer assuming NUL-termination) for names and metadata.
 - **Metadata/data alignment safety**: `aiMetadataEntry::mData` and material property blobs are now read with unaligned-safe loads to avoid UB on misaligned payloads.
 - **Panic surface reduction**: Scene-backed `from_raw` constructors no longer `expect()` on null pointers; internal invariants are checked via `debug_assert!`.
 - **FFI panic safety**: Panics from custom `FileSystem`/`FileStream` and progress callbacks are caught to prevent unwinding across the C ABI.
 - **Progress callback thread-safety**: Progress handlers are invoked under a mutex to avoid `&mut` aliasing if Assimp calls the callback from multiple threads.
+- **Memory import length safety**: `import_from_memory` now rejects buffers larger than `u32::MAX` to avoid length truncation in the Assimp C API.
 - **Material typed-slice safety**: `MaterialPropertyRef::{data_i32,data_f32,data_f64}` now reject null payload pointers when length is non-zero to avoid UB.
 
 ## [0.4.0] - 2025-09-20

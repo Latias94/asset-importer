@@ -203,12 +203,9 @@ pub fn get_import_extensions() -> Vec<String> {
 
     // Convert aiString to Rust String
     let extension_list = if ai_string.length > 0 {
-        let slice = unsafe {
-            std::slice::from_raw_parts(
-                ai_string.data.as_ptr() as *const u8,
-                ai_string.length as usize,
-            )
-        };
+        let len = (ai_string.length as usize).min(ai_string.data.len());
+        let slice =
+            unsafe { std::slice::from_raw_parts(ai_string.data.as_ptr() as *const u8, len) };
         String::from_utf8_lossy(slice).to_string()
     } else {
         // Fallback to hardcoded list if the function fails
