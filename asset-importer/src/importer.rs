@@ -292,8 +292,9 @@ impl ImportBuilder {
         let file_io_ptr_mut: *mut sys::aiFileIO = file_io
             .as_mut()
             .map_or(std::ptr::null_mut(), |io| io.as_mut_ptr_sys());
-        let file_io_ptr_const: *const sys::aiFileIO =
-            file_io.as_ref().map_or(std::ptr::null(), |io| io.as_ptr_sys());
+        let file_io_ptr_const: *const sys::aiFileIO = file_io
+            .as_ref()
+            .map_or(std::ptr::null(), |io| io.as_ptr_sys());
 
         // If a progress handler is provided, use the C++ bridge to set it.
         let scene_ptr = if use_bridge {
@@ -332,8 +333,7 @@ impl ImportBuilder {
             }
 
             // Box the handler to pass across FFI and reclaim after call
-            let user_ptr =
-                Box::into_raw(Box::new(std::sync::Mutex::new(handler))) as *mut c_void;
+            let user_ptr = Box::into_raw(Box::new(std::sync::Mutex::new(handler))) as *mut c_void;
 
             let ptr = unsafe {
                 sys::aiImportFileExWithProgressRust(
@@ -471,8 +471,7 @@ impl ImportBuilder {
                 result.unwrap_or(false)
             }
 
-            let user_ptr =
-                Box::into_raw(Box::new(std::sync::Mutex::new(handler))) as *mut c_void;
+            let user_ptr = Box::into_raw(Box::new(std::sync::Mutex::new(handler))) as *mut c_void;
 
             let ptr = unsafe {
                 sys::aiImportFileFromMemoryWithProgressRust(
@@ -676,7 +675,7 @@ fn build_rust_properties(props: &[(String, PropertyValue)]) -> Result<BridgeProp
                 matrices.push(to_ai_matrix4x4(*m));
                 let idx = matrices.len() - 1;
                 let matrix_ptr = unsafe { matrices.as_ptr().add(idx) };
-                p.matrix_value = (matrix_ptr as *const sys::aiMatrix4x4) as *mut std::ffi::c_void;
+                p.matrix_value = matrix_ptr.cast::<std::ffi::c_void>().cast_mut();
             }
         }
 

@@ -34,7 +34,7 @@ impl<T> SharedPtr<T> {
     }
 
     /// Returns the underlying raw pointer.
-    pub(crate) fn as_ptr(self) -> *const T {
+    pub(crate) fn as_ptr(&self) -> *const T {
         self.0
     }
 }

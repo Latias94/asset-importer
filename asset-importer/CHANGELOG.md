@@ -26,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Raw view safety (breaking)**: `asset_importer::raw::AiFace::indices_unchecked()` is now `unsafe` to prevent safe Rust from dereferencing arbitrary user-provided pointers.
 - **Postprocess ownership (breaking)**: `Scene::apply_postprocess` now consumes and returns `Scene` to avoid double-free/use-after-free if Assimp invalidates the scene pointer on failure.
 - **Thread-safe callbacks (breaking)**: `io::FileSystem`/`io::FileStream` and `progress::ProgressHandler` are now `Send` (and `FileSystem` is `Sync`) so import/export configuration can be moved across threads safely.
+- **Material string ergonomics**: `MaterialStringRef` now implements `Display` (use `.to_string()` via `ToString`) and exposes `to_string_lossy()` as an explicit allocating conversion helper.
 
 ### Fixed
 - **Send/Sync on scene-backed views**: `Texture` and other scene-backed view types now implement `Send + Sync`, matching the multithreading guarantees promised by the crate.
@@ -39,9 +40,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Panic surface reduction**: Scene-backed `from_raw` constructors no longer `expect()` on null pointers; internal invariants are checked via `debug_assert!`.
 - **FFI panic safety**: Panics from custom `FileSystem`/`FileStream` and progress callbacks are caught to prevent unwinding across the C ABI.
 - **Progress callback thread-safety**: Progress handlers are invoked under a mutex to avoid `&mut` aliasing if Assimp calls the callback from multiple threads.
+- **Custom IO callback thread-safety**: File stream callbacks now lock the per-file stream to avoid `&mut` aliasing UB if Assimp calls IO procs concurrently.
 - **Memory import length safety**: `import_from_memory` now rejects buffers larger than `u32::MAX` to avoid length truncation in the Assimp C API.
 - **Material typed-slice safety**: `MaterialPropertyRef::{data_i32,data_f32,data_f64}` now reject null payload pointers when length is non-zero to avoid UB.
 - **Iterator robustness**: Iterators over scene-backed pointer arrays now skip null entries instead of ending iteration early.
+- **Enum conversion safety**: Removed `unsafe transmute` from `TextureType::to_sys()` to eliminate a potential UB footgun.
 
 ## [0.4.0] - 2025-09-20
 

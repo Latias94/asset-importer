@@ -354,7 +354,7 @@ impl AssimpFileIO {
 
 /// Internal structure to hold file stream data
 struct FileWrapper {
-    stream: Box<dyn FileStream>,
+    stream: Mutex<Box<dyn FileStream>>,
 }
 
 /// C callback for opening files
@@ -399,7 +399,9 @@ extern "C" fn file_open_proc(
         };
 
         // Create file wrapper
-        let wrapper = Box::new(FileWrapper { stream });
+        let wrapper = Box::new(FileWrapper {
+            stream: Mutex::new(stream),
+        });
 
         // Create aiFile structure
         let ai_file = Box::new(sys::aiFile {
@@ -455,22 +457,22 @@ extern "C" fn file_read_proc(
             return 0;
         }
 
-        let wrapper = &mut *wrapper_ptr;
+        let wrapper = &*wrapper_ptr;
+        let Ok(mut stream) = wrapper.stream.lock() else {
+            return 0;
+        };
         let Some(total_bytes) = size.checked_mul(count) else {
             return 0;
         };
         let rust_buffer = std::slice::from_raw_parts_mut(buffer as *mut u8, total_bytes);
 
-        match wrapper.stream.read(rust_buffer) {
+        match stream.read(rust_buffer) {
             Ok(bytes_read) => bytes_read / size,
             Err(_) => 0,
         }
     }));
 
-    match result {
-        Ok(v) => v,
-        Err(_) => 0,
-    }
+    result.unwrap_or_default()
 }
 
 /// C callback for writing to files
@@ -489,7 +491,10 @@ extern "C" fn file_write_proc(
         if wrapper_ptr.is_null() {
             return 0;
         }
-        let wrapper = &mut *wrapper_ptr;
+        let wrapper = &*wrapper_ptr;
+        let Ok(mut stream) = wrapper.stream.lock() else {
+            return 0;
+        };
         let Some(total_bytes) = size.checked_mul(count) else {
             return 0;
         };
@@ -500,16 +505,13 @@ extern "C" fn file_write_proc(
 
         let data_slice = std::slice::from_raw_parts(buffer as *const u8, total_bytes);
 
-        match wrapper.stream.write(data_slice) {
+        match stream.write(data_slice) {
             Ok(bytes_written) => bytes_written / size,
             Err(_) => 0,
         }
     }));
 
-    match result {
-        Ok(v) => v,
-        Err(_) => 0,
-    }
+    result.unwrap_or_default()
 }
 
 /// C callback for getting current file position
@@ -525,16 +527,16 @@ extern "C" fn file_tell_proc(file: *mut sys::aiFile) -> usize {
         }
 
         let wrapper = &*wrapper_ptr;
-        match wrapper.stream.tell() {
+        let Ok(stream) = wrapper.stream.lock() else {
+            return 0;
+        };
+        match stream.tell() {
             Ok(pos) => pos as usize,
             Err(_) => 0,
         }
     }));
 
-    match result {
-        Ok(v) => v,
-        Err(_) => 0,
-    }
+    result.unwrap_or_default()
 }
 
 /// C callback for getting file size
@@ -550,16 +552,16 @@ extern "C" fn file_size_proc(file: *mut sys::aiFile) -> usize {
         }
 
         let wrapper = &*wrapper_ptr;
-        match wrapper.stream.size() {
+        let Ok(stream) = wrapper.stream.lock() else {
+            return 0;
+        };
+        match stream.size() {
             Ok(size) => size as usize,
             Err(_) => 0,
         }
     }));
 
-    match result {
-        Ok(v) => v,
-        Err(_) => 0,
-    }
+    result.unwrap_or_default()
 }
 
 /// C callback for seeking in files
@@ -578,11 +580,14 @@ extern "C" fn file_seek_proc(
             return sys::aiReturn::aiReturn_FAILURE;
         }
 
-        let wrapper = &mut *wrapper_ptr;
+        let wrapper = &*wrapper_ptr;
+        let Ok(mut stream) = wrapper.stream.lock() else {
+            return sys::aiReturn::aiReturn_FAILURE;
+        };
 
         let new_position = match origin {
             sys::aiOrigin::aiOrigin_SET => offset as u64,
-            sys::aiOrigin::aiOrigin_CUR => match wrapper.stream.tell() {
+            sys::aiOrigin::aiOrigin_CUR => match stream.tell() {
                 Ok(current) => {
                     let Some(pos) = current.checked_add(offset as u64) else {
                         return sys::aiReturn::aiReturn_FAILURE;
@@ -591,7 +596,7 @@ extern "C" fn file_seek_proc(
                 }
                 Err(_) => return sys::aiReturn::aiReturn_FAILURE,
             },
-            sys::aiOrigin::aiOrigin_END => match wrapper.stream.size() {
+            sys::aiOrigin::aiOrigin_END => match stream.size() {
                 Ok(size) => {
                     let off = offset as u64;
                     if off > size {
@@ -604,7 +609,7 @@ extern "C" fn file_seek_proc(
             _ => return sys::aiReturn::aiReturn_FAILURE,
         };
 
-        match wrapper.stream.seek(new_position) {
+        match stream.seek(new_position) {
             Ok(_) => sys::aiReturn::aiReturn_SUCCESS,
             Err(_) => sys::aiReturn::aiReturn_FAILURE,
         }
@@ -627,8 +632,10 @@ extern "C" fn file_flush_proc(_file: *mut sys::aiFile) {
         if wrapper_ptr.is_null() {
             return;
         }
-        let wrapper = &mut *wrapper_ptr;
-        let _ = wrapper.stream.flush();
+        let wrapper = &*wrapper_ptr;
+        if let Ok(mut stream) = wrapper.stream.lock() {
+            let _ = stream.flush();
+        }
     }));
 }
 

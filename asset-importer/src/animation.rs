@@ -663,18 +663,6 @@ impl<'a> MorphMeshAnimation<'a> {
     }
 }
 
-#[cfg(test)]
-mod layout_tests {
-    use super::MeshKey;
-    use crate::sys;
-
-    #[test]
-    fn test_mesh_key_layout_matches_sys() {
-        assert_eq!(std::mem::size_of::<MeshKey>(), std::mem::size_of::<sys::aiMeshKey>());
-        assert_eq!(std::mem::align_of::<MeshKey>(), std::mem::align_of::<sys::aiMeshKey>());
-    }
-}
-
 /// Iterator over morph mesh animation channels
 pub struct MorphMeshAnimationIterator<'a> {
     animation_ptr: SharedPtr<sys::aiAnimation>,
@@ -715,3 +703,21 @@ impl<'a> Iterator for MorphMeshAnimationIterator<'a> {
 }
 
 // Auto-traits (Send/Sync) are derived from the contained pointers and lifetimes.
+
+#[cfg(test)]
+mod layout_tests {
+    use super::MeshKey;
+    use crate::sys;
+
+    #[test]
+    fn test_mesh_key_layout_matches_sys() {
+        assert_eq!(
+            std::mem::size_of::<MeshKey>(),
+            std::mem::size_of::<sys::aiMeshKey>()
+        );
+        assert_eq!(
+            std::mem::align_of::<MeshKey>(),
+            std::mem::align_of::<sys::aiMeshKey>()
+        );
+    }
+}

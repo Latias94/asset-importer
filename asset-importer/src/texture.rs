@@ -185,7 +185,9 @@ impl<'a> Texture<'a> {
                     return Err(Error::invalid_scene("Texture data is null"));
                 }
                 let data_ptr = texture.pcData as *const u8;
-                Ok(TextureDataRef::Compressed(std::slice::from_raw_parts(data_ptr, size)))
+                Ok(TextureDataRef::Compressed(std::slice::from_raw_parts(
+                    data_ptr, size,
+                )))
             } else {
                 let width = self.width() as usize;
                 let height = self.height() as usize;

@@ -2,8 +2,8 @@
 
 // Regression tests: never unwind across FFI callbacks.
 
-use asset_importer::{Error, Importer};
 use asset_importer::io::{FileStream, FileSystem};
+use asset_importer::{Error, Importer};
 use std::sync::{Arc, Mutex};
 
 #[derive(Debug)]

@@ -271,13 +271,13 @@ impl Metadata {
                 Ok(MetadataEntry::Double(value))
             }
             sys::aiMetadataType::AI_AISTRING => {
-                let ai_string = unsafe { std::ptr::read_unaligned(entry.mData as *const sys::aiString) };
+                let ai_string =
+                    unsafe { std::ptr::read_unaligned(entry.mData as *const sys::aiString) };
                 Ok(MetadataEntry::String(ai_string_to_string(&ai_string)))
             }
             sys::aiMetadataType::AI_AIVECTOR3D => {
-                let vector = unsafe {
-                    std::ptr::read_unaligned(entry.mData as *const raw::AiVector3D)
-                };
+                let vector =
+                    unsafe { std::ptr::read_unaligned(entry.mData as *const raw::AiVector3D) };
                 Ok(MetadataEntry::Vector3D(crate::types::Vector3D::new(
                     vector.x, vector.y, vector.z,
                 )))

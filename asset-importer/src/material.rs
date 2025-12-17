@@ -125,8 +125,14 @@ impl MaterialStringRef {
     }
 
     /// Convert to an owned `String` (allocates).
-    pub fn to_string(&self) -> String {
+    pub fn to_string_lossy(&self) -> String {
         ai_string_to_string(&self.value)
+    }
+}
+
+impl std::fmt::Display for MaterialStringRef {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&ai_string_to_string(&self.value))
     }
 }
 
@@ -817,7 +823,7 @@ impl<'a> Material<'a> {
 
             // Try read UV transform
             let mut uv_transform = std::mem::MaybeUninit::<sys::aiUVTransform>::uninit();
-            let uv_key = CStr::from_bytes_with_nul_unchecked(b"$tex.uvtrafo\0");
+            let uv_key: &CStr = c"$tex.uvtrafo";
             let uv_ok = sys::aiGetMaterialUVTransform(
                 self.material_ptr.as_ptr(),
                 uv_key.as_ptr(),
@@ -839,7 +845,7 @@ impl<'a> Material<'a> {
 
             // Try read TEXMAP_AXIS via property API ("$tex.mapaxis")
             let axis = {
-                let key = CStr::from_bytes_with_nul_unchecked(b"$tex.mapaxis\0");
+                let key: &CStr = c"$tex.mapaxis";
                 let mut prop_ptr: *const sys::aiMaterialProperty = std::ptr::null();
                 let ok = sys::aiGetMaterialProperty(
                     self.material_ptr.as_ptr(),
@@ -1215,9 +1221,39 @@ impl<'a> Iterator for MaterialPropertyIterator<'a> {
 impl TextureType {
     #[inline]
     fn to_sys(self) -> sys::aiTextureType {
-        // Our discriminants are defined from sys::aiTextureType constants,
-        // so this cast is safe for all valid variants of TextureType.
-        unsafe { std::mem::transmute(self as u32) }
+        match self {
+            Self::Diffuse => sys::aiTextureType::aiTextureType_DIFFUSE,
+            Self::Specular => sys::aiTextureType::aiTextureType_SPECULAR,
+            Self::Ambient => sys::aiTextureType::aiTextureType_AMBIENT,
+            Self::Emissive => sys::aiTextureType::aiTextureType_EMISSIVE,
+            Self::Height => sys::aiTextureType::aiTextureType_HEIGHT,
+            Self::Normals => sys::aiTextureType::aiTextureType_NORMALS,
+            Self::Shininess => sys::aiTextureType::aiTextureType_SHININESS,
+            Self::Opacity => sys::aiTextureType::aiTextureType_OPACITY,
+            Self::Displacement => sys::aiTextureType::aiTextureType_DISPLACEMENT,
+            Self::Lightmap => sys::aiTextureType::aiTextureType_LIGHTMAP,
+            Self::Reflection => sys::aiTextureType::aiTextureType_REFLECTION,
+            Self::BaseColor => sys::aiTextureType::aiTextureType_BASE_COLOR,
+            Self::NormalCamera => sys::aiTextureType::aiTextureType_NORMAL_CAMERA,
+            Self::EmissionColor => sys::aiTextureType::aiTextureType_EMISSION_COLOR,
+            Self::Metalness => sys::aiTextureType::aiTextureType_METALNESS,
+            Self::DiffuseRoughness => sys::aiTextureType::aiTextureType_DIFFUSE_ROUGHNESS,
+            Self::AmbientOcclusion => sys::aiTextureType::aiTextureType_AMBIENT_OCCLUSION,
+            Self::Unknown => sys::aiTextureType::aiTextureType_UNKNOWN,
+            Self::Sheen => sys::aiTextureType::aiTextureType_SHEEN,
+            Self::Clearcoat => sys::aiTextureType::aiTextureType_CLEARCOAT,
+            Self::Transmission => sys::aiTextureType::aiTextureType_TRANSMISSION,
+            Self::MayaBase => sys::aiTextureType::aiTextureType_MAYA_BASE,
+            Self::MayaSpecular => sys::aiTextureType::aiTextureType_MAYA_SPECULAR,
+            Self::MayaSpecularColor => sys::aiTextureType::aiTextureType_MAYA_SPECULAR_COLOR,
+            Self::MayaSpecularRoughness => {
+                sys::aiTextureType::aiTextureType_MAYA_SPECULAR_ROUGHNESS
+            }
+            Self::Anisotropy => sys::aiTextureType::aiTextureType_ANISOTROPY,
+            Self::GltfMetallicRoughness => {
+                sys::aiTextureType::aiTextureType_GLTF_METALLIC_ROUGHNESS
+            }
+        }
     }
 
     /// Try convert a raw u32 (aiTextureType) into TextureType safely

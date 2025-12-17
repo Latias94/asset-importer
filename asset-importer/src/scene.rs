@@ -187,7 +187,8 @@ impl Scene {
     pub fn apply_postprocess(self, flags: crate::postprocess::PostProcessSteps) -> Result<Self> {
         let this = std::mem::ManuallyDrop::new(self);
 
-        let new_ptr = unsafe { sys::aiApplyPostProcessing(this.scene_ptr.as_ptr(), flags.as_raw()) };
+        let new_ptr =
+            unsafe { sys::aiApplyPostProcessing(this.scene_ptr.as_ptr(), flags.as_raw()) };
         if new_ptr.is_null() {
             return Err(Error::invalid_scene("Post-processing failed"));
         }
