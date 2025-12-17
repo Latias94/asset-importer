@@ -10,7 +10,7 @@ use crate::{
     raw,
     scene::Scene,
     sys,
-    types::{Color4D, Vector3D, ai_string_to_str, ai_string_to_string},
+    types::{Color4D, Vector2D, Vector3D, ai_string_to_str, ai_string_to_string},
 };
 
 /// A mesh containing vertices, faces, and other geometric data
@@ -279,6 +279,14 @@ impl Mesh {
             .map(|uvs| uvs.iter().map(|v| Vector3D::new(v.x, v.y, v.z)).collect())
     }
 
+    /// Get texture coordinates (Vec2) for a specific channel.
+    ///
+    /// This is a convenience for the common case where UVs are 2D; it discards the third component.
+    pub fn texture_coords2(&self, channel: usize) -> Option<Vec<Vector2D>> {
+        self.texture_coords_raw_opt(channel)
+            .map(|uvs| uvs.iter().map(|v| Vector2D::new(v.x, v.y)).collect())
+    }
+
     /// Get raw texture coordinates for a specific channel (zero-copy).
     pub fn texture_coords_raw(&self, channel: usize) -> &[raw::AiVector3D] {
         if channel >= sys::AI_MAX_NUMBER_OF_TEXTURECOORDS as usize {
@@ -321,6 +329,15 @@ impl Mesh {
         self.texture_coords_raw(channel)
             .iter()
             .map(|v| Vector3D::new(v.x, v.y, v.z))
+    }
+
+    /// Iterate texture coordinates (Vec2) without allocation.
+    ///
+    /// This is a convenience for the common case where UVs are 2D; it discards the third component.
+    pub fn texture_coords_iter2(&self, channel: usize) -> impl Iterator<Item = Vector2D> + '_ {
+        self.texture_coords_raw(channel)
+            .iter()
+            .map(|v| Vector2D::new(v.x, v.y))
     }
 
     /// Get vertex colors for a specific channel
@@ -893,6 +910,14 @@ impl AnimMesh {
             .map(|uvs| uvs.iter().map(|v| Vector3D::new(v.x, v.y, v.z)).collect())
     }
 
+    /// Replacement texture coordinates (Vec2) for a specific channel.
+    ///
+    /// This is a convenience for the common case where UVs are 2D; it discards the third component.
+    pub fn texture_coords2(&self, channel: usize) -> Option<Vec<Vector2D>> {
+        self.texture_coords_raw_opt(channel)
+            .map(|uvs| uvs.iter().map(|v| Vector2D::new(v.x, v.y)).collect())
+    }
+
     /// Raw replacement texture coordinates for a specific channel (zero-copy).
     pub fn texture_coords_raw(&self, channel: usize) -> &[raw::AiVector3D] {
         if channel >= sys::AI_MAX_NUMBER_OF_TEXTURECOORDS as usize {
@@ -919,6 +944,15 @@ impl AnimMesh {
                 Some(ffi::slice_from_ptr_len(self, ptr, m.mNumVertices as usize))
             }
         }
+    }
+
+    /// Iterate replacement texture coordinates (Vec2) without allocation.
+    ///
+    /// This is a convenience for the common case where UVs are 2D; it discards the third component.
+    pub fn texture_coords_iter2(&self, channel: usize) -> impl Iterator<Item = Vector2D> + '_ {
+        self.texture_coords_raw(channel)
+            .iter()
+            .map(|v| Vector2D::new(v.x, v.y))
     }
 
     /// Weight of this anim mesh

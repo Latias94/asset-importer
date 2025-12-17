@@ -92,6 +92,14 @@ fn test_mesh_has_helpers() {
     assert!(mesh.has_normals());
     assert!(mesh.has_texture_coords(0));
     assert!(!mesh.has_vertex_colors(0));
+
+    // 2D UV convenience API should match the first two components of the raw buffer.
+    let raw_uv = mesh.texture_coords_raw(0);
+    assert!(!raw_uv.is_empty());
+    let uv2 = mesh.texture_coords2(0).expect("expected UVs");
+    assert_eq!(uv2.len(), raw_uv.len());
+    assert!((uv2[0].x - raw_uv[0].x).abs() < 1e-6);
+    assert!((uv2[0].y - raw_uv[0].y).abs() < 1e-6);
 }
 
 #[test]
