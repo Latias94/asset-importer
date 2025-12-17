@@ -66,7 +66,7 @@ impl ExportBuilder {
             let mut file_io = AssimpFileIO::new(fs.clone()).create_ai_file_io();
             unsafe {
                 sys::aiExportSceneEx(
-                    scene.as_raw(),
+                    scene.as_raw_sys(),
                     c_format.as_ptr(),
                     c_path.as_ptr(),
                     file_io.as_mut_ptr(),
@@ -76,7 +76,7 @@ impl ExportBuilder {
         } else {
             unsafe {
                 sys::aiExportScene(
-                    scene.as_raw(),
+                    scene.as_raw_sys(),
                     c_format.as_ptr(),
                     c_path.as_ptr(),
                     self.preprocessing,
@@ -97,7 +97,7 @@ impl ExportBuilder {
             .map_err(|_| Error::invalid_parameter("Invalid format ID"))?;
 
         let blob_ptr = unsafe {
-            sys::aiExportSceneToBlob(scene.as_raw(), c_format.as_ptr(), self.preprocessing)
+            sys::aiExportSceneToBlob(scene.as_raw_sys(), c_format.as_ptr(), self.preprocessing)
         };
 
         if blob_ptr.is_null() {

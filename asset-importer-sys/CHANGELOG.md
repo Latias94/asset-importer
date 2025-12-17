@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Bundled Assimp updated**: Updated the `assimp` submodule to `c58496185d05c123fa84b68f1f85c3ef2936f2bb`.
 
 ### Fixed
-- **System Assimp version mismatch**: `system` builds now fail fast when discovered headers are older than Assimp 6, avoiding confusing missing-symbol errors during compilation.
+- **System Assimp version mismatch**: `system` builds now fail fast when discovered headers are older than Assimp 6 (including when pkg-config omits include paths), avoiding confusing missing-symbol errors during compilation.
 - **macOS prebuilt runtime loading**: Prebuilt builds now copy Assimp shared libraries into `OUT_DIR` to avoid `dyld: Library not loaded @rpath/libassimp*.dylib` at runtime.
 
 ## [0.3.0] - 2025-09-19

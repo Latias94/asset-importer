@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Thread-safety internals**: Centralized Assimp pointer sharing logic to reduce scattered `unsafe impl Send/Sync` across the codebase.
 - **Material property keys (breaking)**: `material_keys::*` are now `&CStr` constants, and `Material::get_*_property` APIs prefer `&CStr` with `*_str` convenience wrappers.
 - **Raw sys bindings opt-in (breaking)**: `asset_importer::sys` is now behind the `raw-sys` feature to reduce accidental safety contract violations.
+- **Raw pointers opt-in (breaking)**: `Scene::as_raw()` (and similar `as_raw()` accessors on scene-backed view types) now require the `raw-sys` feature; the default API stays sys-free.
 - **Zero-copy API types (breaking)**: `Mesh::vertices_raw()`/`normals_raw()`/etc and `Texture::data_ref()` now return `asset_importer::raw::*` or crate-owned types instead of `sys::*`, so users can consume zero-copy data without enabling `raw-sys`.
 
 ### Fixed

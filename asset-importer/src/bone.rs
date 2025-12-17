@@ -88,9 +88,15 @@ impl<'a> Bone<'a> {
         })
     }
 
-    /// Get the raw bone pointer
-    pub fn as_raw(&self) -> *const sys::aiBone {
+    #[allow(dead_code)]
+    pub(crate) fn as_raw_sys(&self) -> *const sys::aiBone {
         self.bone_ptr.as_ptr()
+    }
+
+    /// Get the raw bone pointer (requires `raw-sys`).
+    #[cfg(feature = "raw-sys")]
+    pub fn as_raw(&self) -> *const sys::aiBone {
+        self.as_raw_sys()
     }
 
     /// Get the name of the bone

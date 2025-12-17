@@ -28,9 +28,15 @@ impl<'a> Animation<'a> {
         }
     }
 
-    /// Get the raw animation pointer
-    pub fn as_raw(&self) -> *const sys::aiAnimation {
+    #[allow(dead_code)]
+    pub(crate) fn as_raw_sys(&self) -> *const sys::aiAnimation {
         self.animation_ptr.as_ptr()
+    }
+
+    /// Get the raw animation pointer (requires `raw-sys`).
+    #[cfg(feature = "raw-sys")]
+    pub fn as_raw(&self) -> *const sys::aiAnimation {
+        self.as_raw_sys()
     }
 
     /// Get the name of the animation
@@ -166,9 +172,15 @@ impl<'a> NodeAnimation<'a> {
         }
     }
 
-    /// Get the raw channel pointer
-    pub fn as_raw(&self) -> *const sys::aiNodeAnim {
+    #[allow(dead_code)]
+    pub(crate) fn as_raw_sys(&self) -> *const sys::aiNodeAnim {
         self.channel_ptr.as_ptr()
+    }
+
+    /// Get the raw channel pointer (requires `raw-sys`).
+    #[cfg(feature = "raw-sys")]
+    pub fn as_raw(&self) -> *const sys::aiNodeAnim {
+        self.as_raw_sys()
     }
 
     /// Get the name of the node this animation affects

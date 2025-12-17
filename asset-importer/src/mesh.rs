@@ -32,9 +32,15 @@ impl<'a> Mesh<'a> {
         }
     }
 
-    /// Get the raw mesh pointer
-    pub fn as_raw(&self) -> *const sys::aiMesh {
+    #[allow(dead_code)]
+    pub(crate) fn as_raw_sys(&self) -> *const sys::aiMesh {
         self.mesh_ptr.as_ptr()
+    }
+
+    /// Get the raw mesh pointer (requires `raw-sys`).
+    #[cfg(feature = "raw-sys")]
+    pub fn as_raw(&self) -> *const sys::aiMesh {
+        self.as_raw_sys()
     }
 
     /// Get the name of the mesh

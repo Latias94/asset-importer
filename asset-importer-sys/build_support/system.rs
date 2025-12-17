@@ -48,22 +48,33 @@ pub fn probe(cfg: &BuildConfig) -> BuildPlan {
             )
         });
 
+    let required_major = 6;
+    let major_from_pc = parse_major_from_version(&lib.version);
+
+    if major_from_pc.is_some_and(|m| m < required_major) {
+        panic!(
+            "system assimp is too old (pkg-config reports version {}). This crate requires Assimp >= {}.\n\
+             Hint: use `--features build-assimp` (vendored build), `--features prebuilt`, or install a newer Assimp and ensure pkg-config finds it.",
+            lib.version, required_major
+        );
+    }
+
     let include_dirs = lib.include_paths.iter().cloned().collect::<Vec<_>>();
 
     if include_dirs.is_empty() {
         util::warn("pkg-config returned no include paths for assimp; bindgen may fail");
-    } else {
-        let major_from_pc = parse_major_from_version(&lib.version);
-        let required_major = 6;
 
-        if major_from_pc.is_some_and(|m| m < required_major) {
-            panic!(
-                "system assimp is too old (pkg-config reports version {}). This crate requires Assimp >= {}.\n\
-                 Hint: use `--features build-assimp` (vendored build), `--features prebuilt`, or install a newer Assimp and ensure pkg-config finds it.",
-                lib.version, required_major
+        // pkg-config may omit /usr/include-like paths. Try to double-check headers via common include roots.
+        let fallback = common_include_roots();
+        if !fallback.is_empty() {
+            require_assimp_major_at_least(
+                &fallback,
+                required_major,
+                "pkg-config (fallback include roots)",
+                "Hint: install Assimp >= 6 (matching the headers) or use `--features build-assimp` / `--features prebuilt`.",
             );
         }
-
+    } else {
         // pkg-config version strings can be missing or misleading on some distros;
         // double-check the headers we are about to run bindgen against.
         require_assimp_major_at_least(
@@ -137,4 +148,25 @@ fn parse_define_u32(contents: &str, name: &str) -> Option<u32> {
         }
     }
     None
+}
+
+fn common_include_roots() -> Vec<std::path::PathBuf> {
+    let mut roots = Vec::new();
+
+    #[cfg(not(windows))]
+    {
+        for p in [
+            "/usr/include",
+            "/usr/local/include",
+            "/opt/homebrew/include",
+            "/opt/local/include",
+        ] {
+            let pb = std::path::PathBuf::from(p);
+            if pb.exists() {
+                roots.push(pb);
+            }
+        }
+    }
+
+    roots
 }

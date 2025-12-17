@@ -144,9 +144,15 @@ impl<'a> Material<'a> {
         }
     }
 
-    /// Get the raw material pointer
-    pub fn as_raw(&self) -> *const sys::aiMaterial {
+    #[allow(dead_code)]
+    pub(crate) fn as_raw_sys(&self) -> *const sys::aiMaterial {
         self.material_ptr.as_ptr()
+    }
+
+    /// Get the raw material pointer (requires `raw-sys`).
+    #[cfg(feature = "raw-sys")]
+    pub fn as_raw(&self) -> *const sys::aiMaterial {
+        self.as_raw_sys()
     }
 
     /// Get the name of the material

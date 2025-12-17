@@ -146,9 +146,15 @@ impl Scene {
         })
     }
 
-    /// Get the raw scene pointer
-    pub fn as_raw(&self) -> *const sys::aiScene {
+    #[allow(dead_code)]
+    pub(crate) fn as_raw_sys(&self) -> *const sys::aiScene {
         self.scene_ptr.as_ptr()
+    }
+
+    /// Get the raw scene pointer (requires `raw-sys`).
+    #[cfg(feature = "raw-sys")]
+    pub fn as_raw(&self) -> *const sys::aiScene {
+        self.as_raw_sys()
     }
 
     /// Apply Assimp post-processing to this scene in-place

@@ -31,9 +31,15 @@ impl<'a> Node<'a> {
         }
     }
 
-    /// Get the raw node pointer
-    pub fn as_raw(&self) -> *const sys::aiNode {
+    #[allow(dead_code)]
+    pub(crate) fn as_raw_sys(&self) -> *const sys::aiNode {
         self.node_ptr.as_ptr()
+    }
+
+    /// Get the raw node pointer (requires `raw-sys`).
+    #[cfg(feature = "raw-sys")]
+    pub fn as_raw(&self) -> *const sys::aiNode {
+        self.as_raw_sys()
     }
 
     /// Get the name of the node

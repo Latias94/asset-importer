@@ -32,9 +32,15 @@ impl<'a> Light<'a> {
         }
     }
 
-    /// Get the raw light pointer
-    pub fn as_raw(&self) -> *const sys::aiLight {
+    #[allow(dead_code)]
+    pub(crate) fn as_raw_sys(&self) -> *const sys::aiLight {
         self.light_ptr.as_ptr()
+    }
+
+    /// Get the raw light pointer (requires `raw-sys`).
+    #[cfg(feature = "raw-sys")]
+    pub fn as_raw(&self) -> *const sys::aiLight {
+        self.as_raw_sys()
     }
 
     /// Get the name of the light

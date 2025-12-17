@@ -134,9 +134,15 @@ impl<'a> Texture<'a> {
         })
     }
 
-    /// Get the raw texture pointer
-    pub fn as_raw(&self) -> *const sys::aiTexture {
+    #[allow(dead_code)]
+    pub(crate) fn as_raw_sys(&self) -> *const sys::aiTexture {
         self.texture_ptr.as_ptr()
+    }
+
+    /// Get the raw texture pointer (requires `raw-sys`).
+    #[cfg(feature = "raw-sys")]
+    pub fn as_raw(&self) -> *const sys::aiTexture {
+        self.as_raw_sys()
     }
 
     /// Get the width of the texture
