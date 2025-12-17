@@ -583,11 +583,22 @@ extern "C" fn file_seek_proc(
         let new_position = match origin {
             sys::aiOrigin::aiOrigin_SET => offset as u64,
             sys::aiOrigin::aiOrigin_CUR => match wrapper.stream.tell() {
-                Ok(current) => current + offset as u64,
+                Ok(current) => {
+                    let Some(pos) = current.checked_add(offset as u64) else {
+                        return sys::aiReturn::aiReturn_FAILURE;
+                    };
+                    pos
+                }
                 Err(_) => return sys::aiReturn::aiReturn_FAILURE,
             },
             sys::aiOrigin::aiOrigin_END => match wrapper.stream.size() {
-                Ok(size) => size.saturating_sub(offset as u64),
+                Ok(size) => {
+                    let off = offset as u64;
+                    if off > size {
+                        return sys::aiReturn::aiReturn_FAILURE;
+                    }
+                    size - off
+                }
                 Err(_) => return sys::aiReturn::aiReturn_FAILURE,
             },
             _ => return sys::aiReturn::aiReturn_FAILURE,

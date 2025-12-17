@@ -41,7 +41,7 @@ fn configure_cpp_flags(build: &mut cc::Build, cfg: &BuildConfig) {
     }
 
     if cfg.is_macos() {
-        build.flag(&format!(
+        build.flag(format!(
             "-mmacosx-version-min={}",
             cfg.macos_deployment_target()
         ));

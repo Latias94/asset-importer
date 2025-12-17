@@ -312,26 +312,28 @@ impl ImportBuilder {
                 if user.is_null() {
                     return true;
                 }
-                let handler: &mut dyn ProgressHandler =
-                    unsafe { &mut **(user as *mut Box<dyn ProgressHandler>) };
                 let msg_opt = if message.is_null() {
                     None
                 } else {
                     unsafe { CStr::from_ptr(message) }.to_str().ok()
                 };
+
+                // The callback can be invoked from worker threads; serialize access to the handler
+                // to avoid aliasing `&mut` across threads.
                 let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    let mutex =
+                        unsafe { &*(user as *const std::sync::Mutex<Box<dyn ProgressHandler>>) };
+                    let Ok(mut handler) = mutex.lock() else {
+                        return false;
+                    };
                     handler.update(percentage, msg_opt)
                 }));
-                match result {
-                    Ok(v) => v,
-                    // Never unwind across FFI. Treat panics as a request to cancel the import.
-                    Err(_) => false,
-                }
+                result.unwrap_or(false)
             }
 
             // Box the handler to pass across FFI and reclaim after call
-            let mut boxed: Box<Box<dyn ProgressHandler>> = Box::new(handler);
-            let user_ptr = &mut *boxed as *mut Box<dyn ProgressHandler> as *mut c_void;
+            let user_ptr =
+                Box::into_raw(Box::new(std::sync::Mutex::new(handler))) as *mut c_void;
 
             let ptr = unsafe {
                 sys::aiImportFileExWithProgressRust(
@@ -346,7 +348,11 @@ impl ImportBuilder {
             };
 
             // Reclaim box (drop) now that import returned
-            drop(boxed);
+            unsafe {
+                drop(Box::from_raw(
+                    user_ptr as *mut std::sync::Mutex<Box<dyn ProgressHandler>>,
+                ));
+            }
 
             ptr
         } else {
@@ -442,24 +448,25 @@ impl ImportBuilder {
                 if user.is_null() {
                     return true;
                 }
-                let handler: &mut dyn ProgressHandler =
-                    unsafe { &mut **(user as *mut Box<dyn ProgressHandler>) };
                 let msg_opt = if message.is_null() {
                     None
                 } else {
                     unsafe { CStr::from_ptr(message) }.to_str().ok()
                 };
+
                 let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    let mutex =
+                        unsafe { &*(user as *const std::sync::Mutex<Box<dyn ProgressHandler>>) };
+                    let Ok(mut handler) = mutex.lock() else {
+                        return false;
+                    };
                     handler.update(percentage, msg_opt)
                 }));
-                match result {
-                    Ok(v) => v,
-                    Err(_) => false,
-                }
+                result.unwrap_or(false)
             }
 
-            let mut boxed: Box<Box<dyn ProgressHandler>> = Box::new(handler);
-            let user_ptr = &mut *boxed as *mut Box<dyn ProgressHandler> as *mut c_void;
+            let user_ptr =
+                Box::into_raw(Box::new(std::sync::Mutex::new(handler))) as *mut c_void;
 
             let ptr = unsafe {
                 sys::aiImportFileFromMemoryWithProgressRust(
@@ -474,7 +481,11 @@ impl ImportBuilder {
                 )
             };
 
-            drop(boxed);
+            unsafe {
+                drop(Box::from_raw(
+                    user_ptr as *mut std::sync::Mutex<Box<dyn ProgressHandler>>,
+                ));
+            }
             ptr
         } else {
             unsafe {

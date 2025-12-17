@@ -250,31 +250,34 @@ impl Metadata {
 
         match entry.mType {
             sys::aiMetadataType::AI_BOOL => {
-                let value = unsafe { *(entry.mData as *const bool) };
+                // `aiMetadataEntry::mData` is an untyped pointer; do not assume alignment.
+                let value = unsafe { std::ptr::read_unaligned(entry.mData as *const bool) };
                 Ok(MetadataEntry::Bool(value))
             }
             sys::aiMetadataType::AI_INT32 => {
-                let value = unsafe { *(entry.mData as *const i32) };
+                let value = unsafe { std::ptr::read_unaligned(entry.mData as *const i32) };
                 Ok(MetadataEntry::Int32(value))
             }
             sys::aiMetadataType::AI_UINT64 => {
-                let value = unsafe { *(entry.mData as *const u64) };
+                let value = unsafe { std::ptr::read_unaligned(entry.mData as *const u64) };
                 Ok(MetadataEntry::UInt64(value))
             }
             sys::aiMetadataType::AI_FLOAT => {
-                let value = unsafe { *(entry.mData as *const f32) };
+                let value = unsafe { std::ptr::read_unaligned(entry.mData as *const f32) };
                 Ok(MetadataEntry::Float(value))
             }
             sys::aiMetadataType::AI_DOUBLE => {
-                let value = unsafe { *(entry.mData as *const f64) };
+                let value = unsafe { std::ptr::read_unaligned(entry.mData as *const f64) };
                 Ok(MetadataEntry::Double(value))
             }
             sys::aiMetadataType::AI_AISTRING => {
-                let ai_string = unsafe { &*(entry.mData as *const sys::aiString) };
-                Ok(MetadataEntry::String(ai_string_to_string(ai_string)))
+                let ai_string = unsafe { std::ptr::read_unaligned(entry.mData as *const sys::aiString) };
+                Ok(MetadataEntry::String(ai_string_to_string(&ai_string)))
             }
             sys::aiMetadataType::AI_AIVECTOR3D => {
-                let vector = unsafe { &*(entry.mData as *const raw::AiVector3D) };
+                let vector = unsafe {
+                    std::ptr::read_unaligned(entry.mData as *const raw::AiVector3D)
+                };
                 Ok(MetadataEntry::Vector3D(crate::types::Vector3D::new(
                     vector.x, vector.y, vector.z,
                 )))
@@ -285,11 +288,11 @@ impl Metadata {
                 Ok(MetadataEntry::Metadata(nested_metadata))
             }
             sys::aiMetadataType::AI_INT64 => {
-                let value = unsafe { *(entry.mData as *const i64) };
+                let value = unsafe { std::ptr::read_unaligned(entry.mData as *const i64) };
                 Ok(MetadataEntry::Int64(value))
             }
             sys::aiMetadataType::AI_UINT32 => {
-                let value = unsafe { *(entry.mData as *const u32) };
+                let value = unsafe { std::ptr::read_unaligned(entry.mData as *const u32) };
                 Ok(MetadataEntry::UInt32(value))
             }
             _ => Err(crate::error::Error::invalid_parameter(

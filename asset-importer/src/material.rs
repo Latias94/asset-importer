@@ -789,7 +789,8 @@ impl<'a> Material<'a> {
             let mut op = std::mem::MaybeUninit::<sys::aiTextureOp>::uninit();
             // Use the exact sys enum type to avoid platform-dependent
             // signedness mismatches across compilers.
-            let mut map_mode: [sys::aiTextureMapMode; 3] = [std::mem::zeroed(); 3];
+            let mut map_mode: [sys::aiTextureMapMode; 3] =
+                [sys::aiTextureMapMode::aiTextureMapMode_Wrap; 3];
             let mut tex_flags: u32 = 0;
 
             let result = sys::aiGetMaterialTexture(
@@ -854,7 +855,8 @@ impl<'a> Material<'a> {
                     {
                         None
                     } else {
-                        let v = *(prop.mData as *const raw::AiVector3D);
+                        // `aiMaterialProperty::mData` is a byte blob; do not assume alignment.
+                        let v = std::ptr::read_unaligned(prop.mData as *const raw::AiVector3D);
                         Some(Vector3D::new(v.x, v.y, v.z))
                     }
                 } else {

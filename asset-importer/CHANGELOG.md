@@ -34,8 +34,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Custom IO leaks**: Assimp `aiFileIO` user-data is now released via RAII, fixing leaks when using a custom `FileSystem`.
 - **Export blob ownership**: Export blob iteration no longer risks double-free by mixing owned and borrowed nodes.
 - **aiString conversion correctness**: `aiString` is decoded using its explicit length (no longer assuming NUL-termination) for names and metadata.
+- **Metadata/data alignment safety**: `aiMetadataEntry::mData` and material property blobs are now read with unaligned-safe loads to avoid UB on misaligned payloads.
 - **Panic surface reduction**: Scene-backed `from_raw` constructors no longer `expect()` on null pointers; internal invariants are checked via `debug_assert!`.
 - **FFI panic safety**: Panics from custom `FileSystem`/`FileStream` and progress callbacks are caught to prevent unwinding across the C ABI.
+- **Progress callback thread-safety**: Progress handlers are invoked under a mutex to avoid `&mut` aliasing if Assimp calls the callback from multiple threads.
 - **Material typed-slice safety**: `MaterialPropertyRef::{data_i32,data_f32,data_f64}` now reject null payload pointers when length is non-zero to avoid UB.
 
 ## [0.4.0] - 2025-09-20
