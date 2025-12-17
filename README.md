@@ -28,7 +28,7 @@ See **[Model Viewer](https://github.com/Latias94/model-viewer)** (asset-importer
 - **Import Support**: 71+ 3D file formats (OBJ, FBX, glTF, DAE, etc.)
 - **Export Support**: 22+ output formats (optional)
 - **Memory Safe**: Safe Rust API over unsafe FFI bindings
-- **Modern Math**: Integration with glam for vectors and matrices
+- **Modern Math (Optional)**: Interop with `glam` and `mint` via opt-in Cargo features
 - **Flexible Building**: Multiple build options for different use cases
 - **Cross-Platform**: Supports Windows, macOS, and Linux
 
@@ -41,11 +41,11 @@ Add to your `Cargo.toml`:
 # Default – Use prebuilt binaries (fastest)
 asset-importer = "0.4"
 
-# Or build from source (best compatibility)
-asset-importer = { version = "0.4", features = ["build-assimp"] }
+# Or build from source (best compatibility; mutually exclusive build mode)
+asset-importer = { version = "0.4", default-features = false, features = ["build-assimp"] }
 
-# Or use system-installed assimp
-asset-importer = { version = "0.4", features = ["system"] }
+# Or link a system-installed Assimp (requires libclang/bindgen; mutually exclusive build mode)
+asset-importer = { version = "0.4", default-features = false, features = ["system"] }
 ```
 
 Basic usage:
@@ -97,7 +97,7 @@ asset-importer = "0.4"
 ### Build from Source
 
 ```toml
-asset-importer = { version = "0.4", features = ["build-assimp"] }
+asset-importer = { version = "0.4", default-features = false, features = ["build-assimp"] }
 ```
 
 - **Best compatibility**: Works on all platforms
@@ -107,7 +107,7 @@ asset-importer = { version = "0.4", features = ["build-assimp"] }
 ### System Library
 
 ```toml
-asset-importer = { version = "0.4", features = ["system"] }
+asset-importer = { version = "0.4", default-features = false, features = ["system"] }
 ```
 
 - **Lightweight**: Uses existing system installation
@@ -119,15 +119,26 @@ asset-importer = { version = "0.4", features = ["system"] }
 ```toml
 asset-importer = {
     version = "0.4",
+    default-features = false,
     features = [
+        "build-assimp",    # Choose exactly one build mode (or use default prebuilt)
         "export",          # Enable export functionality
         "type-extensions", # Enable convenience methods on types
+        "raw-sys",         # Expose raw bindings as `asset_importer::sys` (unsafe contract)
+        "glam",            # Enable `glam` conversions
         "mint",            # Enable mint math library integration
+        "bytemuck",        # Enable zero-copy byte casts for raw views
+        "gpu",             # Convenience meta-feature: bytemuck + glam
         "static-link",     # Prefer static linking (source/prebuilt)
         "nozlib"           # Disable zlib compression support
     ]
 }
 ```
+
+## Examples
+
+See `asset-importer/examples/README.md` for a guided, step-by-step set of examples and recommended
+commands for each build mode.
 
 ## Build Requirements
 
@@ -184,8 +195,8 @@ RUSTFLAGS="-C target-feature=+crt-static" cargo build --release
 
 If you need more control or compatibility, use:
 
-- `--features build-assimp` to build from source (best compatibility)
-- `--features system` to link an existing installation
+- `--no-default-features --features build-assimp` to build from source (best compatibility)
+- `--no-default-features --features system` to link an existing installation
 
 ## Development and Testing
 
@@ -193,7 +204,7 @@ For development work or when prebuilt binaries are not available:
 
 ```toml
 # Use this for development
-asset-importer = { version = "0.4", features = ["build-assimp"] }
+asset-importer = { version = "0.4", default-features = false, features = ["build-assimp"] }
 ```
 
 This ensures you can always build from source regardless of release availability.

@@ -102,6 +102,11 @@ name = "07_mint_integration"
 path = "examples/07_mint_integration.rs"
 required-features = ["mint"]
 
+[[example]]
+name = "11_glam_integration"
+path = "examples/11_glam_integration.rs"
+required-features = ["glam"]
+
 
 
 [dev-dependencies.winit]
