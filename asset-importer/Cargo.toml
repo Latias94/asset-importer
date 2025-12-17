@@ -60,7 +60,7 @@ raw-sys = []
 
 # Math library integrations
 mint = ["dep:mint", "asset-importer-sys/mint"]
-bytemuck = ["dep:bytemuck"]
+bytemuck = ["dep:bytemuck", "glam/bytemuck"]
 
 # Functionality features
 export = ["asset-importer-sys/export"]
