@@ -5,6 +5,7 @@
 use crate::{
     aabb::AABB,
     bone::{Bone, BoneIterator},
+    ffi,
     ptr::SharedPtr,
     raw,
     scene::Scene,
@@ -70,7 +71,8 @@ impl Mesh {
             if mesh.mVertices.is_null() {
                 None
             } else {
-                Some(std::slice::from_raw_parts(
+                Some(ffi::slice_from_ptr_len(
+                    self,
                     mesh.mVertices as *const raw::AiVector3D,
                     mesh.mNumVertices as usize,
                 ))
@@ -98,7 +100,8 @@ impl Mesh {
             if mesh.mNormals.is_null() {
                 None
             } else {
-                Some(std::slice::from_raw_parts(
+                Some(ffi::slice_from_ptr_len(
+                    self,
                     mesh.mNormals as *const raw::AiVector3D,
                     mesh.mNumVertices as usize,
                 ))
@@ -126,7 +129,8 @@ impl Mesh {
             if mesh.mTangents.is_null() {
                 None
             } else {
-                Some(std::slice::from_raw_parts(
+                Some(ffi::slice_from_ptr_len(
+                    self,
                     mesh.mTangents as *const raw::AiVector3D,
                     mesh.mNumVertices as usize,
                 ))
@@ -154,7 +158,8 @@ impl Mesh {
             if mesh.mBitangents.is_null() {
                 None
             } else {
-                Some(std::slice::from_raw_parts(
+                Some(ffi::slice_from_ptr_len(
+                    self,
                     mesh.mBitangents as *const raw::AiVector3D,
                     mesh.mNumVertices as usize,
                 ))
@@ -187,7 +192,8 @@ impl Mesh {
             if tex_coords_ptr.is_null() {
                 None
             } else {
-                Some(std::slice::from_raw_parts(
+                Some(ffi::slice_from_ptr_len(
+                    self,
                     tex_coords_ptr as *const raw::AiVector3D,
                     mesh.mNumVertices as usize,
                 ))
@@ -223,7 +229,8 @@ impl Mesh {
             if colors_ptr.is_null() {
                 None
             } else {
-                Some(std::slice::from_raw_parts(
+                Some(ffi::slice_from_ptr_len(
+                    self,
                     colors_ptr as *const raw::AiColor4D,
                     mesh.mNumVertices as usize,
                 ))
@@ -259,7 +266,8 @@ impl Mesh {
             if mesh.mFaces.is_null() || mesh.mNumFaces == 0 {
                 None
             } else {
-                Some(std::slice::from_raw_parts(
+                Some(ffi::slice_from_ptr_len(
+                    self,
                     mesh.mFaces as *const raw::AiFace,
                     mesh.mNumFaces as usize,
                 ))
@@ -439,14 +447,11 @@ impl Face {
     pub fn indices_raw(&self) -> Option<&[u32]> {
         unsafe {
             let face = &*self.face_ptr.as_ptr();
-            if face.mIndices.is_null() || face.mNumIndices == 0 {
-                None
-            } else {
-                Some(std::slice::from_raw_parts(
-                    face.mIndices,
-                    face.mNumIndices as usize,
-                ))
-            }
+            ffi::slice_from_ptr_len_opt(
+                self,
+                face.mIndices as *const u32,
+                face.mNumIndices as usize,
+            )
         }
     }
 
@@ -530,7 +535,8 @@ impl AnimMesh {
         unsafe {
             let m = &*self.anim_ptr.as_ptr();
             (!m.mVertices.is_null()).then(|| {
-                std::slice::from_raw_parts(
+                ffi::slice_from_ptr_len(
+                    self,
                     m.mVertices as *const raw::AiVector3D,
                     m.mNumVertices as usize,
                 )
@@ -549,7 +555,8 @@ impl AnimMesh {
         unsafe {
             let m = &*self.anim_ptr.as_ptr();
             (!m.mNormals.is_null()).then(|| {
-                std::slice::from_raw_parts(
+                ffi::slice_from_ptr_len(
+                    self,
                     m.mNormals as *const raw::AiVector3D,
                     m.mNumVertices as usize,
                 )
@@ -568,7 +575,8 @@ impl AnimMesh {
         unsafe {
             let m = &*self.anim_ptr.as_ptr();
             (!m.mTangents.is_null()).then(|| {
-                std::slice::from_raw_parts(
+                ffi::slice_from_ptr_len(
+                    self,
                     m.mTangents as *const raw::AiVector3D,
                     m.mNumVertices as usize,
                 )
@@ -587,7 +595,8 @@ impl AnimMesh {
         unsafe {
             let m = &*self.anim_ptr.as_ptr();
             (!m.mBitangents.is_null()).then(|| {
-                std::slice::from_raw_parts(
+                ffi::slice_from_ptr_len(
+                    self,
                     m.mBitangents as *const raw::AiVector3D,
                     m.mNumVertices as usize,
                 )
@@ -615,7 +624,8 @@ impl AnimMesh {
             if ptr.is_null() {
                 None
             } else {
-                Some(std::slice::from_raw_parts(
+                Some(ffi::slice_from_ptr_len(
+                    self,
                     ptr as *const raw::AiColor4D,
                     m.mNumVertices as usize,
                 ))
@@ -640,7 +650,8 @@ impl AnimMesh {
             if ptr.is_null() {
                 None
             } else {
-                Some(std::slice::from_raw_parts(
+                Some(ffi::slice_from_ptr_len(
+                    self,
                     ptr as *const raw::AiVector3D,
                     m.mNumVertices as usize,
                 ))

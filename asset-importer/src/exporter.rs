@@ -6,6 +6,7 @@ use std::sync::Arc;
 
 use crate::{
     error::{Error, Result},
+    ffi,
     io::{AssimpFileIO, FileSystem},
     ptr::SharedPtr,
     scene::Scene,
@@ -137,11 +138,7 @@ impl ExportBlob {
     pub fn data(&self) -> &[u8] {
         unsafe {
             let blob = &*self.inner.root.as_ptr();
-            if blob.size == 0 || blob.data.is_null() {
-                &[]
-            } else {
-                std::slice::from_raw_parts(blob.data as *const u8, blob.size)
-            }
+            ffi::slice_from_ptr_len(self, blob.data as *const u8, blob.size)
         }
     }
 
@@ -199,11 +196,7 @@ impl ExportBlobView {
     pub fn data(&self) -> &[u8] {
         unsafe {
             let blob = &*self.blob_ptr.as_ptr();
-            if blob.size == 0 || blob.data.is_null() {
-                &[]
-            } else {
-                std::slice::from_raw_parts(blob.data as *const u8, blob.size)
-            }
+            ffi::slice_from_ptr_len(self, blob.data as *const u8, blob.size)
         }
     }
 

@@ -5,6 +5,7 @@
 
 use crate::{
     error::{Error, Result},
+    ffi,
     ptr::SharedPtr,
     raw,
     scene::Scene,
@@ -129,14 +130,11 @@ impl Bone {
     pub fn weights_raw(&self) -> Option<&[raw::AiVertexWeight]> {
         unsafe {
             let bone = &*self.bone_ptr.as_ptr();
-            if bone.mWeights.is_null() || bone.mNumWeights == 0 {
-                None
-            } else {
-                Some(std::slice::from_raw_parts(
-                    bone.mWeights as *const raw::AiVertexWeight,
-                    bone.mNumWeights as usize,
-                ))
-            }
+            ffi::slice_from_ptr_len_opt(
+                self,
+                bone.mWeights as *const raw::AiVertexWeight,
+                bone.mNumWeights as usize,
+            )
         }
     }
 

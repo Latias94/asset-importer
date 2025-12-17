@@ -1,6 +1,7 @@
 //! Animation data structures and utilities
 
 use crate::{
+    ffi,
     ptr::SharedPtr,
     raw,
     scene::Scene,
@@ -239,7 +240,8 @@ impl NodeAnimation {
             if ch.mPositionKeys.is_null() || ch.mNumPositionKeys == 0 {
                 &[]
             } else {
-                std::slice::from_raw_parts(
+                ffi::slice_from_ptr_len(
+                    self,
                     ch.mPositionKeys as *const raw::AiVectorKey,
                     ch.mNumPositionKeys as usize,
                 )
@@ -279,7 +281,8 @@ impl NodeAnimation {
             if ch.mRotationKeys.is_null() || ch.mNumRotationKeys == 0 {
                 &[]
             } else {
-                std::slice::from_raw_parts(
+                ffi::slice_from_ptr_len(
+                    self,
                     ch.mRotationKeys as *const raw::AiQuatKey,
                     ch.mNumRotationKeys as usize,
                 )
@@ -319,7 +322,8 @@ impl NodeAnimation {
             if ch.mScalingKeys.is_null() || ch.mNumScalingKeys == 0 {
                 &[]
             } else {
-                std::slice::from_raw_parts(
+                ffi::slice_from_ptr_len(
+                    self,
                     ch.mScalingKeys as *const raw::AiVectorKey,
                     ch.mNumScalingKeys as usize,
                 )
@@ -536,11 +540,8 @@ impl MeshAnimation {
     pub fn keys(&self) -> &[MeshKey] {
         unsafe {
             let ch = &*self.channel_ptr.as_ptr();
-            if ch.mKeys.is_null() || ch.mNumKeys == 0 {
-                &[]
-            } else {
-                std::slice::from_raw_parts(ch.mKeys as *const MeshKey, ch.mNumKeys as usize)
-            }
+            ffi::slice_from_ptr_len_opt(self, ch.mKeys as *const MeshKey, ch.mNumKeys as usize)
+                .unwrap_or(&[])
         }
     }
 }
@@ -613,13 +614,7 @@ impl MorphMeshKey {
         unsafe {
             let k = &*self.key_ptr.as_ptr();
             let n = k.mNumValuesAndWeights as usize;
-            if n == 0 {
-                return Some(&[]);
-            }
-            if k.mValues.is_null() {
-                return None;
-            }
-            Some(std::slice::from_raw_parts(k.mValues, n))
+            ffi::slice_from_ptr_len_opt(self, k.mValues as *const u32, n)
         }
     }
 
@@ -628,13 +623,7 @@ impl MorphMeshKey {
         unsafe {
             let k = &*self.key_ptr.as_ptr();
             let n = k.mNumValuesAndWeights as usize;
-            if n == 0 {
-                return Some(&[]);
-            }
-            if k.mWeights.is_null() {
-                return None;
-            }
-            Some(std::slice::from_raw_parts(k.mWeights, n))
+            ffi::slice_from_ptr_len_opt(self, k.mWeights as *const f64, n)
         }
     }
 }

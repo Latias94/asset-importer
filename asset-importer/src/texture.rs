@@ -7,6 +7,7 @@
 use crate::types::ai_string_to_string;
 use crate::{
     error::{Error, Result},
+    ffi,
     ptr::SharedPtr,
     scene::Scene,
     sys,
@@ -181,13 +182,11 @@ impl Texture {
                 if size == 0 {
                     return Ok(TextureDataRef::Compressed(&[]));
                 }
-                if texture.pcData.is_null() {
-                    return Err(Error::invalid_scene("Texture data is null"));
-                }
                 let data_ptr = texture.pcData as *const u8;
-                Ok(TextureDataRef::Compressed(std::slice::from_raw_parts(
-                    data_ptr, size,
-                )))
+                let Some(bytes) = ffi::slice_from_ptr_len_opt(self, data_ptr, size) else {
+                    return Err(Error::invalid_scene("Texture data is null"));
+                };
+                Ok(TextureDataRef::Compressed(bytes))
             } else {
                 let width = self.width() as usize;
                 let height = self.height() as usize;
@@ -197,13 +196,12 @@ impl Texture {
                 if size == 0 {
                     return Ok(TextureDataRef::Texels(&[]));
                 }
-                if texture.pcData.is_null() {
+                let Some(texels) =
+                    ffi::slice_from_ptr_len_opt(self, texture.pcData as *const Texel, size)
+                else {
                     return Err(Error::invalid_scene("Texture data is null"));
-                }
-                Ok(TextureDataRef::Texels(std::slice::from_raw_parts(
-                    texture.pcData as *const Texel,
-                    size,
-                )))
+                };
+                Ok(TextureDataRef::Texels(texels))
             }
         }
     }

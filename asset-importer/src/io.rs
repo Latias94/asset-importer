@@ -9,7 +9,7 @@ use std::os::raw::c_char;
 use std::ptr;
 use std::sync::{Arc, Mutex};
 
-use crate::{error::Result, sys};
+use crate::{error::Result, ffi, sys};
 
 /// Trait for custom file I/O implementations
 pub trait FileSystem: std::fmt::Debug + Send + Sync {
@@ -503,7 +503,8 @@ extern "C" fn file_write_proc(
             return 0;
         }
 
-        let data_slice = std::slice::from_raw_parts(buffer as *const u8, total_bytes);
+        let owner = &buffer;
+        let data_slice = ffi::slice_from_ptr_len(owner, buffer as *const u8, total_bytes);
 
         match stream.write(data_slice) {
             Ok(bytes_written) => bytes_written / size,

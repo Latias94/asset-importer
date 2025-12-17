@@ -95,6 +95,7 @@ pub use crate::importer_desc::{
 
 // Core modules
 pub mod error;
+pub(crate) mod ffi;
 pub mod importer;
 pub mod importer_desc;
 pub mod scene;
@@ -203,10 +204,7 @@ pub fn get_import_extensions() -> Vec<String> {
 
     // Convert aiString to Rust String
     let extension_list = if ai_string.length > 0 {
-        let len = (ai_string.length as usize).min(ai_string.data.len());
-        let slice =
-            unsafe { std::slice::from_raw_parts(ai_string.data.as_ptr() as *const u8, len) };
-        String::from_utf8_lossy(slice).to_string()
+        crate::types::ai_string_to_string(&ai_string)
     } else {
         // Fallback to hardcoded list if the function fails
         return vec![

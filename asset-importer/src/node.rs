@@ -2,6 +2,7 @@
 
 use crate::{
     error::Result,
+    ffi,
     metadata::Metadata,
     ptr::SharedPtr,
     scene::Scene,
@@ -149,14 +150,7 @@ impl Node {
     pub fn mesh_indices_raw(&self) -> Option<&[u32]> {
         unsafe {
             let node = &*self.node_ptr.as_ptr();
-            if node.mMeshes.is_null() || node.mNumMeshes == 0 {
-                None
-            } else {
-                Some(std::slice::from_raw_parts(
-                    node.mMeshes,
-                    node.mNumMeshes as usize,
-                ))
-            }
+            ffi::slice_from_ptr_len_opt(self, node.mMeshes as *const u32, node.mNumMeshes as usize)
         }
     }
 
