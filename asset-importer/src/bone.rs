@@ -130,6 +130,7 @@ impl Bone {
     pub fn weights_raw(&self) -> &[raw::AiVertexWeight] {
         unsafe {
             let bone = &*self.bone_ptr.as_ptr();
+            debug_assert!(bone.mNumWeights == 0 || !bone.mWeights.is_null());
             ffi::slice_from_ptr_len(
                 self,
                 bone.mWeights as *const raw::AiVertexWeight,

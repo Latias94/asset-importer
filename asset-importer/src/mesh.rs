@@ -57,6 +57,60 @@ impl Mesh {
         unsafe { (*self.mesh_ptr.as_ptr()).mNumVertices as usize }
     }
 
+    /// Returns `true` if this mesh has a position buffer.
+    pub fn has_vertices(&self) -> bool {
+        unsafe {
+            let mesh = &*self.mesh_ptr.as_ptr();
+            mesh.mNumVertices > 0 && !mesh.mVertices.is_null()
+        }
+    }
+
+    /// Returns `true` if this mesh has normals.
+    pub fn has_normals(&self) -> bool {
+        unsafe {
+            let mesh = &*self.mesh_ptr.as_ptr();
+            mesh.mNumVertices > 0 && !mesh.mNormals.is_null()
+        }
+    }
+
+    /// Returns `true` if this mesh has tangents.
+    pub fn has_tangents(&self) -> bool {
+        unsafe {
+            let mesh = &*self.mesh_ptr.as_ptr();
+            mesh.mNumVertices > 0 && !mesh.mTangents.is_null()
+        }
+    }
+
+    /// Returns `true` if this mesh has bitangents.
+    pub fn has_bitangents(&self) -> bool {
+        unsafe {
+            let mesh = &*self.mesh_ptr.as_ptr();
+            mesh.mNumVertices > 0 && !mesh.mBitangents.is_null()
+        }
+    }
+
+    /// Returns `true` if this mesh has texture coordinates for `channel`.
+    pub fn has_texture_coords(&self, channel: usize) -> bool {
+        if channel >= sys::AI_MAX_NUMBER_OF_TEXTURECOORDS as usize {
+            return false;
+        }
+        unsafe {
+            let mesh = &*self.mesh_ptr.as_ptr();
+            mesh.mNumVertices > 0 && !mesh.mTextureCoords[channel].is_null()
+        }
+    }
+
+    /// Returns `true` if this mesh has vertex colors for `channel`.
+    pub fn has_vertex_colors(&self, channel: usize) -> bool {
+        if channel >= sys::AI_MAX_NUMBER_OF_COLOR_SETS as usize {
+            return false;
+        }
+        unsafe {
+            let mesh = &*self.mesh_ptr.as_ptr();
+            mesh.mNumVertices > 0 && !mesh.mColors[channel].is_null()
+        }
+    }
+
     /// Get the vertices of the mesh
     pub fn vertices(&self) -> Vec<Vector3D> {
         self.vertices_iter().collect()
@@ -532,6 +586,7 @@ impl Face {
     pub fn indices_raw(&self) -> &[u32] {
         unsafe {
             let face = &*self.face_ptr.as_ptr();
+            debug_assert!(face.mNumIndices == 0 || !face.mIndices.is_null());
             ffi::slice_from_ptr_len(self, face.mIndices as *const u32, face.mNumIndices as usize)
         }
     }
@@ -615,6 +670,60 @@ impl AnimMesh {
     /// Number of vertices in this anim mesh
     pub fn num_vertices(&self) -> usize {
         unsafe { (*self.anim_ptr.as_ptr()).mNumVertices as usize }
+    }
+
+    /// Returns `true` if this anim mesh has replacement positions.
+    pub fn has_vertices(&self) -> bool {
+        unsafe {
+            let m = &*self.anim_ptr.as_ptr();
+            m.mNumVertices > 0 && !m.mVertices.is_null()
+        }
+    }
+
+    /// Returns `true` if this anim mesh has replacement normals.
+    pub fn has_normals(&self) -> bool {
+        unsafe {
+            let m = &*self.anim_ptr.as_ptr();
+            m.mNumVertices > 0 && !m.mNormals.is_null()
+        }
+    }
+
+    /// Returns `true` if this anim mesh has replacement tangents.
+    pub fn has_tangents(&self) -> bool {
+        unsafe {
+            let m = &*self.anim_ptr.as_ptr();
+            m.mNumVertices > 0 && !m.mTangents.is_null()
+        }
+    }
+
+    /// Returns `true` if this anim mesh has replacement bitangents.
+    pub fn has_bitangents(&self) -> bool {
+        unsafe {
+            let m = &*self.anim_ptr.as_ptr();
+            m.mNumVertices > 0 && !m.mBitangents.is_null()
+        }
+    }
+
+    /// Returns `true` if this anim mesh has replacement texture coordinates for `channel`.
+    pub fn has_texture_coords(&self, channel: usize) -> bool {
+        if channel >= sys::AI_MAX_NUMBER_OF_TEXTURECOORDS as usize {
+            return false;
+        }
+        unsafe {
+            let m = &*self.anim_ptr.as_ptr();
+            m.mNumVertices > 0 && !m.mTextureCoords[channel].is_null()
+        }
+    }
+
+    /// Returns `true` if this anim mesh has replacement vertex colors for `channel`.
+    pub fn has_vertex_colors(&self, channel: usize) -> bool {
+        if channel >= sys::AI_MAX_NUMBER_OF_COLOR_SETS as usize {
+            return false;
+        }
+        unsafe {
+            let m = &*self.anim_ptr.as_ptr();
+            m.mNumVertices > 0 && !m.mColors[channel].is_null()
+        }
     }
 
     /// Replacement positions (if present)

@@ -150,6 +150,7 @@ impl Node {
     pub fn mesh_indices_raw(&self) -> &[u32] {
         unsafe {
             let node = &*self.node_ptr.as_ptr();
+            debug_assert!(node.mNumMeshes == 0 || !node.mMeshes.is_null());
             ffi::slice_from_ptr_len(self, node.mMeshes as *const u32, node.mNumMeshes as usize)
         }
     }

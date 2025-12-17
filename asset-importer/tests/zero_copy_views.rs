@@ -50,6 +50,47 @@ fn test_mesh_vertices_raw_type_is_sys_free() {
 }
 
 #[test]
+fn test_mesh_has_helpers() {
+    let box_path = Path::new("tests/models/box.obj");
+    if !box_path.exists() {
+        println!("Skipping test - model file not found: {:?}", box_path);
+        return;
+    }
+
+    let scene = Importer::new()
+        .read_file(box_path)
+        .with_post_process(PostProcessSteps::TRIANGULATE)
+        .import_file(box_path)
+        .expect("failed to import box.obj");
+
+    let mesh = scene.meshes().next().expect("scene has no meshes");
+    assert!(mesh.has_vertices());
+    assert!(!mesh.has_normals());
+    assert!(!mesh.has_tangents());
+    assert!(!mesh.has_bitangents());
+    assert!(!mesh.has_texture_coords(0));
+    assert!(!mesh.has_vertex_colors(0));
+
+    let tri_path = Path::new("tests/models/textured.obj");
+    if !tri_path.exists() {
+        println!("Skipping test - model file not found: {:?}", tri_path);
+        return;
+    }
+
+    let scene = Importer::new()
+        .read_file(tri_path)
+        .with_post_process(PostProcessSteps::TRIANGULATE)
+        .import_file(tri_path)
+        .expect("failed to import textured.obj");
+
+    let mesh = scene.meshes().next().expect("scene has no meshes");
+    assert!(mesh.has_vertices());
+    assert!(mesh.has_normals());
+    assert!(mesh.has_texture_coords(0));
+    assert!(!mesh.has_vertex_colors(0));
+}
+
+#[test]
 fn test_material_texture_ref_path() {
     let model_path = Path::new("tests/models/textured.obj");
     if !model_path.exists() {

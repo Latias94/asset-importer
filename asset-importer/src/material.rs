@@ -1139,6 +1139,16 @@ impl MaterialPropertyRef {
             .flatten()
     }
 
+    /// Interpret the property payload as a `u32` slice when stored as `Integer` (zero-copy).
+    ///
+    /// Note: Assimp stores integer properties as signed `int`. This method simply
+    /// reinterprets the bytes as `u32` when the payload is aligned and sized for `u32`.
+    pub fn data_u32(&self) -> Option<&[u32]> {
+        (self.type_info() == PropertyTypeInfo::Integer)
+            .then(|| self.data_cast_slice_opt())
+            .flatten()
+    }
+
     /// Interpret the property payload as an `f32` slice when stored as `Float` (zero-copy).
     pub fn data_f32(&self) -> Option<&[f32]> {
         (self.type_info() == PropertyTypeInfo::Float)
@@ -1151,6 +1161,31 @@ impl MaterialPropertyRef {
         (self.type_info() == PropertyTypeInfo::Double)
             .then(|| self.data_cast_slice_opt())
             .flatten()
+    }
+
+    /// Read the first element as `i32` when stored as `Integer`.
+    pub fn as_i32(&self) -> Option<i32> {
+        self.data_i32().and_then(|xs| xs.first().copied())
+    }
+
+    /// Read the first element as `u32` when stored as `Integer`.
+    pub fn as_u32(&self) -> Option<u32> {
+        self.data_u32().and_then(|xs| xs.first().copied())
+    }
+
+    /// Read the first element as `bool` when stored as `Integer` (non-zero => true).
+    pub fn as_bool(&self) -> Option<bool> {
+        self.as_i32().map(|v| v != 0)
+    }
+
+    /// Read the first element as `f32` when stored as `Float`.
+    pub fn as_f32(&self) -> Option<f32> {
+        self.data_f32().and_then(|xs| xs.first().copied())
+    }
+
+    /// Read the first element as `f64` when stored as `Double`.
+    pub fn as_f64(&self) -> Option<f64> {
+        self.data_f64().and_then(|xs| xs.first().copied())
     }
 
     fn data_cast_slice_opt<T>(&self) -> Option<&[T]> {
