@@ -262,30 +262,24 @@ impl<'a> Iterator for BoneIterator<'a> {
 
     fn next(&mut self) -> Option<Self::Item> {
         let bones = self.bones?;
-        if self.count == 0 {
-            return None;
+        while self.index < self.count {
+            unsafe {
+                let bone_ptr = *bones.as_ptr().add(self.index);
+                self.index += 1;
+                if bone_ptr.is_null() {
+                    continue;
+                }
+                if let Ok(bone) = Bone::from_raw(bone_ptr) {
+                    return Some(bone);
+                }
+            }
         }
-        if self.index >= self.count {
-            return None;
-        }
-
-        unsafe {
-            let bone_ptr = *bones.as_ptr().add(self.index);
-            self.index += 1;
-
-            Bone::from_raw(bone_ptr).ok()
-        }
+        None
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
         let remaining = self.count.saturating_sub(self.index);
-        (remaining, Some(remaining))
-    }
-}
-
-impl<'a> ExactSizeIterator for BoneIterator<'a> {
-    fn len(&self) -> usize {
-        self.count.saturating_sub(self.index)
+        (0, Some(remaining))
     }
 }
 

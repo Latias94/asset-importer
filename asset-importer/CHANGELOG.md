@@ -41,6 +41,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Progress callback thread-safety**: Progress handlers are invoked under a mutex to avoid `&mut` aliasing if Assimp calls the callback from multiple threads.
 - **Memory import length safety**: `import_from_memory` now rejects buffers larger than `u32::MAX` to avoid length truncation in the Assimp C API.
 - **Material typed-slice safety**: `MaterialPropertyRef::{data_i32,data_f32,data_f64}` now reject null payload pointers when length is non-zero to avoid UB.
+- **Iterator robustness**: Iterators over scene-backed pointer arrays now skip null entries instead of ending iteration early.
 
 ## [0.4.0] - 2025-09-20
 

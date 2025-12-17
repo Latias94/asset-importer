@@ -461,17 +461,15 @@ impl<'a> Iterator for NodeAnimationIterator<'a> {
             if animation.mChannels.is_null() || animation.mNumChannels == 0 {
                 return None;
             }
-            if self.index >= animation.mNumChannels as usize {
-                None
-            } else {
+            while self.index < animation.mNumChannels as usize {
                 let channel_ptr = *animation.mChannels.add(self.index);
                 self.index += 1;
                 if channel_ptr.is_null() {
-                    None
-                } else {
-                    Some(NodeAnimation::from_raw(channel_ptr))
+                    continue;
                 }
+                return Some(NodeAnimation::from_raw(channel_ptr));
             }
+            None
         }
     }
 
@@ -482,13 +480,11 @@ impl<'a> Iterator for NodeAnimationIterator<'a> {
                 (0, Some(0))
             } else {
                 let remaining = (animation.mNumChannels as usize).saturating_sub(self.index);
-                (remaining, Some(remaining))
+                (0, Some(remaining))
             }
         }
     }
 }
-
-impl<'a> ExactSizeIterator for NodeAnimationIterator<'a> {}
 
 /// Mesh animation key
 #[repr(C)]
@@ -565,17 +561,15 @@ impl<'a> Iterator for MeshAnimationIterator<'a> {
             if anim.mMeshChannels.is_null() || anim.mNumMeshChannels == 0 {
                 return None;
             }
-            if self.index >= anim.mNumMeshChannels as usize {
-                None
-            } else {
+            while self.index < anim.mNumMeshChannels as usize {
                 let ptr = *anim.mMeshChannels.add(self.index);
                 self.index += 1;
                 if ptr.is_null() {
-                    None
-                } else {
-                    Some(MeshAnimation::from_raw(ptr))
+                    continue;
                 }
+                return Some(MeshAnimation::from_raw(ptr));
             }
+            None
         }
     }
     fn size_hint(&self) -> (usize, Option<usize>) {
@@ -585,13 +579,11 @@ impl<'a> Iterator for MeshAnimationIterator<'a> {
                 (0, Some(0))
             } else {
                 let remaining = (anim.mNumMeshChannels as usize).saturating_sub(self.index);
-                (remaining, Some(remaining))
+                (0, Some(remaining))
             }
         }
     }
 }
-
-impl<'a> ExactSizeIterator for MeshAnimationIterator<'a> {}
 
 /// Morph mesh key (weights for multiple targets)
 pub struct MorphMeshKey<'a> {
@@ -698,17 +690,15 @@ impl<'a> Iterator for MorphMeshAnimationIterator<'a> {
             if anim.mMorphMeshChannels.is_null() || anim.mNumMorphMeshChannels == 0 {
                 return None;
             }
-            if self.index >= anim.mNumMorphMeshChannels as usize {
-                None
-            } else {
+            while self.index < anim.mNumMorphMeshChannels as usize {
                 let ptr = *anim.mMorphMeshChannels.add(self.index);
                 self.index += 1;
                 if ptr.is_null() {
-                    None
-                } else {
-                    Some(MorphMeshAnimation::from_raw(ptr))
+                    continue;
                 }
+                return Some(MorphMeshAnimation::from_raw(ptr));
             }
+            None
         }
     }
     fn size_hint(&self) -> (usize, Option<usize>) {
@@ -718,12 +708,10 @@ impl<'a> Iterator for MorphMeshAnimationIterator<'a> {
                 (0, Some(0))
             } else {
                 let remaining = (anim.mNumMorphMeshChannels as usize).saturating_sub(self.index);
-                (remaining, Some(remaining))
+                (0, Some(remaining))
             }
         }
     }
 }
-
-impl<'a> ExactSizeIterator for MorphMeshAnimationIterator<'a> {}
 
 // Auto-traits (Send/Sync) are derived from the contained pointers and lifetimes.

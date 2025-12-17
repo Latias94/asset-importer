@@ -203,17 +203,15 @@ impl<'a> Iterator for NodeIterator<'a> {
             if node.mChildren.is_null() || node.mNumChildren == 0 {
                 return None;
             }
-            if self.index >= node.mNumChildren as usize {
-                None
-            } else {
+            while self.index < node.mNumChildren as usize {
                 let child_ptr = *node.mChildren.add(self.index);
                 self.index += 1;
                 if child_ptr.is_null() {
-                    None
-                } else {
-                    Some(Node::from_raw(child_ptr))
+                    continue;
                 }
+                return Some(Node::from_raw(child_ptr));
             }
+            None
         }
     }
 
@@ -224,13 +222,11 @@ impl<'a> Iterator for NodeIterator<'a> {
                 (0, Some(0))
             } else {
                 let remaining = (node.mNumChildren as usize).saturating_sub(self.index);
-                (remaining, Some(remaining))
+                (0, Some(remaining))
             }
         }
     }
 }
-
-impl<'a> ExactSizeIterator for NodeIterator<'a> {}
 
 /// Iterator over mesh indices in a node
 pub struct MeshIndexIterator<'a> {

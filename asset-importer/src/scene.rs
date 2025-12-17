@@ -586,18 +586,21 @@ impl<'a> Iterator for MeshIterator<'a> {
     type Item = Mesh<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let mesh = self.scene.mesh(self.index)?;
-        self.index += 1;
-        Some(mesh)
+        while self.index < self.scene.num_meshes() {
+            let idx = self.index;
+            self.index += 1;
+            if let Some(mesh) = self.scene.mesh(idx) {
+                return Some(mesh);
+            }
+        }
+        None
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
         let remaining = self.scene.num_meshes().saturating_sub(self.index);
-        (remaining, Some(remaining))
+        (0, Some(remaining))
     }
 }
-
-impl<'a> ExactSizeIterator for MeshIterator<'a> {}
 
 /// Iterator over materials in a scene
 pub struct MaterialIterator<'a> {
@@ -609,18 +612,21 @@ impl<'a> Iterator for MaterialIterator<'a> {
     type Item = Material<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let material = self.scene.material(self.index)?;
-        self.index += 1;
-        Some(material)
+        while self.index < self.scene.num_materials() {
+            let idx = self.index;
+            self.index += 1;
+            if let Some(material) = self.scene.material(idx) {
+                return Some(material);
+            }
+        }
+        None
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
         let remaining = self.scene.num_materials().saturating_sub(self.index);
-        (remaining, Some(remaining))
+        (0, Some(remaining))
     }
 }
-
-impl<'a> ExactSizeIterator for MaterialIterator<'a> {}
 
 /// Iterator over animations in a scene
 pub struct AnimationIterator<'a> {
@@ -632,18 +638,21 @@ impl<'a> Iterator for AnimationIterator<'a> {
     type Item = Animation<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let animation = self.scene.animation(self.index)?;
-        self.index += 1;
-        Some(animation)
+        while self.index < self.scene.num_animations() {
+            let idx = self.index;
+            self.index += 1;
+            if let Some(animation) = self.scene.animation(idx) {
+                return Some(animation);
+            }
+        }
+        None
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
         let remaining = self.scene.num_animations().saturating_sub(self.index);
-        (remaining, Some(remaining))
+        (0, Some(remaining))
     }
 }
-
-impl<'a> ExactSizeIterator for AnimationIterator<'a> {}
 
 /// Iterator over cameras in a scene
 pub struct CameraIterator<'a> {
@@ -655,18 +664,21 @@ impl<'a> Iterator for CameraIterator<'a> {
     type Item = Camera<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let camera = self.scene.camera(self.index)?;
-        self.index += 1;
-        Some(camera)
+        while self.index < self.scene.num_cameras() {
+            let idx = self.index;
+            self.index += 1;
+            if let Some(camera) = self.scene.camera(idx) {
+                return Some(camera);
+            }
+        }
+        None
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
         let remaining = self.scene.num_cameras().saturating_sub(self.index);
-        (remaining, Some(remaining))
+        (0, Some(remaining))
     }
 }
-
-impl<'a> ExactSizeIterator for CameraIterator<'a> {}
 
 /// Iterator over lights in a scene
 pub struct LightIterator<'a> {
@@ -678,18 +690,21 @@ impl<'a> Iterator for LightIterator<'a> {
     type Item = Light<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let light = self.scene.light(self.index)?;
-        self.index += 1;
-        Some(light)
+        while self.index < self.scene.num_lights() {
+            let idx = self.index;
+            self.index += 1;
+            if let Some(light) = self.scene.light(idx) {
+                return Some(light);
+            }
+        }
+        None
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
         let remaining = self.scene.num_lights().saturating_sub(self.index);
-        (remaining, Some(remaining))
+        (0, Some(remaining))
     }
 }
-
-impl<'a> ExactSizeIterator for LightIterator<'a> {}
 
 impl Scene {
     /// Get scene metadata

@@ -323,27 +323,25 @@ impl<'a> Iterator for TextureIterator<'a> {
 
     fn next(&mut self) -> Option<Self::Item> {
         let textures = self.textures?;
-        if self.index >= self.count {
-            return None;
+        while self.index < self.count {
+            unsafe {
+                let texture_ptr = *textures.as_ptr().add(self.index);
+                self.index += 1;
+                if texture_ptr.is_null() {
+                    continue;
+                }
+                // `from_raw` only fails on null pointers; keep the iterator robust anyway.
+                if let Ok(tex) = Texture::from_raw(texture_ptr) {
+                    return Some(tex);
+                }
+            }
         }
-
-        unsafe {
-            let texture_ptr = *textures.as_ptr().add(self.index);
-            self.index += 1;
-
-            Texture::from_raw(texture_ptr).ok()
-        }
+        None
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
         let remaining = self.count.saturating_sub(self.index);
-        (remaining, Some(remaining))
-    }
-}
-
-impl<'a> ExactSizeIterator for TextureIterator<'a> {
-    fn len(&self) -> usize {
-        self.count.saturating_sub(self.index)
+        (0, Some(remaining))
     }
 }
 

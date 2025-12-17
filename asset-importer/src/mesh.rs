@@ -665,21 +665,19 @@ impl<'a> Iterator for AnimMeshIterator<'a> {
             if mesh.mAnimMeshes.is_null() || mesh.mNumAnimMeshes == 0 {
                 return None;
             }
-            if self.index >= mesh.mNumAnimMeshes as usize {
-                None
-            } else {
+            while self.index < mesh.mNumAnimMeshes as usize {
                 let ptr = *mesh.mAnimMeshes.add(self.index);
                 self.index += 1;
                 if ptr.is_null() {
-                    None
-                } else {
-                    let anim_ptr = SharedPtr::new(ptr)?;
-                    Some(AnimMesh {
-                        anim_ptr,
-                        _marker: PhantomData,
-                    })
+                    continue;
                 }
+                let anim_ptr = SharedPtr::new(ptr)?;
+                return Some(AnimMesh {
+                    anim_ptr,
+                    _marker: PhantomData,
+                });
             }
+            None
         }
     }
 
@@ -690,13 +688,11 @@ impl<'a> Iterator for AnimMeshIterator<'a> {
                 (0, Some(0))
             } else {
                 let remaining = (mesh.mNumAnimMeshes as usize).saturating_sub(self.index);
-                (remaining, Some(remaining))
+                (0, Some(remaining))
             }
         }
     }
 }
-
-impl<'a> ExactSizeIterator for AnimMeshIterator<'a> {}
 
 /// Methods of mesh morphing supported by Assimp
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
