@@ -24,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Guided examples**: Added progressive examples for zero-copy mesh access, custom IO (in-memory FS), multithreading, and glam integration.
 - **Importer ergonomics**: Added `ImportBuilder::import()` so you can call `Importer::read_file(path)...import()` without repeating the path.
 - **Importer ergonomics**: Added `Importer::{import_file_with,import_from_memory_with}` for closure-based configuration without boilerplate.
+- **Importer ergonomics**: Added `Importer::{read_from_memory_owned,read_from_memory_shared,import_from_memory_owned,import_from_memory_owned_with}` to avoid extra copies when importing from memory.
 
 ### Changed
 - **Scene ownership model (breaking)**: Scene-backed view types (`Mesh`, `Node`, `Material`, `Texture`, etc.) now own a cheap clone of `Scene` instead of borrowing via lifetimes, making them effectively `'static` and more ergonomic for async/multithreading.

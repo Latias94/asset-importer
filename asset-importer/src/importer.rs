@@ -816,6 +816,16 @@ impl Importer {
         ImportBuilder::new().with_source_memory_copy(data)
     }
 
+    /// Start building an import operation from an owned memory buffer (no extra copy).
+    pub fn read_from_memory_owned(&self, data: Vec<u8>) -> ImportBuilder {
+        ImportBuilder::new().with_source_memory_owned(data)
+    }
+
+    /// Start building an import operation from a shared memory buffer (no extra copy).
+    pub fn read_from_memory_shared(&self, data: Arc<[u8]>) -> ImportBuilder {
+        ImportBuilder::new().with_source_memory_shared(data)
+    }
+
     /// Quick import with default settings
     pub fn import_file<P: AsRef<Path>>(&self, path: P) -> Result<Scene> {
         self.read_file(path).import()
@@ -824,6 +834,13 @@ impl Importer {
     /// Quick import from memory with default settings
     pub fn import_from_memory(&self, data: &[u8], hint: Option<&str>) -> Result<Scene> {
         self.read_from_memory(data)
+            .with_memory_hint_opt(hint)
+            .import()
+    }
+
+    /// Quick import from an owned memory buffer (no extra copy).
+    pub fn import_from_memory_owned(&self, data: Vec<u8>, hint: Option<&str>) -> Result<Scene> {
+        self.read_from_memory_owned(data)
             .with_memory_hint_opt(hint)
             .import()
     }
@@ -859,6 +876,19 @@ impl Importer {
         F: FnOnce(ImportBuilder) -> ImportBuilder,
     {
         f(self.read_from_memory(data).with_memory_hint_opt(hint)).import()
+    }
+
+    /// Import from an owned memory buffer with a builder configuration closure (no extra copy).
+    pub fn import_from_memory_owned_with<F>(
+        &self,
+        data: Vec<u8>,
+        hint: Option<&str>,
+        f: F,
+    ) -> Result<Scene>
+    where
+        F: FnOnce(ImportBuilder) -> ImportBuilder,
+    {
+        f(self.read_from_memory_owned(data).with_memory_hint_opt(hint)).import()
     }
 }
 

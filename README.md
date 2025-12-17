@@ -94,6 +94,12 @@ or the `asset-importer-sys` crate) while a `Scene` (or any
 scene-backed view type) is shared across threads. Doing so violates the crate's safety contract and may cause
 undefined behavior.
 
+Practical guidance:
+
+- Prefer the safe API for reading scene data (`Mesh::*_raw()` / `*_iter()` / `MaterialPropertyRef`, etc.).
+- Only enable `raw-sys` when you explicitly need raw bindings, and treat the returned pointers as read-only.
+- Do not call Assimp APIs that mutate or free the scene (e.g. post-processing, freeing, replacing pointers) on a scene that is still alive on the Rust side.
+
 ## Build Options
 
 ### Default: Prebuilt Binaries (Recommended)
@@ -220,6 +226,12 @@ asset-importer = { version = "0.4", default-features = false, features = ["build
 ```
 
 This ensures you can always build from source regardless of release availability.
+
+## Memory Import Notes
+
+`Importer::read_from_memory(&[u8])` stores an owned copy internally so the builder can be `'static` and support `.import()`.
+If you already have an owned buffer, prefer `Importer::read_from_memory_owned(Vec<u8>)` or
+`Importer::import_from_memory_owned(Vec<u8>, hint)` to avoid an extra copy.
 
 ## Architecture
 
