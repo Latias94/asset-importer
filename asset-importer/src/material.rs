@@ -748,7 +748,7 @@ impl Material {
             let m = &*self.material_ptr.as_ptr();
             MaterialPropertyIterator {
                 scene: self.scene.clone(),
-                props: SharedPtr::new(m.mProperties as *const *mut sys::aiMaterialProperty),
+                props: SharedPtr::new(m.mProperties as *const *const sys::aiMaterialProperty),
                 count: m.mNumProperties as usize,
                 index: 0,
             }
@@ -1347,7 +1347,7 @@ impl MaterialPropertyRef {
 /// Iterator over material properties (skips null entries).
 pub struct MaterialPropertyIterator {
     scene: Scene,
-    props: Option<SharedPtr<*mut sys::aiMaterialProperty>>,
+    props: Option<SharedPtr<*const sys::aiMaterialProperty>>,
     count: usize,
     index: usize,
 }

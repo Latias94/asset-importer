@@ -328,7 +328,7 @@ impl Texture {
 /// Iterator over textures in a scene
 pub struct TextureIterator {
     scene: Scene,
-    textures: Option<SharedPtr<*mut sys::aiTexture>>,
+    textures: Option<SharedPtr<*const sys::aiTexture>>,
     count: usize,
     index: usize,
 }
@@ -343,7 +343,7 @@ impl TextureIterator {
         textures: *mut *mut sys::aiTexture,
         count: usize,
     ) -> Self {
-        let textures_ptr = SharedPtr::new(textures as *const *mut sys::aiTexture);
+        let textures_ptr = SharedPtr::new(textures as *const *const sys::aiTexture);
         Self {
             scene,
             textures: textures_ptr,

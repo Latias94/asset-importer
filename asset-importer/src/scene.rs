@@ -805,26 +805,28 @@ impl Scene {
 
     /// Find a texture by filename
     pub fn find_texture_by_filename(&self, filename: &str) -> Option<Texture> {
-        self.textures().find(|texture| {
-            texture
-                .filename()
-                .map(|name| name == filename)
-                .unwrap_or(false)
-        })
+        self.textures()
+            .find(|texture| texture.filename_str().is_some_and(|name| name == filename))
+    }
+
+    /// Iterate over compressed textures.
+    pub fn compressed_textures_iter(&self) -> impl Iterator<Item = Texture> + '_ {
+        self.textures().filter(|t| t.is_compressed())
     }
 
     /// Get all compressed textures
     pub fn compressed_textures(&self) -> Vec<Texture> {
-        self.textures()
-            .filter(|texture| texture.is_compressed())
-            .collect()
+        self.compressed_textures_iter().collect()
+    }
+
+    /// Iterate over uncompressed textures.
+    pub fn uncompressed_textures_iter(&self) -> impl Iterator<Item = Texture> + '_ {
+        self.textures().filter(|t| t.is_uncompressed())
     }
 
     /// Get all uncompressed textures
     pub fn uncompressed_textures(&self) -> Vec<Texture> {
-        self.textures()
-            .filter(|texture| texture.is_uncompressed())
-            .collect()
+        self.uncompressed_textures_iter().collect()
     }
 
     /// Get embedded texture by filename hint (e.g. "*0", "*1")
@@ -832,6 +834,18 @@ impl Scene {
         let c = std::ffi::CString::new(name).ok()?;
         unsafe {
             let tex = sys::aiGetEmbeddedTexture(self.inner.scene_ptr.as_ptr(), c.as_ptr());
+            if tex.is_null() {
+                None
+            } else {
+                Texture::from_raw(self.clone(), tex).ok()
+            }
+        }
+    }
+
+    /// Get embedded texture by filename hint (e.g. "*0", "*1") without allocating.
+    pub fn embedded_texture_by_cstr(&self, name: &std::ffi::CStr) -> Option<Texture> {
+        unsafe {
+            let tex = sys::aiGetEmbeddedTexture(self.inner.scene_ptr.as_ptr(), name.as_ptr());
             if tex.is_null() {
                 None
             } else {

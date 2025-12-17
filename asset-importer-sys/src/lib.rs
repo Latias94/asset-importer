@@ -10,6 +10,22 @@
 #![allow(clippy::all)]
 #![allow(unpredictable_function_pointer_comparisons)]
 
+#[cfg(any(
+    all(feature = "system", feature = "prebuilt"),
+    all(feature = "system", feature = "build-assimp"),
+    all(feature = "prebuilt", feature = "build-assimp"),
+))]
+compile_error!(
+    "Build mode features are mutually exclusive. Use at most one of: `system`, `prebuilt`, `build-assimp`.\n\
+     Hint: use `system` to link against a system-installed Assimp, `prebuilt` to download prebuilt binaries, or `build-assimp` to build from source."
+);
+
+#[cfg(all(feature = "system", not(feature = "generate-bindings")))]
+compile_error!(
+    "feature `system` requires `generate-bindings` so Rust bindings match the system Assimp headers.\n\
+     Hint: enable `asset-importer-sys/generate-bindings` (or use `build-assimp` / `prebuilt`)."
+);
+
 // Include the generated bindings
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 

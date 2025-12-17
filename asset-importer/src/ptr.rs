@@ -54,7 +54,6 @@ unsafe impl SharedPtrTarget for crate::raw::AiFace {}
 // Pointer arrays in Assimp use `T**` layouts; treat the pointer elements as shareable only
 // when the pointee type itself is a valid shared target.
 unsafe impl<T: SharedPtrTarget> SharedPtrTarget for *const T {}
-unsafe impl<T: SharedPtrTarget> SharedPtrTarget for *mut T {}
 
 impl<T> SharedPtr<T> {
     /// Creates a new `SharedPtr` if `ptr` is non-null.

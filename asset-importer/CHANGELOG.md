@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **More typed property reads**: Added `MaterialPropertyRef::{data_u32,as_i32,as_u32,as_bool,as_f32,as_f64}` for ergonomic scalar/typed reads.
 - **Typed vectors/colors**: Added `MaterialPropertyRef::{as_f32_array,as_f64_array,as_vec2,as_vec3,as_vec4,as_color3,as_color4}` for unaligned-safe, allocation-free decoding of common float payloads.
 - **Allocation-free string properties**: Added `MaterialPropertyRef::string_ref()` to decode `aiString` payloads without heap allocation.
+- **Texture iter helpers**: Added `Scene::{compressed_textures_iter,uncompressed_textures_iter}` and `Scene::embedded_texture_by_cstr()` to avoid allocations in hot loops.
 
 ### Changed
 - **Scene ownership model (breaking)**: Scene-backed view types (`Mesh`, `Node`, `Material`, `Texture`, etc.) now own a cheap clone of `Scene` instead of borrowing via lifetimes, making them effectively `'static` and more ergonomic for async/multithreading.
@@ -32,6 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Thread-safety internals**: Centralized Assimp pointer sharing logic to reduce scattered `unsafe impl Send/Sync` across the codebase.
 - **Material property keys (breaking)**: `material_keys::*` are now `&CStr` constants, and `Material::get_*_property` APIs prefer `&CStr` with `*_str` convenience wrappers.
 - **Raw sys bindings opt-in (breaking)**: `asset_importer::sys` is now behind the `raw-sys` feature to reduce accidental safety contract violations.
+- **Build mode features (breaking)**: `prebuilt`, `build-assimp`, and `system` are now enforced as mutually exclusive; for `system` use `--no-default-features --features system`.
 - **Raw pointers opt-in (breaking)**: `Scene::as_raw()` (and similar `as_raw()` accessors on scene-backed view types) now require the `raw-sys` feature; the default API stays sys-free.
 - **Zero-copy API types (breaking)**: `Mesh::vertices_raw()`/`normals_raw()`/etc and `Texture::data_ref()` now return `asset_importer::raw::*` or crate-owned types instead of `sys::*`, so users can consume zero-copy data without enabling `raw-sys`.
 - **Raw view safety (breaking)**: `asset_importer::raw::AiFace::indices_unchecked()` is now `unsafe` to prevent safe Rust from dereferencing arbitrary user-provided pointers.

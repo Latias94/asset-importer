@@ -39,9 +39,27 @@
 //! - **Ergonomic**: Builder patterns and method chaining
 //! - **Efficient**: Zero-copy where possible
 //! - **Extensible**: Support for custom I/O and callbacks
+//!
+//! ## Build features
+//! This crate supports three mutually exclusive build modes:
+//! - `prebuilt` (default): download/use prebuilt Assimp binaries via `asset-importer-sys`
+//! - `build-assimp`: build Assimp from source via CMake
+//! - `system`: link against a system-installed Assimp (requires libclang/bindgen)
+//!
+//! For `system`, use `--no-default-features --features system`.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![warn(missing_docs)]
+
+#[cfg(any(
+    all(feature = "prebuilt", feature = "build-assimp"),
+    all(feature = "prebuilt", feature = "system"),
+    all(feature = "build-assimp", feature = "system"),
+))]
+compile_error!(
+    "Build mode features are mutually exclusive. Use exactly one of: `prebuilt` (default), `build-assimp`, or `system`.\n\
+     Hint: for system Assimp use `--no-default-features --features system`."
+);
 
 #[cfg(feature = "raw-sys")]
 pub use asset_importer_sys as sys;

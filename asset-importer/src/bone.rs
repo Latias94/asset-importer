@@ -240,7 +240,7 @@ impl Bone {
 /// Iterator over bones in a mesh
 pub struct BoneIterator {
     scene: Scene,
-    bones: Option<SharedPtr<*mut sys::aiBone>>,
+    bones: Option<SharedPtr<*const sys::aiBone>>,
     count: usize,
     index: usize,
 }
@@ -251,7 +251,7 @@ impl BoneIterator {
     /// # Safety
     /// The caller must ensure that the bones pointer and count are valid.
     pub(crate) unsafe fn new(scene: Scene, bones: *mut *mut sys::aiBone, count: usize) -> Self {
-        let bones_ptr = SharedPtr::new(bones as *const *mut sys::aiBone);
+        let bones_ptr = SharedPtr::new(bones as *const *const sys::aiBone);
         let count = if bones_ptr.is_some() { count } else { 0 };
         Self {
             scene,

@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - **Deterministic bindings by default**: Non-`system` builds now use the shipped pregenerated bindings by default (no libclang required), avoiding header/version skew and speeding up builds.
 - **Opt-in bindgen**: Added feature `generate-bindings` to regenerate bindings at build time when needed.
+- **Mutually exclusive build modes**: `system`, `prebuilt`, and `build-assimp` are now enforced as mutually exclusive to reduce surprising dependency/build behavior.
 
 ### Changed
 - **Bundled Assimp updated**: Updated the `assimp` submodule to `v6.0.2` (`fb375dd8c66f1c47dd000548f44d81b47f4466df`).
