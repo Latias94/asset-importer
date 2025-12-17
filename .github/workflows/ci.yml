@@ -95,6 +95,26 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y cmake build-essential
 
+      - name: Check examples (build-assimp)
+        run: cargo check -p asset-importer --examples --no-default-features --features build-assimp
+        env:
+          ASSET_IMPORTER_FORCE_BUILD: "1"
+
+      - name: Check example (mint)
+        run: cargo check -p asset-importer --example 07_mint_integration --no-default-features --features "build-assimp,mint"
+        env:
+          ASSET_IMPORTER_FORCE_BUILD: "1"
+
+      - name: Check example (glam)
+        run: cargo check -p asset-importer --example 11_glam_integration --no-default-features --features "build-assimp,glam"
+        env:
+          ASSET_IMPORTER_FORCE_BUILD: "1"
+
+      - name: Check build (bytemuck)
+        run: cargo check -p asset-importer --no-default-features --features "build-assimp,bytemuck"
+        env:
+          ASSET_IMPORTER_FORCE_BUILD: "1"
+
       - name: Test (raw-sys)
         run: cargo test -p asset-importer --no-default-features --features "build-assimp,raw-sys"
         env:
@@ -102,6 +122,11 @@ jobs:
 
       - name: Test (export)
         run: cargo test -p asset-importer --no-default-features --features "build-assimp,export"
+        env:
+          ASSET_IMPORTER_FORCE_BUILD: "1"
+
+      - name: Check example (export)
+        run: cargo check -p asset-importer --example 06_convert --no-default-features --features "build-assimp,export"
         env:
           ASSET_IMPORTER_FORCE_BUILD: "1"
 
