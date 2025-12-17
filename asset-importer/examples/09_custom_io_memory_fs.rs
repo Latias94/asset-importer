@@ -1,9 +1,6 @@
 //! Custom IO: import from an in-memory file system (OBJ + MTL).
 
-use std::{
-    error::Error,
-    sync::{Arc, Mutex},
-};
+use std::error::Error;
 
 use asset_importer::{Importer, io::MemoryFileSystem, postprocess::PostProcessSteps};
 
@@ -35,8 +32,6 @@ d 1.0
     let mut fs = MemoryFileSystem::new();
     fs.add_file("cube.obj", obj.as_bytes().to_vec());
     fs.add_file("cube.mtl", mtl.as_bytes().to_vec());
-
-    let fs = Arc::new(Mutex::new(fs));
 
     let scene = Importer::new()
         .read_file("cube.obj")

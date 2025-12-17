@@ -47,8 +47,16 @@ impl ExportBuilder {
         self
     }
 
-    /// Use a custom file system for exporting (uses aiExportSceneEx)
-    pub fn with_file_system(
+    /// Use a custom file system for exporting (uses aiExportSceneEx).
+    pub fn with_file_system<F>(self, file_system: F) -> Self
+    where
+        F: FileSystem + 'static,
+    {
+        self.with_file_system_shared(std::sync::Arc::new(std::sync::Mutex::new(file_system)))
+    }
+
+    /// Use a custom file system for exporting, from an explicitly shared handle.
+    pub fn with_file_system_shared(
         mut self,
         file_system: std::sync::Arc<std::sync::Mutex<dyn FileSystem>>,
     ) -> Self {

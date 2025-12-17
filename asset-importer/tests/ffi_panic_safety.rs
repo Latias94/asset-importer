@@ -4,7 +4,6 @@
 
 use asset_importer::io::{FileStream, FileSystem};
 use asset_importer::{Error, Importer};
-use std::sync::{Arc, Mutex};
 
 #[derive(Debug)]
 struct PanicFs;
@@ -26,13 +25,12 @@ impl FileSystem for PanicFs {
 #[test]
 fn test_file_system_panic_does_not_unwind_over_ffi() {
     let importer = Importer::new();
-    let fs: Arc<Mutex<dyn FileSystem>> = Arc::new(Mutex::new(PanicFs));
 
     // The important property: this must not abort or unwind across the C ABI.
     // A panic inside the FileSystem should be caught and turned into an import error.
     let result = importer
         .read_file("does-not-matter.obj")
-        .with_file_system(fs)
+        .with_file_system(PanicFs)
         .import_file("does-not-matter.obj");
 
     assert!(result.is_err());

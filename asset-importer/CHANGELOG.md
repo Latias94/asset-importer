@@ -40,6 +40,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Mint/glam integrations (breaking)**: `glam` is now an optional feature; mint conversions use standard `From`/`Into` (the `07_mint_integration` example now requires `--features mint`).
 - **Docs (breaking feature flags)**: Updated README and examples to consistently use mutually exclusive build modes (e.g. `--no-default-features --features build-assimp`).
 - **Custom IO performance**: `MemoryFileSystem::open()` now returns a read-only stream backed by a shared `Arc<[u8]>` buffer (no per-open byte cloning).
+- **Builder ergonomics**: `ImportBuilder::with_file_system` and `ExportBuilder::with_file_system` now accept `impl FileSystem` directly; use `*_with_file_system_shared` when you need to share an `Arc<Mutex<dyn FileSystem>>`.
+- **Progress ergonomics**: Added `ImportBuilder::with_progress_handler_fn` for closure-based progress callbacks.
 - **Extension support API (breaking)**: `is_extension_supported()` now returns `Result<bool>` instead of silently treating embedded NUL bytes as unsupported.
 - **Examples build gating**: `model_loading_demo` is now behind the `demo` feature to avoid compiling heavy windowing/OpenGL deps during `cargo test`.
 - **Raw pointers opt-in (breaking)**: `Scene::as_raw()` (and similar `as_raw()` accessors on scene-backed view types) now require the `raw-sys` feature; the default API stays sys-free.

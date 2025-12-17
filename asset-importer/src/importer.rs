@@ -253,8 +253,19 @@ impl ImportBuilder {
         self
     }
 
-    /// Set a custom file system
-    pub fn with_file_system(
+    /// Set a custom file system (ergonomic wrapper).
+    ///
+    /// Prefer this over [`ImportBuilder::with_file_system_shared`] unless you need to share a
+    /// single file system instance across multiple importers/builders.
+    pub fn with_file_system<F>(self, file_system: F) -> Self
+    where
+        F: FileSystem + 'static,
+    {
+        self.with_file_system_shared(std::sync::Arc::new(std::sync::Mutex::new(file_system)))
+    }
+
+    /// Set a custom file system from an explicitly shared handle.
+    pub fn with_file_system_shared(
         mut self,
         file_system: std::sync::Arc<std::sync::Mutex<dyn FileSystem>>,
     ) -> Self {
@@ -266,6 +277,14 @@ impl ImportBuilder {
     pub fn with_progress_handler(mut self, handler: Box<dyn ProgressHandler>) -> Self {
         self.progress_handler = Some(handler);
         self
+    }
+
+    /// Set a progress handler from a closure.
+    pub fn with_progress_handler_fn<F>(self, f: F) -> Self
+    where
+        F: FnMut(f32, Option<&str>) -> bool + Send + 'static,
+    {
+        self.with_progress_handler(Box::new(crate::progress::ClosureProgressHandler::new(f)))
     }
 
     /// Import a scene from a file path
