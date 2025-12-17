@@ -5,7 +5,7 @@
 
 use crate::{
     error::Result,
-    sys,
+    raw, sys,
     types::{Vector3D, ai_string_to_string},
 };
 
@@ -283,7 +283,7 @@ impl Metadata {
                 Ok(MetadataEntry::String(ai_string_to_string(ai_string)))
             }
             sys::aiMetadataType::AI_AIVECTOR3D => {
-                let vector = unsafe { &*(entry.mData as *const sys::aiVector3D) };
+                let vector = unsafe { &*(entry.mData as *const raw::AiVector3D) };
                 Ok(MetadataEntry::Vector3D(crate::types::Vector3D::new(
                     vector.x, vector.y, vector.z,
                 )))

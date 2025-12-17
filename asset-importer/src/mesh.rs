@@ -377,7 +377,7 @@ impl<'a> Mesh<'a> {
 
     /// Find a bone by name
     pub fn find_bone_by_name(&self, name: &str) -> Option<Bone<'a>> {
-        self.bones().find(|bone| bone.name() == name)
+        self.bones().find(|bone| bone.name_str().as_ref() == name)
     }
 
     /// Get all bone names

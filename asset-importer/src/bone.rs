@@ -312,7 +312,10 @@ pub mod utils {
         bones: &'a [Bone<'scene>],
         name: &str,
     ) -> Vec<&'a Bone<'scene>> {
-        bones.iter().filter(|bone| bone.name() == name).collect()
+        bones
+            .iter()
+            .filter(|bone| bone.name_str().as_ref() == name)
+            .collect()
     }
 
     /// Get the maximum number of bones affecting any single vertex

@@ -7,6 +7,7 @@ use std::ffi::CStr;
 use std::ffi::CString;
 use std::marker::PhantomData;
 
+use crate::raw;
 use crate::{
     ptr::SharedPtr,
     sys,
@@ -843,11 +844,11 @@ impl<'a> Material<'a> {
                 if ok && !prop_ptr.is_null() {
                     let prop = &*prop_ptr;
                     if prop.mData.is_null()
-                        || prop.mDataLength < std::mem::size_of::<sys::aiVector3D>() as u32
+                        || prop.mDataLength < std::mem::size_of::<raw::AiVector3D>() as u32
                     {
                         None
                     } else {
-                        let v = *(prop.mData as *const sys::aiVector3D);
+                        let v = *(prop.mData as *const raw::AiVector3D);
                         Some(Vector3D::new(v.x, v.y, v.z))
                     }
                 } else {
