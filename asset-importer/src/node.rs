@@ -74,7 +74,14 @@ impl<'a> Node<'a> {
 
     /// Get the number of child nodes
     pub fn num_children(&self) -> usize {
-        unsafe { (*self.node_ptr.as_ptr()).mNumChildren as usize }
+        unsafe {
+            let node = &*self.node_ptr.as_ptr();
+            if node.mChildren.is_null() {
+                0
+            } else {
+                node.mNumChildren as usize
+            }
+        }
     }
 
     /// Get a child node by index
@@ -85,6 +92,9 @@ impl<'a> Node<'a> {
 
         unsafe {
             let node = &*self.node_ptr.as_ptr();
+            if node.mChildren.is_null() {
+                return None;
+            }
             let child_ptr = *node.mChildren.add(index);
             if child_ptr.is_null() {
                 None
@@ -105,7 +115,14 @@ impl<'a> Node<'a> {
 
     /// Get the number of meshes attached to this node
     pub fn num_meshes(&self) -> usize {
-        unsafe { (*self.node_ptr.as_ptr()).mNumMeshes as usize }
+        unsafe {
+            let node = &*self.node_ptr.as_ptr();
+            if node.mMeshes.is_null() {
+                0
+            } else {
+                node.mNumMeshes as usize
+            }
+        }
     }
 
     /// Get a mesh index by index
@@ -116,6 +133,9 @@ impl<'a> Node<'a> {
 
         unsafe {
             let node = &*self.node_ptr.as_ptr();
+            if node.mMeshes.is_null() {
+                return None;
+            }
             Some(*node.mMeshes.add(index) as usize)
         }
     }
@@ -180,6 +200,9 @@ impl<'a> Iterator for NodeIterator<'a> {
     fn next(&mut self) -> Option<Self::Item> {
         unsafe {
             let node = &*self.node_ptr.as_ptr();
+            if node.mChildren.is_null() || node.mNumChildren == 0 {
+                return None;
+            }
             if self.index >= node.mNumChildren as usize {
                 None
             } else {
@@ -197,8 +220,12 @@ impl<'a> Iterator for NodeIterator<'a> {
     fn size_hint(&self) -> (usize, Option<usize>) {
         unsafe {
             let node = &*self.node_ptr.as_ptr();
-            let remaining = (node.mNumChildren as usize).saturating_sub(self.index);
-            (remaining, Some(remaining))
+            if node.mChildren.is_null() {
+                (0, Some(0))
+            } else {
+                let remaining = (node.mNumChildren as usize).saturating_sub(self.index);
+                (remaining, Some(remaining))
+            }
         }
     }
 }
@@ -218,6 +245,9 @@ impl<'a> Iterator for MeshIndexIterator<'a> {
     fn next(&mut self) -> Option<Self::Item> {
         unsafe {
             let node = &*self.node_ptr.as_ptr();
+            if node.mMeshes.is_null() || node.mNumMeshes == 0 {
+                return None;
+            }
             if self.index >= node.mNumMeshes as usize {
                 None
             } else {
@@ -231,8 +261,12 @@ impl<'a> Iterator for MeshIndexIterator<'a> {
     fn size_hint(&self) -> (usize, Option<usize>) {
         unsafe {
             let node = &*self.node_ptr.as_ptr();
-            let remaining = (node.mNumMeshes as usize).saturating_sub(self.index);
-            (remaining, Some(remaining))
+            if node.mMeshes.is_null() {
+                (0, Some(0))
+            } else {
+                let remaining = (node.mNumMeshes as usize).saturating_sub(self.index);
+                (remaining, Some(remaining))
+            }
         }
     }
 }

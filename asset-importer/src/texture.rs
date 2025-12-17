@@ -175,18 +175,28 @@ impl<'a> Texture<'a> {
     pub fn data_ref(&self) -> Result<TextureDataRef<'a>> {
         unsafe {
             let texture = &*self.texture_ptr.as_ptr();
-            if texture.pcData.is_null() {
-                return Err(Error::invalid_scene("Texture data is null"));
-            }
-
             if self.is_compressed() {
                 let size = self.width() as usize;
+                if size == 0 {
+                    return Ok(TextureDataRef::Compressed(&[]));
+                }
+                if texture.pcData.is_null() {
+                    return Err(Error::invalid_scene("Texture data is null"));
+                }
                 let data_ptr = texture.pcData as *const u8;
-                Ok(TextureDataRef::Compressed(std::slice::from_raw_parts(
-                    data_ptr, size,
-                )))
+                Ok(TextureDataRef::Compressed(std::slice::from_raw_parts(data_ptr, size)))
             } else {
-                let size = (self.width() * self.height()) as usize;
+                let width = self.width() as usize;
+                let height = self.height() as usize;
+                let Some(size) = width.checked_mul(height) else {
+                    return Err(Error::invalid_scene("Texture dimensions overflow"));
+                };
+                if size == 0 {
+                    return Ok(TextureDataRef::Texels(&[]));
+                }
+                if texture.pcData.is_null() {
+                    return Err(Error::invalid_scene("Texture data is null"));
+                }
                 Ok(TextureDataRef::Texels(std::slice::from_raw_parts(
                     texture.pcData as *const Texel,
                     size,
@@ -247,7 +257,9 @@ impl<'a> Texture<'a> {
         if self.is_compressed() {
             self.width() as usize
         } else {
-            (self.width() * self.height() * 4) as usize // 4 bytes per texel (ARGB)
+            let w = self.width() as u64;
+            let h = self.height() as u64;
+            w.saturating_mul(h).saturating_mul(4) as usize // 4 bytes per texel (ARGB)
         }
     }
 
@@ -295,9 +307,10 @@ impl<'a> TextureIterator<'a> {
     /// # Safety
     /// The caller must ensure that the textures pointer and count are valid.
     pub(crate) unsafe fn new(textures: *mut *mut sys::aiTexture, count: usize) -> Self {
+        let textures_ptr = SharedPtr::new(textures as *const *mut sys::aiTexture);
         Self {
-            textures: SharedPtr::new(textures as *const *mut sys::aiTexture),
-            count,
+            textures: textures_ptr,
+            count: if textures_ptr.is_some() { count } else { 0 },
             index: 0,
             _marker: PhantomData,
         }

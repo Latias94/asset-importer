@@ -10,6 +10,7 @@ use crate::{
     ptr::SharedPtr,
     scene::Scene,
     sys,
+    types::ai_string_to_string,
 };
 
 /// Builder for configuring and executing scene exports
@@ -205,13 +206,10 @@ impl<'a> ExportBlobView<'a> {
     pub fn name(&self) -> String {
         unsafe {
             let blob = &*self.blob_ptr.as_ptr();
-            let name_data = blob.name.data.as_ptr();
             if blob.name.length == 0 {
                 String::new()
             } else {
-                std::ffi::CStr::from_ptr(name_data)
-                    .to_string_lossy()
-                    .into_owned()
+                ai_string_to_string(&blob.name)
             }
         }
     }

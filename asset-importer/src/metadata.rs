@@ -228,6 +228,9 @@ impl Metadata {
         }
 
         let metadata = unsafe { &*metadata_ptr };
+        if metadata.mNumProperties > 0 && (metadata.mKeys.is_null() || metadata.mValues.is_null()) {
+            return Ok(Self::new());
+        }
         let mut entries = std::collections::HashMap::new();
 
         // Parse each metadata entry

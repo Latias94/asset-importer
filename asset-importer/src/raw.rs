@@ -61,14 +61,17 @@ impl AiFace {
         self.mNumIndices as usize
     }
 
-    /// Index slice (zero-copy). Returns empty slice if pointer is null or count is 0.
-    pub fn indices(&self) -> &[u32] {
-        unsafe {
-            if self.mIndices.is_null() || self.mNumIndices == 0 {
-                &[]
-            } else {
-                std::slice::from_raw_parts(self.mIndices, self.mNumIndices as usize)
-            }
+    /// Index slice (zero-copy).
+    ///
+    /// # Safety
+    /// `self.mIndices` must point to at least `self.mNumIndices` valid `u32` entries.
+    /// This is true for values borrowed from an Assimp-owned scene. It is **not**
+    /// guaranteed for arbitrary `AiFace` values constructed by user code.
+    pub unsafe fn indices_unchecked(&self) -> &[u32] {
+        if self.mIndices.is_null() || self.mNumIndices == 0 {
+            &[]
+        } else {
+            unsafe { std::slice::from_raw_parts(self.mIndices, self.mNumIndices as usize) }
         }
     }
 }

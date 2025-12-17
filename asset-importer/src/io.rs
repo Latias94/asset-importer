@@ -358,6 +358,9 @@ extern "C" fn file_open_proc(
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| unsafe {
         // Get the file system from user data
         let file_system_ptr = (*file_io).UserData as *mut Arc<Mutex<dyn FileSystem>>;
+        if file_system_ptr.is_null() {
+            return ptr::null_mut();
+        }
         let file_system = &*file_system_ptr;
 
         // Convert filename to Rust string
@@ -410,7 +413,7 @@ extern "C" fn file_open_proc(
 /// C callback for closing files
 extern "C" fn file_close_proc(_file_io: *mut sys::aiFileIO, file: *mut sys::aiFile) {
     if !file.is_null() {
-        unsafe {
+        let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| unsafe {
             // Clean up the file wrapper
             let wrapper_ptr = (*file).UserData as *mut FileWrapper;
             if !wrapper_ptr.is_null() {
@@ -419,7 +422,7 @@ extern "C" fn file_close_proc(_file_io: *mut sys::aiFileIO, file: *mut sys::aiFi
 
             // Clean up the aiFile
             let _ = Box::from_raw(file);
-        }
+        }));
     }
 }
 
@@ -441,7 +444,9 @@ extern "C" fn file_read_proc(
         }
 
         let wrapper = &mut *wrapper_ptr;
-        let total_bytes = size * count;
+        let Some(total_bytes) = size.checked_mul(count) else {
+            return 0;
+        };
         let rust_buffer = std::slice::from_raw_parts_mut(buffer as *mut u8, total_bytes);
 
         match wrapper.stream.read(rust_buffer) {
@@ -473,7 +478,9 @@ extern "C" fn file_write_proc(
             return 0;
         }
         let wrapper = &mut *wrapper_ptr;
-        let total_bytes = size * count;
+        let Some(total_bytes) = size.checked_mul(count) else {
+            return 0;
+        };
 
         if total_bytes == 0 {
             return 0;

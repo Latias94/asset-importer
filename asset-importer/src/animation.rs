@@ -64,7 +64,14 @@ impl<'a> Animation<'a> {
 
     /// Get the number of node animation channels
     pub fn num_channels(&self) -> usize {
-        unsafe { (*self.animation_ptr.as_ptr()).mNumChannels as usize }
+        unsafe {
+            let anim = &*self.animation_ptr.as_ptr();
+            if anim.mChannels.is_null() {
+                0
+            } else {
+                anim.mNumChannels as usize
+            }
+        }
     }
 
     /// Get a node animation channel by index
@@ -75,6 +82,9 @@ impl<'a> Animation<'a> {
 
         unsafe {
             let animation = &*self.animation_ptr.as_ptr();
+            if animation.mChannels.is_null() {
+                return None;
+            }
             let channel_ptr = *animation.mChannels.add(index);
             if channel_ptr.is_null() {
                 None
@@ -95,7 +105,14 @@ impl<'a> Animation<'a> {
 
     /// Get the number of mesh animation channels (vertex anim via aiAnimMesh)
     pub fn num_mesh_channels(&self) -> usize {
-        unsafe { (*self.animation_ptr.as_ptr()).mNumMeshChannels as usize }
+        unsafe {
+            let anim = &*self.animation_ptr.as_ptr();
+            if anim.mMeshChannels.is_null() {
+                0
+            } else {
+                anim.mNumMeshChannels as usize
+            }
+        }
     }
 
     /// Get a mesh animation channel
@@ -104,7 +121,11 @@ impl<'a> Animation<'a> {
             return None;
         }
         unsafe {
-            let ptr = *(*self.animation_ptr.as_ptr()).mMeshChannels.add(index);
+            let anim = &*self.animation_ptr.as_ptr();
+            if anim.mMeshChannels.is_null() {
+                return None;
+            }
+            let ptr = *anim.mMeshChannels.add(index);
             if ptr.is_null() {
                 None
             } else {
@@ -124,7 +145,14 @@ impl<'a> Animation<'a> {
 
     /// Get the number of morph mesh animation channels
     pub fn num_morph_mesh_channels(&self) -> usize {
-        unsafe { (*self.animation_ptr.as_ptr()).mNumMorphMeshChannels as usize }
+        unsafe {
+            let anim = &*self.animation_ptr.as_ptr();
+            if anim.mMorphMeshChannels.is_null() {
+                0
+            } else {
+                anim.mNumMorphMeshChannels as usize
+            }
+        }
     }
 
     /// Get a morph mesh animation channel
@@ -133,7 +161,11 @@ impl<'a> Animation<'a> {
             return None;
         }
         unsafe {
-            let ptr = *(*self.animation_ptr.as_ptr()).mMorphMeshChannels.add(index);
+            let anim = &*self.animation_ptr.as_ptr();
+            if anim.mMorphMeshChannels.is_null() {
+                return None;
+            }
+            let ptr = *anim.mMorphMeshChannels.add(index);
             if ptr.is_null() {
                 None
             } else {
@@ -190,7 +222,14 @@ impl<'a> NodeAnimation<'a> {
 
     /// Get the number of position keyframes
     pub fn num_position_keys(&self) -> usize {
-        unsafe { (*self.channel_ptr.as_ptr()).mNumPositionKeys as usize }
+        unsafe {
+            let ch = &*self.channel_ptr.as_ptr();
+            if ch.mPositionKeys.is_null() {
+                0
+            } else {
+                ch.mNumPositionKeys as usize
+            }
+        }
     }
 
     /// Get the raw position keyframes (zero-copy).
@@ -223,7 +262,14 @@ impl<'a> NodeAnimation<'a> {
 
     /// Get the number of rotation keyframes
     pub fn num_rotation_keys(&self) -> usize {
-        unsafe { (*self.channel_ptr.as_ptr()).mNumRotationKeys as usize }
+        unsafe {
+            let ch = &*self.channel_ptr.as_ptr();
+            if ch.mRotationKeys.is_null() {
+                0
+            } else {
+                ch.mNumRotationKeys as usize
+            }
+        }
     }
 
     /// Get the raw rotation keyframes (zero-copy).
@@ -256,7 +302,14 @@ impl<'a> NodeAnimation<'a> {
 
     /// Get the number of scaling keyframes
     pub fn num_scaling_keys(&self) -> usize {
-        unsafe { (*self.channel_ptr.as_ptr()).mNumScalingKeys as usize }
+        unsafe {
+            let ch = &*self.channel_ptr.as_ptr();
+            if ch.mScalingKeys.is_null() {
+                0
+            } else {
+                ch.mNumScalingKeys as usize
+            }
+        }
     }
 
     /// Get the raw scaling keyframes (zero-copy).
@@ -405,6 +458,9 @@ impl<'a> Iterator for NodeAnimationIterator<'a> {
     fn next(&mut self) -> Option<Self::Item> {
         unsafe {
             let animation = &*self.animation_ptr.as_ptr();
+            if animation.mChannels.is_null() || animation.mNumChannels == 0 {
+                return None;
+            }
             if self.index >= animation.mNumChannels as usize {
                 None
             } else {
@@ -422,8 +478,12 @@ impl<'a> Iterator for NodeAnimationIterator<'a> {
     fn size_hint(&self) -> (usize, Option<usize>) {
         unsafe {
             let animation = &*self.animation_ptr.as_ptr();
-            let remaining = (animation.mNumChannels as usize).saturating_sub(self.index);
-            (remaining, Some(remaining))
+            if animation.mChannels.is_null() {
+                (0, Some(0))
+            } else {
+                let remaining = (animation.mNumChannels as usize).saturating_sub(self.index);
+                (remaining, Some(remaining))
+            }
         }
     }
 }
@@ -467,14 +527,25 @@ impl<'a> MeshAnimation<'a> {
 
     /// Get the number of animation keys
     pub fn num_keys(&self) -> usize {
-        unsafe { (*self.channel_ptr.as_ptr()).mNumKeys as usize }
+        unsafe {
+            let ch = &*self.channel_ptr.as_ptr();
+            if ch.mKeys.is_null() {
+                0
+            } else {
+                ch.mNumKeys as usize
+            }
+        }
     }
 
     /// Get the array of animation keys
     pub fn keys(&self) -> &[MeshKey] {
         unsafe {
             let ch = &*self.channel_ptr.as_ptr();
-            std::slice::from_raw_parts(ch.mKeys as *const MeshKey, ch.mNumKeys as usize)
+            if ch.mKeys.is_null() || ch.mNumKeys == 0 {
+                &[]
+            } else {
+                std::slice::from_raw_parts(ch.mKeys as *const MeshKey, ch.mNumKeys as usize)
+            }
         }
     }
 }
@@ -491,6 +562,9 @@ impl<'a> Iterator for MeshAnimationIterator<'a> {
     fn next(&mut self) -> Option<Self::Item> {
         unsafe {
             let anim = &*self.animation_ptr.as_ptr();
+            if anim.mMeshChannels.is_null() || anim.mNumMeshChannels == 0 {
+                return None;
+            }
             if self.index >= anim.mNumMeshChannels as usize {
                 None
             } else {
@@ -507,8 +581,12 @@ impl<'a> Iterator for MeshAnimationIterator<'a> {
     fn size_hint(&self) -> (usize, Option<usize>) {
         unsafe {
             let anim = &*self.animation_ptr.as_ptr();
-            let remaining = (anim.mNumMeshChannels as usize).saturating_sub(self.index);
-            (remaining, Some(remaining))
+            if anim.mMeshChannels.is_null() {
+                (0, Some(0))
+            } else {
+                let remaining = (anim.mNumMeshChannels as usize).saturating_sub(self.index);
+                (remaining, Some(remaining))
+            }
         }
     }
 }
@@ -550,7 +628,14 @@ impl<'a> MorphMeshAnimation<'a> {
 
     /// Get the number of animation keys
     pub fn num_keys(&self) -> usize {
-        unsafe { (*self.channel_ptr.as_ptr()).mNumKeys as usize }
+        unsafe {
+            let ch = &*self.channel_ptr.as_ptr();
+            if ch.mKeys.is_null() {
+                0
+            } else {
+                ch.mNumKeys as usize
+            }
+        }
     }
 
     /// Get a specific animation key by index
@@ -560,6 +645,9 @@ impl<'a> MorphMeshAnimation<'a> {
         }
         unsafe {
             let ch = &*self.channel_ptr.as_ptr();
+            if ch.mKeys.is_null() {
+                return None;
+            }
             let key = &*ch.mKeys.add(index);
             let n = key.mNumValuesAndWeights as usize;
             if key.mValues.is_null() || key.mWeights.is_null() {
@@ -588,6 +676,9 @@ impl<'a> Iterator for MorphMeshAnimationIterator<'a> {
     fn next(&mut self) -> Option<Self::Item> {
         unsafe {
             let anim = &*self.animation_ptr.as_ptr();
+            if anim.mMorphMeshChannels.is_null() || anim.mNumMorphMeshChannels == 0 {
+                return None;
+            }
             if self.index >= anim.mNumMorphMeshChannels as usize {
                 None
             } else {
@@ -604,8 +695,12 @@ impl<'a> Iterator for MorphMeshAnimationIterator<'a> {
     fn size_hint(&self) -> (usize, Option<usize>) {
         unsafe {
             let anim = &*self.animation_ptr.as_ptr();
-            let remaining = (anim.mNumMorphMeshChannels as usize).saturating_sub(self.index);
-            (remaining, Some(remaining))
+            if anim.mMorphMeshChannels.is_null() {
+                (0, Some(0))
+            } else {
+                let remaining = (anim.mNumMorphMeshChannels as usize).saturating_sub(self.index);
+                (remaining, Some(remaining))
+            }
         }
     }
 }

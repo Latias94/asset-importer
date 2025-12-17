@@ -314,7 +314,14 @@ impl<'a> Mesh<'a> {
 
     /// Get the number of animation meshes (morph targets)
     pub fn num_anim_meshes(&self) -> usize {
-        unsafe { (*self.mesh_ptr.as_ptr()).mNumAnimMeshes as usize }
+        unsafe {
+            let mesh = &*self.mesh_ptr.as_ptr();
+            if mesh.mAnimMeshes.is_null() {
+                0
+            } else {
+                mesh.mNumAnimMeshes as usize
+            }
+        }
     }
 
     /// Get an animation mesh by index
@@ -324,6 +331,9 @@ impl<'a> Mesh<'a> {
         }
         unsafe {
             let mesh = &*self.mesh_ptr.as_ptr();
+            if mesh.mAnimMeshes.is_null() {
+                return None;
+            }
             let ptr = *mesh.mAnimMeshes.add(index);
             if ptr.is_null() {
                 None
@@ -348,7 +358,14 @@ impl<'a> Mesh<'a> {
 
     /// Get the number of bones in the mesh
     pub fn num_bones(&self) -> usize {
-        unsafe { (*self.mesh_ptr.as_ptr()).mNumBones as usize }
+        unsafe {
+            let mesh = &*self.mesh_ptr.as_ptr();
+            if mesh.mBones.is_null() {
+                0
+            } else {
+                mesh.mNumBones as usize
+            }
+        }
     }
 
     /// Get a bone by index
@@ -359,6 +376,9 @@ impl<'a> Mesh<'a> {
 
         unsafe {
             let mesh = &*self.mesh_ptr.as_ptr();
+            if mesh.mBones.is_null() {
+                return None;
+            }
             let bone_ptr = *mesh.mBones.add(index);
             if bone_ptr.is_null() {
                 None
@@ -466,8 +486,12 @@ impl<'a> Iterator for FaceIterator<'a> {
     fn size_hint(&self) -> (usize, Option<usize>) {
         unsafe {
             let mesh = &*self.mesh_ptr.as_ptr();
-            let remaining = (mesh.mNumFaces as usize).saturating_sub(self.index);
-            (remaining, Some(remaining))
+            if mesh.mFaces.is_null() {
+                (0, Some(0))
+            } else {
+                let remaining = (mesh.mNumFaces as usize).saturating_sub(self.index);
+                (remaining, Some(remaining))
+            }
         }
     }
 }
@@ -662,8 +686,12 @@ impl<'a> Iterator for AnimMeshIterator<'a> {
     fn size_hint(&self) -> (usize, Option<usize>) {
         unsafe {
             let mesh = &*self.mesh_ptr.as_ptr();
-            let remaining = (mesh.mNumAnimMeshes as usize).saturating_sub(self.index);
-            (remaining, Some(remaining))
+            if mesh.mAnimMeshes.is_null() {
+                (0, Some(0))
+            } else {
+                let remaining = (mesh.mNumAnimMeshes as usize).saturating_sub(self.index);
+                (remaining, Some(remaining))
+            }
         }
     }
 }

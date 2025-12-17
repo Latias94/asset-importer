@@ -111,7 +111,14 @@ impl<'a> Bone<'a> {
 
     /// Get the number of vertex weights for this bone
     pub fn num_weights(&self) -> usize {
-        unsafe { (*self.bone_ptr.as_ptr()).mNumWeights as usize }
+        unsafe {
+            let bone = &*self.bone_ptr.as_ptr();
+            if bone.mWeights.is_null() {
+                0
+            } else {
+                bone.mNumWeights as usize
+            }
+        }
     }
 
     /// Get the vertex weights for this bone
@@ -238,8 +245,10 @@ impl<'a> BoneIterator<'a> {
     /// # Safety
     /// The caller must ensure that the bones pointer and count are valid.
     pub(crate) unsafe fn new(bones: *mut *mut sys::aiBone, count: usize) -> Self {
+        let bones_ptr = SharedPtr::new(bones as *const *mut sys::aiBone);
+        let count = if bones_ptr.is_some() { count } else { 0 };
         Self {
-            bones: SharedPtr::new(bones as *const *mut sys::aiBone),
+            bones: bones_ptr,
             count,
             index: 0,
             _marker: PhantomData,

@@ -157,17 +157,27 @@ impl Scene {
         self.as_raw_sys()
     }
 
-    /// Apply Assimp post-processing to this scene in-place
-    pub fn apply_postprocess(&mut self, flags: crate::postprocess::PostProcessSteps) -> Result<()> {
-        unsafe {
-            let new_ptr = sys::aiApplyPostProcessing(self.scene_ptr.as_ptr(), flags.as_raw());
-            if new_ptr.is_null() {
-                return Err(Error::invalid_scene("Post-processing failed"));
-            }
-            // Update pointer; ownership/allocator unchanged
-            self.scene_ptr = SharedPtr::new(new_ptr).ok_or(Error::NullPointer)?;
+    /// Apply Assimp post-processing to this scene.
+    ///
+    /// This consumes the scene and returns the updated scene on success:
+    /// `scene = scene.apply_postprocess(flags)?;`.
+    ///
+    /// Assimp documents that post-processing is in-place but may return `NULL` on failure
+    /// (notably for `aiProcess_ValidateDataStructure`), potentially invalidating the input
+    /// scene pointer. To avoid double-free or use-after-free in safe Rust, this API takes
+    /// ownership of the scene and will not drop the original pointer on failure.
+    pub fn apply_postprocess(self, flags: crate::postprocess::PostProcessSteps) -> Result<Self> {
+        let this = std::mem::ManuallyDrop::new(self);
+
+        let new_ptr = unsafe { sys::aiApplyPostProcessing(this.scene_ptr.as_ptr(), flags.as_raw()) };
+        if new_ptr.is_null() {
+            return Err(Error::invalid_scene("Post-processing failed"));
         }
-        Ok(())
+
+        // Assimp promises this is the same scene pointer on success, but treat it as an update anyway.
+        let mut scene = std::mem::ManuallyDrop::into_inner(this);
+        scene.scene_ptr = SharedPtr::new(new_ptr).ok_or(Error::NullPointer)?;
+        Ok(scene)
     }
 
     /// Load a scene from a file with default settings
@@ -338,7 +348,14 @@ impl Scene {
 
     /// Get the number of meshes in the scene
     pub fn num_meshes(&self) -> usize {
-        unsafe { (*self.scene_ptr.as_ptr()).mNumMeshes as usize }
+        unsafe {
+            let scene = &*self.scene_ptr.as_ptr();
+            if scene.mMeshes.is_null() {
+                0
+            } else {
+                scene.mNumMeshes as usize
+            }
+        }
     }
 
     /// Get a mesh by index
@@ -349,6 +366,9 @@ impl Scene {
 
         unsafe {
             let scene = &*self.scene_ptr.as_ptr();
+            if scene.mMeshes.is_null() {
+                return None;
+            }
             let mesh_ptr = *scene.mMeshes.add(index);
             if mesh_ptr.is_null() {
                 None
@@ -368,7 +388,14 @@ impl Scene {
 
     /// Get the number of materials in the scene
     pub fn num_materials(&self) -> usize {
-        unsafe { (*self.scene_ptr.as_ptr()).mNumMaterials as usize }
+        unsafe {
+            let scene = &*self.scene_ptr.as_ptr();
+            if scene.mMaterials.is_null() {
+                0
+            } else {
+                scene.mNumMaterials as usize
+            }
+        }
     }
 
     /// Get a material by index
@@ -379,6 +406,9 @@ impl Scene {
 
         unsafe {
             let scene = &*self.scene_ptr.as_ptr();
+            if scene.mMaterials.is_null() {
+                return None;
+            }
             let material_ptr = *scene.mMaterials.add(index);
             if material_ptr.is_null() {
                 None
@@ -398,7 +428,14 @@ impl Scene {
 
     /// Get the number of animations in the scene
     pub fn num_animations(&self) -> usize {
-        unsafe { (*self.scene_ptr.as_ptr()).mNumAnimations as usize }
+        unsafe {
+            let scene = &*self.scene_ptr.as_ptr();
+            if scene.mAnimations.is_null() {
+                0
+            } else {
+                scene.mNumAnimations as usize
+            }
+        }
     }
 
     /// Get an animation by index
@@ -409,6 +446,9 @@ impl Scene {
 
         unsafe {
             let scene = &*self.scene_ptr.as_ptr();
+            if scene.mAnimations.is_null() {
+                return None;
+            }
             let animation_ptr = *scene.mAnimations.add(index);
             if animation_ptr.is_null() {
                 None
@@ -428,7 +468,14 @@ impl Scene {
 
     /// Get the number of cameras in the scene
     pub fn num_cameras(&self) -> usize {
-        unsafe { (*self.scene_ptr.as_ptr()).mNumCameras as usize }
+        unsafe {
+            let scene = &*self.scene_ptr.as_ptr();
+            if scene.mCameras.is_null() {
+                0
+            } else {
+                scene.mNumCameras as usize
+            }
+        }
     }
 
     /// Get a camera by index
@@ -439,6 +486,9 @@ impl Scene {
 
         unsafe {
             let scene = &*self.scene_ptr.as_ptr();
+            if scene.mCameras.is_null() {
+                return None;
+            }
             let camera_ptr = *scene.mCameras.add(index);
             if camera_ptr.is_null() {
                 None
@@ -458,7 +508,14 @@ impl Scene {
 
     /// Get the number of lights in the scene
     pub fn num_lights(&self) -> usize {
-        unsafe { (*self.scene_ptr.as_ptr()).mNumLights as usize }
+        unsafe {
+            let scene = &*self.scene_ptr.as_ptr();
+            if scene.mLights.is_null() {
+                0
+            } else {
+                scene.mNumLights as usize
+            }
+        }
     }
 
     /// Get a light by index
@@ -469,6 +526,9 @@ impl Scene {
 
         unsafe {
             let scene = &*self.scene_ptr.as_ptr();
+            if scene.mLights.is_null() {
+                return None;
+            }
             let light_ptr = *scene.mLights.add(index);
             if light_ptr.is_null() {
                 None
@@ -622,7 +682,14 @@ impl Scene {
 
     /// Get the number of textures in the scene
     pub fn num_textures(&self) -> usize {
-        unsafe { (*self.scene_ptr.as_ptr()).mNumTextures as usize }
+        unsafe {
+            let scene = &*self.scene_ptr.as_ptr();
+            if scene.mTextures.is_null() {
+                0
+            } else {
+                scene.mNumTextures as usize
+            }
+        }
     }
 
     /// Get a texture by index
@@ -633,6 +700,9 @@ impl Scene {
 
         unsafe {
             let scene = &*self.scene_ptr.as_ptr();
+            if scene.mTextures.is_null() {
+                return None;
+            }
             let texture_ptr = *scene.mTextures.add(index);
             if texture_ptr.is_null() {
                 None
