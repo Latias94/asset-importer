@@ -287,12 +287,17 @@ impl AABB {
     }
 }
 
+pub(crate) fn from_sys_aabb(aabb: &sys::aiAABB) -> AABB {
+    AABB {
+        min: Vector3D::new(aabb.mMin.x, aabb.mMin.y, aabb.mMin.z),
+        max: Vector3D::new(aabb.mMax.x, aabb.mMax.y, aabb.mMax.z),
+    }
+}
+
+#[cfg(feature = "raw-sys")]
 impl From<&sys::aiAABB> for AABB {
     fn from(aabb: &sys::aiAABB) -> Self {
-        Self {
-            min: Vector3D::new(aabb.mMin.x, aabb.mMin.y, aabb.mMin.z),
-            max: Vector3D::new(aabb.mMax.x, aabb.mMax.y, aabb.mMax.z),
-        }
+        from_sys_aabb(aabb)
     }
 }
 

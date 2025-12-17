@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
-- **Bundled Assimp updated**: Updated the `assimp` submodule to `c58496185d05c123fa84b68f1f85c3ef2936f2bb`.
+- **Bundled Assimp updated**: Updated the `assimp` submodule to `v6.0.2` (`fb375dd8c66f1c47dd000548f44d81b47f4466df`).
 
 ### Fixed
 - **System Assimp version mismatch**: `system` builds now fail fast when discovered headers are older than Assimp 6 (including when pkg-config omits include paths), avoiding confusing missing-symbol errors during compilation.

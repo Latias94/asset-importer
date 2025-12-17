@@ -83,6 +83,48 @@ jobs:
         env:
           ASSET_IMPORTER_FORCE_BUILD: "1"
 
+  feature-check:
+    name: Feature Check (ubuntu-latest)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake build-essential
+
+      - name: Install LLVM (libclang) for bindgen
+        uses: KyleMayes/install-llvm-action@v1
+        with:
+          directory: ${{ runner.temp }}/llvm
+          cached: true
+          version: '14.0'
+
+      - name: Test (raw-sys)
+        run: cargo test -p asset-importer --no-default-features --features "build-assimp,raw-sys"
+        env:
+          ASSET_IMPORTER_FORCE_BUILD: "1"
+
+      - name: Test (export)
+        run: cargo test -p asset-importer --no-default-features --features "build-assimp,export"
+        env:
+          ASSET_IMPORTER_FORCE_BUILD: "1"
+
+      - name: Test (export + raw-sys)
+        run: cargo test -p asset-importer --no-default-features --features "build-assimp,export,raw-sys"
+        env:
+          ASSET_IMPORTER_FORCE_BUILD: "1"
+
   system-macos:
     name: System Assimp (macos-latest)
     runs-on: macos-latest

@@ -124,7 +124,7 @@ impl Scene {
     /// - `scene_ptr` is a valid pointer to an aiScene
     /// - The scene was allocated by Assimp and should be freed with aiReleaseImport
     /// - The scene pointer remains valid for the lifetime of this Scene
-    pub unsafe fn from_raw_import(scene_ptr: *const sys::aiScene) -> Result<Self> {
+    pub(crate) unsafe fn from_raw_import_sys(scene_ptr: *const sys::aiScene) -> Result<Self> {
         let scene_ptr = SharedPtr::new(scene_ptr).ok_or(Error::NullPointer)?;
 
         Ok(Self {
@@ -133,17 +133,35 @@ impl Scene {
         })
     }
 
+    /// Create a Scene from a raw Assimp scene pointer (requires `raw-sys`).
+    ///
+    /// # Safety
+    /// Same contract as `from_raw_import_sys`.
+    #[cfg(feature = "raw-sys")]
+    pub unsafe fn from_raw_import(scene_ptr: *const sys::aiScene) -> Result<Self> {
+        unsafe { Self::from_raw_import_sys(scene_ptr) }
+    }
+
     /// Create a Scene from a deep-copied Assimp scene pointer (aiCopyScene)
     /// The scene will be freed with aiFreeScene.
     ///
     /// # Safety
     /// Caller must ensure `scene_ptr` is valid and was allocated by aiCopyScene.
-    pub unsafe fn from_raw_copied(scene_ptr: *const sys::aiScene) -> Result<Self> {
+    pub(crate) unsafe fn from_raw_copied_sys(scene_ptr: *const sys::aiScene) -> Result<Self> {
         let scene_ptr = SharedPtr::new(scene_ptr).ok_or(Error::NullPointer)?;
         Ok(Self {
             scene_ptr,
             release_kind: SceneRelease::FreeScene,
         })
+    }
+
+    /// Create a Scene from a deep-copied Assimp scene pointer (requires `raw-sys`).
+    ///
+    /// # Safety
+    /// Same contract as `from_raw_copied_sys`.
+    #[cfg(feature = "raw-sys")]
+    pub unsafe fn from_raw_copied(scene_ptr: *const sys::aiScene) -> Result<Self> {
+        unsafe { Self::from_raw_copied_sys(scene_ptr) }
     }
 
     #[allow(dead_code)]
@@ -677,7 +695,7 @@ impl Scene {
     /// Get scene metadata
     pub fn metadata(&self) -> Result<Metadata> {
         let scene = unsafe { &*self.scene_ptr.as_ptr() };
-        unsafe { Metadata::from_raw(scene.mMetaData) }
+        unsafe { Metadata::from_raw_sys(scene.mMetaData) }
     }
 
     /// Get the number of textures in the scene

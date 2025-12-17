@@ -12,6 +12,8 @@ pub struct BuildConfig {
     pub target_features: String,
     pub docs_rs: bool,
     pub verbose: bool,
+    /// Force building Assimp from source even when `prebuilt` is enabled.
+    pub force_build: bool,
     #[cfg_attr(not(feature = "prebuilt"), allow(dead_code))]
     pub offline: bool,
 }
@@ -21,6 +23,7 @@ impl BuildConfig {
         let target_features = env::var("CARGO_CFG_TARGET_FEATURE").unwrap_or_default();
         let offline = env::var("ASSET_IMPORTER_OFFLINE").is_ok()
             || env::var("CARGO_NET_OFFLINE").is_ok_and(|v| v == "true");
+        let force_build = matches!(env::var("ASSET_IMPORTER_FORCE_BUILD"), Ok(v) if !v.is_empty());
 
         Self {
             manifest_dir: PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap()),
@@ -32,6 +35,7 @@ impl BuildConfig {
             target_features,
             docs_rs: env::var("DOCS_RS").is_ok(),
             verbose: env::var("ASSET_IMPORTER_VERBOSE").is_ok(),
+            force_build,
             offline,
         }
     }
@@ -87,11 +91,25 @@ impl BuildConfig {
         println!("cargo:rerun-if-changed=wrapper.h");
         println!("cargo:rerun-if-changed=wrapper.cpp");
 
+        // When building from vendored sources, ensure changes to the Assimp checkout retrigger builds.
+        // (Cargo does not automatically watch git submodules.)
+        let assimp_dir = self.assimp_source_dir();
+        for p in [
+            assimp_dir.join("CMakeLists.txt"),
+            assimp_dir.join("include").join("assimp").join("version.h"),
+            assimp_dir.join("include").join("assimp").join("anim.h"),
+        ] {
+            if p.exists() {
+                println!("cargo:rerun-if-changed={}", p.display());
+            }
+        }
+
         // Build method inputs
         println!("cargo:rerun-if-env-changed=ASSIMP_DIR");
         println!("cargo:rerun-if-env-changed=ASSET_IMPORTER_PACKAGE_DIR");
         println!("cargo:rerun-if-env-changed=ASSET_IMPORTER_CACHE_DIR");
         println!("cargo:rerun-if-env-changed=ASSET_IMPORTER_OFFLINE");
+        println!("cargo:rerun-if-env-changed=ASSET_IMPORTER_FORCE_BUILD");
         println!("cargo:rerun-if-env-changed=ASSET_IMPORTER_VERBOSE");
         println!("cargo:rerun-if-env-changed=CARGO_TARGET_DIR");
         println!("cargo:rerun-if-env-changed=CARGO_NET_OFFLINE");

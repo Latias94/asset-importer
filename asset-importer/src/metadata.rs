@@ -62,24 +62,6 @@ pub enum MetadataType {
     UInt32,
 }
 
-impl From<sys::aiMetadataType> for MetadataType {
-    fn from(value: sys::aiMetadataType) -> Self {
-        match value {
-            sys::aiMetadataType::AI_BOOL => MetadataType::Bool,
-            sys::aiMetadataType::AI_INT32 => MetadataType::Int32,
-            sys::aiMetadataType::AI_UINT64 => MetadataType::UInt64,
-            sys::aiMetadataType::AI_FLOAT => MetadataType::Float,
-            sys::aiMetadataType::AI_DOUBLE => MetadataType::Double,
-            sys::aiMetadataType::AI_AISTRING => MetadataType::String,
-            sys::aiMetadataType::AI_AIVECTOR3D => MetadataType::Vector3D,
-            sys::aiMetadataType::AI_AIMETADATA => MetadataType::Metadata,
-            sys::aiMetadataType::AI_INT64 => MetadataType::Int64,
-            sys::aiMetadataType::AI_UINT32 => MetadataType::UInt32,
-            _ => MetadataType::String, // Default fallback
-        }
-    }
-}
-
 /// A metadata entry containing a typed value
 #[derive(Debug, Clone)]
 pub enum MetadataEntry {
@@ -222,7 +204,7 @@ impl Metadata {
     /// # Safety
     ///
     /// The caller must ensure that `metadata_ptr` is a valid pointer to an aiMetadata
-    pub unsafe fn from_raw(metadata_ptr: *const sys::aiMetadata) -> Result<Self> {
+    pub(crate) unsafe fn from_raw_sys(metadata_ptr: *const sys::aiMetadata) -> Result<Self> {
         if metadata_ptr.is_null() {
             return Ok(Self::new());
         }
@@ -250,6 +232,12 @@ impl Metadata {
         }
 
         Ok(Self { entries })
+    }
+
+    /// Create metadata from a raw Assimp metadata pointer (requires `raw-sys`).
+    #[cfg(feature = "raw-sys")]
+    pub unsafe fn from_raw(metadata_ptr: *const sys::aiMetadata) -> Result<Self> {
+        unsafe { Self::from_raw_sys(metadata_ptr) }
     }
 
     /// Parse a single metadata entry
@@ -293,7 +281,7 @@ impl Metadata {
             }
             sys::aiMetadataType::AI_AIMETADATA => {
                 let nested_metadata =
-                    unsafe { Self::from_raw(entry.mData as *const sys::aiMetadata)? };
+                    unsafe { Self::from_raw_sys(entry.mData as *const sys::aiMetadata)? };
                 Ok(MetadataEntry::Metadata(nested_metadata))
             }
             sys::aiMetadataType::AI_INT64 => {

@@ -278,7 +278,7 @@ impl<'a> Node<'a> {
     pub fn metadata(&self) -> Result<Metadata> {
         unsafe {
             let node = &*self.node_ptr.as_ptr();
-            Metadata::from_raw(node.mMetaData)
+            Metadata::from_raw_sys(node.mMetaData)
         }
     }
 }

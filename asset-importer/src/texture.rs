@@ -60,6 +60,7 @@ impl Texel {
     }
 }
 
+#[cfg(feature = "raw-sys")]
 impl From<&sys::aiTexel> for Texel {
     fn from(texel: &sys::aiTexel) -> Self {
         Self {

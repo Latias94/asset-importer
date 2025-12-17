@@ -291,9 +291,9 @@ impl ImportBuilder {
             .map(|fs| AssimpFileIO::new(fs.clone()).create_ai_file_io());
         let file_io_ptr_mut: *mut sys::aiFileIO = file_io
             .as_mut()
-            .map_or(std::ptr::null_mut(), |io| io.as_mut_ptr());
+            .map_or(std::ptr::null_mut(), |io| io.as_mut_ptr_sys());
         let file_io_ptr_const: *const sys::aiFileIO =
-            file_io.as_ref().map_or(std::ptr::null(), |io| io.as_ptr());
+            file_io.as_ref().map_or(std::ptr::null(), |io| io.as_ptr_sys());
 
         // If a progress handler is provided, use the C++ bridge to set it.
         let scene_ptr = if use_bridge {
@@ -400,9 +400,9 @@ impl ImportBuilder {
 
         // Create safe wrapper (bridge import is deep-copied -> FreeScene; C API -> ReleaseImport)
         if use_bridge {
-            unsafe { Scene::from_raw_copied(scene_ptr) }
+            unsafe { Scene::from_raw_copied_sys(scene_ptr) }
         } else {
-            unsafe { Scene::from_raw_import(scene_ptr) }
+            unsafe { Scene::from_raw_import_sys(scene_ptr) }
         }
     }
 
@@ -517,9 +517,9 @@ impl ImportBuilder {
         }
 
         if use_bridge {
-            unsafe { Scene::from_raw_copied(scene_ptr) }
+            unsafe { Scene::from_raw_copied_sys(scene_ptr) }
         } else {
-            unsafe { Scene::from_raw_import(scene_ptr) }
+            unsafe { Scene::from_raw_import_sys(scene_ptr) }
         }
     }
 

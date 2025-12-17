@@ -44,6 +44,7 @@ impl VertexWeight {
     }
 }
 
+#[cfg(feature = "raw-sys")]
 impl From<&sys::aiVertexWeight> for VertexWeight {
     fn from(weight: &sys::aiVertexWeight) -> Self {
         Self {

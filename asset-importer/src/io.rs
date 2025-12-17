@@ -306,13 +306,25 @@ impl OwnedAiFileIO {
     }
 
     /// Get a const pointer to the underlying `aiFileIO`.
-    pub fn as_ptr(&self) -> *const sys::aiFileIO {
+    pub(crate) fn as_ptr_sys(&self) -> *const sys::aiFileIO {
         &self.file_io as *const _
     }
 
     /// Get a mutable pointer to the underlying `aiFileIO`.
-    pub fn as_mut_ptr(&mut self) -> *mut sys::aiFileIO {
+    pub(crate) fn as_mut_ptr_sys(&mut self) -> *mut sys::aiFileIO {
         &mut self.file_io as *mut _
+    }
+
+    /// Get a const pointer to the underlying `aiFileIO` (requires `raw-sys`).
+    #[cfg(feature = "raw-sys")]
+    pub fn as_ptr(&self) -> *const sys::aiFileIO {
+        self.as_ptr_sys()
+    }
+
+    /// Get a mutable pointer to the underlying `aiFileIO` (requires `raw-sys`).
+    #[cfg(feature = "raw-sys")]
+    pub fn as_mut_ptr(&mut self) -> *mut sys::aiFileIO {
+        self.as_mut_ptr_sys()
     }
 }
 

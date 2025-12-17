@@ -55,7 +55,7 @@ pub type Color4D = Vector4D;
 ///
 /// Assimp stores the length explicitly; do not assume the buffer is NUL-terminated.
 #[inline]
-pub fn ai_string_to_str(value: &sys::aiString) -> Cow<'_, str> {
+pub(crate) fn ai_string_to_str(value: &sys::aiString) -> Cow<'_, str> {
     let len = (value.length as usize).min(value.data.len());
     if len == 0 {
         return Cow::Borrowed("");
@@ -66,19 +66,19 @@ pub fn ai_string_to_str(value: &sys::aiString) -> Cow<'_, str> {
 
 /// Convert Assimp `aiString` to an owned UTF-8 string (lossy).
 #[inline]
-pub fn ai_string_to_string(value: &sys::aiString) -> String {
+pub(crate) fn ai_string_to_string(value: &sys::aiString) -> String {
     ai_string_to_str(value).into_owned()
 }
 
 /// Convert aiVector3D to glam Vec3
 #[inline]
-pub fn from_ai_vector3d(v: sys::aiVector3D) -> Vector3D {
+pub(crate) fn from_ai_vector3d(v: sys::aiVector3D) -> Vector3D {
     Vector3D::new(v.x, v.y, v.z)
 }
 
 /// Convert glam Vec3 to aiVector3D
 #[inline]
-pub fn to_ai_vector3d(v: Vector3D) -> sys::aiVector3D {
+pub(crate) fn to_ai_vector3d(v: Vector3D) -> sys::aiVector3D {
     sys::aiVector3D {
         x: v.x,
         y: v.y,
@@ -88,19 +88,19 @@ pub fn to_ai_vector3d(v: Vector3D) -> sys::aiVector3D {
 
 /// Convert aiVector2D to glam Vec2
 #[inline]
-pub fn from_ai_vector2d(v: sys::aiVector2D) -> Vector2D {
+pub(crate) fn from_ai_vector2d(v: sys::aiVector2D) -> Vector2D {
     Vector2D::new(v.x, v.y)
 }
 
 /// Convert glam Vec2 to aiVector2D
 #[inline]
-pub fn to_ai_vector2d(v: Vector2D) -> sys::aiVector2D {
+pub(crate) fn to_ai_vector2d(v: Vector2D) -> sys::aiVector2D {
     sys::aiVector2D { x: v.x, y: v.y }
 }
 
 /// Convert aiMatrix4x4 to glam Mat4
 #[inline]
-pub fn from_ai_matrix4x4(m: sys::aiMatrix4x4) -> Matrix4x4 {
+pub(crate) fn from_ai_matrix4x4(m: sys::aiMatrix4x4) -> Matrix4x4 {
     // Assimp uses row-major matrix with members a1..d4 being rows.
     // glam Mat4 expects columns. Map rows -> columns appropriately.
     Matrix4x4::from_cols(
@@ -113,7 +113,7 @@ pub fn from_ai_matrix4x4(m: sys::aiMatrix4x4) -> Matrix4x4 {
 
 /// Convert glam Mat4 to aiMatrix4x4
 #[inline]
-pub fn to_ai_matrix4x4(m: Matrix4x4) -> sys::aiMatrix4x4 {
+pub(crate) fn to_ai_matrix4x4(m: Matrix4x4) -> sys::aiMatrix4x4 {
     // Convert glam column vectors into Assimp row-major fields
     let cols = m.to_cols_array_2d();
     sys::aiMatrix4x4 {
@@ -138,7 +138,7 @@ pub fn to_ai_matrix4x4(m: Matrix4x4) -> sys::aiMatrix4x4 {
 
 /// Convert aiMatrix3x3 to glam Mat3
 #[inline]
-pub fn from_ai_matrix3x3(m: sys::aiMatrix3x3) -> Matrix3x3 {
+pub(crate) fn from_ai_matrix3x3(m: sys::aiMatrix3x3) -> Matrix3x3 {
     // aiMatrix3x3 is row-major. glam Mat3 expects columns.
     Matrix3x3::from_cols(
         Vector3D::new(m.a1, m.b1, m.c1),
@@ -149,7 +149,7 @@ pub fn from_ai_matrix3x3(m: sys::aiMatrix3x3) -> Matrix3x3 {
 
 /// Convert glam Mat3 to aiMatrix3x3
 #[inline]
-pub fn to_ai_matrix3x3(m: Matrix3x3) -> sys::aiMatrix3x3 {
+pub(crate) fn to_ai_matrix3x3(m: Matrix3x3) -> sys::aiMatrix3x3 {
     let cols = m.to_cols_array_2d();
     sys::aiMatrix3x3 {
         a1: cols[0][0],
@@ -166,13 +166,14 @@ pub fn to_ai_matrix3x3(m: Matrix3x3) -> sys::aiMatrix3x3 {
 
 /// Convert aiQuaternion to glam Quat
 #[inline]
-pub fn from_ai_quaternion(q: sys::aiQuaternion) -> Quaternion {
+pub(crate) fn from_ai_quaternion(q: sys::aiQuaternion) -> Quaternion {
     Quaternion::from_xyzw(q.x, q.y, q.z, q.w)
 }
 
 /// Convert glam Quat to aiQuaternion
 #[inline]
-pub fn to_ai_quaternion(q: Quaternion) -> sys::aiQuaternion {
+#[cfg(feature = "raw-sys")]
+pub(crate) fn to_ai_quaternion(q: Quaternion) -> sys::aiQuaternion {
     sys::aiQuaternion {
         w: q.w,
         x: q.x,
@@ -183,13 +184,14 @@ pub fn to_ai_quaternion(q: Quaternion) -> sys::aiQuaternion {
 
 /// Convert aiColor3D to glam Vec3
 #[inline]
-pub fn from_ai_color3d(c: sys::aiColor3D) -> Color3D {
+pub(crate) fn from_ai_color3d(c: sys::aiColor3D) -> Color3D {
     Color3D::new(c.r, c.g, c.b)
 }
 
 /// Convert glam Vec3 to aiColor3D
 #[inline]
-pub fn to_ai_color3d(c: Color3D) -> sys::aiColor3D {
+#[cfg(feature = "raw-sys")]
+pub(crate) fn to_ai_color3d(c: Color3D) -> sys::aiColor3D {
     sys::aiColor3D {
         r: c.x,
         g: c.y,
@@ -199,19 +201,119 @@ pub fn to_ai_color3d(c: Color3D) -> sys::aiColor3D {
 
 /// Convert aiColor4D to glam Vec4
 #[inline]
-pub fn from_ai_color4d(c: sys::aiColor4D) -> Color4D {
+#[cfg(feature = "raw-sys")]
+pub(crate) fn from_ai_color4d(c: sys::aiColor4D) -> Color4D {
     Color4D::new(c.r, c.g, c.b, c.a)
 }
 
 /// Convert glam Vec4 to aiColor4D
 #[inline]
-pub fn to_ai_color4d(c: Color4D) -> sys::aiColor4D {
+#[cfg(feature = "raw-sys")]
+pub(crate) fn to_ai_color4d(c: Color4D) -> sys::aiColor4D {
     sys::aiColor4D {
         r: c.x,
         g: c.y,
         b: c.z,
         a: c.w,
     }
+}
+
+// ---- Optional sys interop helpers (requires `raw-sys`) ----
+
+/// Convert Assimp `aiString` to a UTF-8 string (lossy), for `raw-sys` users.
+#[cfg(feature = "raw-sys")]
+pub fn ai_string_to_str_sys(value: &sys::aiString) -> Cow<'_, str> {
+    ai_string_to_str(value)
+}
+
+/// Convert Assimp `aiString` to an owned UTF-8 string (lossy), for `raw-sys` users.
+#[cfg(feature = "raw-sys")]
+pub fn ai_string_to_string_sys(value: &sys::aiString) -> String {
+    ai_string_to_string(value)
+}
+
+#[cfg(feature = "raw-sys")]
+/// Convert Assimp `aiVector3D` to `Vector3D`.
+pub fn from_ai_vector3d_sys(v: sys::aiVector3D) -> Vector3D {
+    from_ai_vector3d(v)
+}
+
+#[cfg(feature = "raw-sys")]
+/// Convert `Vector3D` to Assimp `aiVector3D`.
+pub fn to_ai_vector3d_sys(v: Vector3D) -> sys::aiVector3D {
+    to_ai_vector3d(v)
+}
+
+#[cfg(feature = "raw-sys")]
+/// Convert Assimp `aiVector2D` to `Vector2D`.
+pub fn from_ai_vector2d_sys(v: sys::aiVector2D) -> Vector2D {
+    from_ai_vector2d(v)
+}
+
+#[cfg(feature = "raw-sys")]
+/// Convert `Vector2D` to Assimp `aiVector2D`.
+pub fn to_ai_vector2d_sys(v: Vector2D) -> sys::aiVector2D {
+    to_ai_vector2d(v)
+}
+
+#[cfg(feature = "raw-sys")]
+/// Convert Assimp `aiMatrix4x4` to `Matrix4x4`.
+pub fn from_ai_matrix4x4_sys(m: sys::aiMatrix4x4) -> Matrix4x4 {
+    from_ai_matrix4x4(m)
+}
+
+#[cfg(feature = "raw-sys")]
+/// Convert `Matrix4x4` to Assimp `aiMatrix4x4`.
+pub fn to_ai_matrix4x4_sys(m: Matrix4x4) -> sys::aiMatrix4x4 {
+    to_ai_matrix4x4(m)
+}
+
+#[cfg(feature = "raw-sys")]
+/// Convert Assimp `aiMatrix3x3` to `Matrix3x3`.
+pub fn from_ai_matrix3x3_sys(m: sys::aiMatrix3x3) -> Matrix3x3 {
+    from_ai_matrix3x3(m)
+}
+
+#[cfg(feature = "raw-sys")]
+/// Convert `Matrix3x3` to Assimp `aiMatrix3x3`.
+pub fn to_ai_matrix3x3_sys(m: Matrix3x3) -> sys::aiMatrix3x3 {
+    to_ai_matrix3x3(m)
+}
+
+#[cfg(feature = "raw-sys")]
+/// Convert Assimp `aiQuaternion` to `Quaternion`.
+pub fn from_ai_quaternion_sys(q: sys::aiQuaternion) -> Quaternion {
+    from_ai_quaternion(q)
+}
+
+#[cfg(feature = "raw-sys")]
+/// Convert `Quaternion` to Assimp `aiQuaternion`.
+pub fn to_ai_quaternion_sys(q: Quaternion) -> sys::aiQuaternion {
+    to_ai_quaternion(q)
+}
+
+#[cfg(feature = "raw-sys")]
+/// Convert Assimp `aiColor3D` to `Color3D`.
+pub fn from_ai_color3d_sys(c: sys::aiColor3D) -> Color3D {
+    from_ai_color3d(c)
+}
+
+#[cfg(feature = "raw-sys")]
+/// Convert `Color3D` to Assimp `aiColor3D`.
+pub fn to_ai_color3d_sys(c: Color3D) -> sys::aiColor3D {
+    to_ai_color3d(c)
+}
+
+#[cfg(feature = "raw-sys")]
+/// Convert Assimp `aiColor4D` to `Color4D`.
+pub fn from_ai_color4d_sys(c: sys::aiColor4D) -> Color4D {
+    from_ai_color4d(c)
+}
+
+#[cfg(feature = "raw-sys")]
+/// Convert `Color4D` to Assimp `aiColor4D`.
+pub fn to_ai_color4d_sys(c: Color4D) -> sys::aiColor4D {
+    to_ai_color4d(c)
 }
 
 // Mint integration (optional)

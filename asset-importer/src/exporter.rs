@@ -70,7 +70,7 @@ impl ExportBuilder {
                     scene.as_raw_sys(),
                     c_format.as_ptr(),
                     c_path.as_ptr(),
-                    file_io.as_mut_ptr(),
+                    file_io.as_mut_ptr_sys(),
                     self.preprocessing,
                 )
             }

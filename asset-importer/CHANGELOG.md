@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - **Stronger lifetime safety (breaking)**: Most scene-backed view types now borrow the owning `Scene` via lifetimes to prevent use-after-free in safe code.
 - **Assimp version helpers**: `version::assimp_version()` now reports `major.minor.patch` and new helpers expose patch/branch/legal strings.
+- **Bundled Assimp updated**: Vendored Assimp (via `asset-importer-sys`) is now pinned to `v6.0.2`.
 - **Thread-safety internals**: Centralized Assimp pointer sharing logic to reduce scattered `unsafe impl Send/Sync` across the codebase.
 - **Material property keys (breaking)**: `material_keys::*` are now `&CStr` constants, and `Material::get_*_property` APIs prefer `&CStr` with `*_str` convenience wrappers.
 - **Raw sys bindings opt-in (breaking)**: `asset_importer::sys` is now behind the `raw-sys` feature to reduce accidental safety contract violations.

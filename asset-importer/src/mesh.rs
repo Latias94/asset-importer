@@ -308,7 +308,7 @@ impl<'a> Mesh<'a> {
     pub fn aabb(&self) -> AABB {
         unsafe {
             let mesh = &*self.mesh_ptr.as_ptr();
-            AABB::from(&mesh.mAABB)
+            crate::aabb::from_sys_aabb(&mesh.mAABB)
         }
     }
 

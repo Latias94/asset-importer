@@ -85,6 +85,11 @@ pub fn resolve(cfg: &BuildConfig) -> BuildPlan {
         }
     }
 
+    // Environment override: force a local source build even when `prebuilt` is enabled.
+    if cfg.force_build {
+        return crate::build_support::vendored::build(cfg, link_kind);
+    }
+
     // If build-from-source is explicitly requested, it always wins over prebuilt (even if prebuilt is enabled
     // through default features in the high-level crate).
     if cfg!(feature = "build-assimp") {
