@@ -8,7 +8,9 @@ use crate::{
     ptr::SharedPtr,
     scene::Scene,
     sys,
-    types::{Color3D, Color4D, Vector2D, Vector3D, ai_string_to_str, ai_string_to_string},
+    types::{
+        Color3D, Color4D, Vector2D, Vector3D, Vector4D, ai_string_to_str, ai_string_to_string,
+    },
 };
 use std::borrow::Cow;
 use std::ffi::CStr;
@@ -1204,27 +1206,80 @@ impl MaterialPropertyRef {
 
     /// Read the first element as `i32` when stored as `Integer`.
     pub fn as_i32(&self) -> Option<i32> {
-        self.data_i32().and_then(|xs| xs.first().copied())
+        if self.type_info() != PropertyTypeInfo::Integer {
+            return None;
+        }
+        self.read_unaligned::<i32>()
     }
 
-    /// Read the first element as `u32` when stored as `Integer`.
+    /// Read the first element as `u32` when stored as `Integer` and non-negative.
     pub fn as_u32(&self) -> Option<u32> {
-        self.data_u32().and_then(|xs| xs.first().copied())
+        u32::try_from(self.as_i32()?).ok()
     }
 
     /// Read the first element as `bool` when stored as `Integer` (non-zero => true).
     pub fn as_bool(&self) -> Option<bool> {
-        self.as_i32().map(|v| v != 0)
+        Some(self.as_i32()? != 0)
     }
 
     /// Read the first element as `f32` when stored as `Float`.
     pub fn as_f32(&self) -> Option<f32> {
-        self.data_f32().and_then(|xs| xs.first().copied())
+        if self.type_info() != PropertyTypeInfo::Float {
+            return None;
+        }
+        self.read_unaligned::<f32>()
     }
 
     /// Read the first element as `f64` when stored as `Double`.
     pub fn as_f64(&self) -> Option<f64> {
-        self.data_f64().and_then(|xs| xs.first().copied())
+        if self.type_info() != PropertyTypeInfo::Double {
+            return None;
+        }
+        self.read_unaligned::<f64>()
+    }
+
+    /// Read `N` elements as `f32` when stored as `Float`.
+    pub fn as_f32_array<const N: usize>(&self) -> Option<[f32; N]> {
+        if self.type_info() != PropertyTypeInfo::Float {
+            return None;
+        }
+        self.read_array_unaligned::<f32, N>()
+    }
+
+    /// Read `N` elements as `f64` when stored as `Double`.
+    pub fn as_f64_array<const N: usize>(&self) -> Option<[f64; N]> {
+        if self.type_info() != PropertyTypeInfo::Double {
+            return None;
+        }
+        self.read_array_unaligned::<f64, N>()
+    }
+
+    /// Read a `Vec2` when stored as `Float` and the payload has at least 2 floats.
+    pub fn as_vec2(&self) -> Option<Vector2D> {
+        let [x, y] = self.as_f32_array::<2>()?;
+        Some(Vector2D::new(x, y))
+    }
+
+    /// Read a `Vec3` when stored as `Float` and the payload has at least 3 floats.
+    pub fn as_vec3(&self) -> Option<Vector3D> {
+        let [x, y, z] = self.as_f32_array::<3>()?;
+        Some(Vector3D::new(x, y, z))
+    }
+
+    /// Read a `Vec4` when stored as `Float` and the payload has at least 4 floats.
+    pub fn as_vec4(&self) -> Option<Vector4D> {
+        let [x, y, z, w] = self.as_f32_array::<4>()?;
+        Some(Vector4D::new(x, y, z, w))
+    }
+
+    /// Read an RGB color when stored as `Float` and the payload has at least 3 floats.
+    pub fn as_color3(&self) -> Option<Color3D> {
+        self.as_vec3()
+    }
+
+    /// Read an RGBA color when stored as `Float` and the payload has at least 4 floats.
+    pub fn as_color4(&self) -> Option<Color4D> {
+        self.as_vec4()
     }
 
     fn data_cast_slice_opt<T>(&self) -> Option<&[T]> {
@@ -1249,6 +1304,38 @@ impl MaterialPropertyRef {
                 return None;
             }
             Some(ffi::slice_from_ptr_len(self, ptr as *const T, len / size))
+        }
+    }
+
+    fn read_unaligned<T: Copy>(&self) -> Option<T> {
+        unsafe {
+            let p = &*self.prop_ptr.as_ptr();
+            if p.mData.is_null() {
+                return None;
+            }
+            let total = p.mDataLength as usize;
+            if total < std::mem::size_of::<T>() {
+                return None;
+            }
+            Some(std::ptr::read_unaligned(p.mData as *const T))
+        }
+    }
+
+    fn read_array_unaligned<T: Copy, const N: usize>(&self) -> Option<[T; N]> {
+        unsafe {
+            let p = &*self.prop_ptr.as_ptr();
+            if p.mData.is_null() {
+                return None;
+            }
+            let total = p.mDataLength as usize;
+            let need = std::mem::size_of::<T>().checked_mul(N)?;
+            if total < need {
+                return None;
+            }
+            let base = p.mData as *const T;
+            Some(std::array::from_fn(|i| {
+                std::ptr::read_unaligned(base.add(i))
+            }))
         }
     }
 

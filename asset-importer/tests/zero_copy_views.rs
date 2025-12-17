@@ -2,7 +2,7 @@
 
 use asset_importer::{
     Importer,
-    material::{PropertyTypeInfo, TextureType},
+    material::{PropertyTypeInfo, TextureType, material_keys},
     postprocess::PostProcessSteps,
 };
 use std::path::Path;
@@ -127,6 +127,19 @@ fn test_material_texture_ref_path() {
         .texture(TextureType::Diffuse, 0)
         .expect("missing owned diffuse texture 0");
     assert_eq!(owned2.path, "dummy.png");
+
+    // Diffuse color from .mtl should be available as a float property as well.
+    let diffuse_prop = material
+        .properties()
+        .find(|p| p.key_str().as_ref() == material_keys::COLOR_DIFFUSE.to_str().unwrap())
+        .expect("missing $clr.diffuse property");
+    assert_eq!(diffuse_prop.type_info(), PropertyTypeInfo::Float);
+    let c = diffuse_prop
+        .as_color3()
+        .expect("diffuse should decode as Color3D");
+    assert!((c.x - 1.0).abs() < 1e-6);
+    assert!((c.y - 1.0).abs() < 1e-6);
+    assert!((c.z - 1.0).abs() < 1e-6);
 
     // If Assimp exposes any string-typed material properties, ensure they can be decoded
     // without additional queries back into the material API.
