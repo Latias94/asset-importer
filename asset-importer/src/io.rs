@@ -355,7 +355,7 @@ extern "C" fn file_open_proc(
         return ptr::null_mut();
     }
 
-    unsafe {
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| unsafe {
         // Get the file system from user data
         let file_system_ptr = (*file_io).UserData as *mut Arc<Mutex<dyn FileSystem>>;
         let file_system = &*file_system_ptr;
@@ -398,6 +398,12 @@ extern "C" fn file_open_proc(
         });
 
         Box::into_raw(ai_file)
+    }));
+
+    match result {
+        Ok(v) => v,
+        // Never unwind across FFI.
+        Err(_) => ptr::null_mut(),
     }
 }
 
@@ -428,7 +434,7 @@ extern "C" fn file_read_proc(
         return 0;
     }
 
-    unsafe {
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| unsafe {
         let wrapper_ptr = (*file).UserData as *mut FileWrapper;
         if wrapper_ptr.is_null() {
             return 0;
@@ -442,6 +448,11 @@ extern "C" fn file_read_proc(
             Ok(bytes_read) => bytes_read / size,
             Err(_) => 0,
         }
+    }));
+
+    match result {
+        Ok(v) => v,
+        Err(_) => 0,
     }
 }
 
@@ -456,7 +467,7 @@ extern "C" fn file_write_proc(
         return 0;
     }
 
-    unsafe {
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| unsafe {
         let wrapper_ptr = (*file).UserData as *mut FileWrapper;
         if wrapper_ptr.is_null() {
             return 0;
@@ -474,6 +485,11 @@ extern "C" fn file_write_proc(
             Ok(bytes_written) => bytes_written / size,
             Err(_) => 0,
         }
+    }));
+
+    match result {
+        Ok(v) => v,
+        Err(_) => 0,
     }
 }
 
@@ -483,7 +499,7 @@ extern "C" fn file_tell_proc(file: *mut sys::aiFile) -> usize {
         return 0;
     }
 
-    unsafe {
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| unsafe {
         let wrapper_ptr = (*file).UserData as *mut FileWrapper;
         if wrapper_ptr.is_null() {
             return 0;
@@ -494,6 +510,11 @@ extern "C" fn file_tell_proc(file: *mut sys::aiFile) -> usize {
             Ok(pos) => pos as usize,
             Err(_) => 0,
         }
+    }));
+
+    match result {
+        Ok(v) => v,
+        Err(_) => 0,
     }
 }
 
@@ -503,7 +524,7 @@ extern "C" fn file_size_proc(file: *mut sys::aiFile) -> usize {
         return 0;
     }
 
-    unsafe {
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| unsafe {
         let wrapper_ptr = (*file).UserData as *mut FileWrapper;
         if wrapper_ptr.is_null() {
             return 0;
@@ -514,6 +535,11 @@ extern "C" fn file_size_proc(file: *mut sys::aiFile) -> usize {
             Ok(size) => size as usize,
             Err(_) => 0,
         }
+    }));
+
+    match result {
+        Ok(v) => v,
+        Err(_) => 0,
     }
 }
 
@@ -527,7 +553,7 @@ extern "C" fn file_seek_proc(
         return sys::aiReturn::aiReturn_FAILURE;
     }
 
-    unsafe {
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| unsafe {
         let wrapper_ptr = (*file).UserData as *mut FileWrapper;
         if wrapper_ptr.is_null() {
             return sys::aiReturn::aiReturn_FAILURE;
@@ -552,6 +578,11 @@ extern "C" fn file_seek_proc(
             Ok(_) => sys::aiReturn::aiReturn_SUCCESS,
             Err(_) => sys::aiReturn::aiReturn_FAILURE,
         }
+    }));
+
+    match result {
+        Ok(v) => v,
+        Err(_) => sys::aiReturn::aiReturn_FAILURE,
     }
 }
 
@@ -561,14 +592,14 @@ extern "C" fn file_flush_proc(_file: *mut sys::aiFile) {
         return;
     }
 
-    unsafe {
+    let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| unsafe {
         let wrapper_ptr = (*_file).UserData as *mut FileWrapper;
         if wrapper_ptr.is_null() {
             return;
         }
         let wrapper = &mut *wrapper_ptr;
         let _ = wrapper.stream.flush();
-    }
+    }));
 }
 
 #[cfg(test)]

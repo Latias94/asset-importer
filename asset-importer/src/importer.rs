@@ -319,7 +319,14 @@ impl ImportBuilder {
                 } else {
                     unsafe { CStr::from_ptr(message) }.to_str().ok()
                 };
-                handler.update(percentage, msg_opt)
+                let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    handler.update(percentage, msg_opt)
+                }));
+                match result {
+                    Ok(v) => v,
+                    // Never unwind across FFI. Treat panics as a request to cancel the import.
+                    Err(_) => false,
+                }
             }
 
             // Box the handler to pass across FFI and reclaim after call
@@ -442,7 +449,13 @@ impl ImportBuilder {
                 } else {
                     unsafe { CStr::from_ptr(message) }.to_str().ok()
                 };
-                handler.update(percentage, msg_opt)
+                let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    handler.update(percentage, msg_opt)
+                }));
+                match result {
+                    Ok(v) => v,
+                    Err(_) => false,
+                }
             }
 
             let mut boxed: Box<Box<dyn ProgressHandler>> = Box::new(handler);

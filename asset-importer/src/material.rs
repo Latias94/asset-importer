@@ -1156,11 +1156,19 @@ impl<'a> MaterialPropertyRef<'a> {
     fn data_cast_slice_opt<T>(&self) -> Option<&'a [T]> {
         unsafe {
             let p = &*self.prop_ptr.as_ptr();
-            let ptr = p.mData as *const u8;
             let len = p.mDataLength as usize;
             let size = std::mem::size_of::<T>();
             let align = std::mem::align_of::<T>();
-            if size == 0 || len == 0 {
+
+            if len == 0 {
+                return Some(&[]);
+            }
+            if p.mData.is_null() {
+                return None;
+            }
+
+            let ptr = p.mData as *const u8;
+            if size == 0 {
                 return Some(&[]);
             }
             if (ptr as usize) % align != 0 || len % size != 0 {

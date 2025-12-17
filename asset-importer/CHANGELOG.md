@@ -31,6 +31,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Export blob ownership**: Export blob iteration no longer risks double-free by mixing owned and borrowed nodes.
 - **aiString conversion correctness**: `aiString` is decoded using its explicit length (no longer assuming NUL-termination) for names and metadata.
 - **Panic surface reduction**: Scene-backed `from_raw` constructors no longer `expect()` on null pointers; internal invariants are checked via `debug_assert!`.
+- **FFI panic safety**: Panics from custom `FileSystem`/`FileStream` and progress callbacks are caught to prevent unwinding across the C ABI.
+- **Material typed-slice safety**: `MaterialPropertyRef::{data_i32,data_f32,data_f64}` now reject null payload pointers when length is non-zero to avoid UB.
 
 ## [0.4.0] - 2025-09-20
 
