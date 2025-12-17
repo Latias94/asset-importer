@@ -157,34 +157,39 @@ fn locate_build_out_dir(
     let target_dir = env::var("CARGO_TARGET_DIR")
         .map(PathBuf::from)
         .unwrap_or_else(|_| workspace_root.join("target"));
-    let build_root = target_dir.join(target).join(&profile).join("build");
-    if !build_root.exists() {
-        return Err(format!("Build root not found at {}", build_root.display()).into());
-    }
-    let mut candidates: Vec<PathBuf> = match std::fs::read_dir(&build_root) {
-        Ok(rd) => rd
-            .filter_map(|e| e.ok())
-            .filter_map(|e| {
+
+    // Cargo uses different target directory layouts depending on whether `--target` is passed:
+    // - with `--target <triple>`: target/<triple>/<profile>/build
+    // - without `--target` (native): target/<profile>/build
+    let build_roots = [
+        target_dir.join(target).join(&profile).join("build"),
+        target_dir.join(&profile).join("build"),
+    ];
+
+    let mut candidates: Vec<PathBuf> = Vec::new();
+    for build_root in build_roots.iter().filter(|p| p.exists()) {
+        if let Ok(rd) = std::fs::read_dir(build_root) {
+            candidates.extend(rd.filter_map(|e| e.ok()).filter_map(|e| {
                 let p = e.path();
                 let name = p.file_name()?.to_string_lossy().to_string();
-                if name.starts_with("asset-importer-sys-") {
-                    let out = p.join("out");
-                    if out.join("include").exists() {
-                        Some(out)
-                    } else {
-                        None
-                    }
-                } else {
-                    None
+                if !name.starts_with("asset-importer-sys-") {
+                    return None;
                 }
-            })
-            .collect(),
-        Err(_) => Vec::new(),
-    };
+                let out = p.join("out");
+                out.join("include").exists().then_some(out)
+            }));
+        }
+    }
+
     if candidates.is_empty() {
+        let attempted = build_roots
+            .iter()
+            .map(|p| p.display().to_string())
+            .collect::<Vec<_>>()
+            .join(", ");
         return Err(format!(
-            "No asset-importer-sys build out directories found under {}",
-            build_root.display()
+            "No asset-importer-sys build out directories found under any of: {}",
+            attempted
         )
         .into());
     }

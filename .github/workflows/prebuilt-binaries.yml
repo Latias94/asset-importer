@@ -78,6 +78,18 @@ jobs:
           .github/scripts/parse-version.sh "${{ inputs.tag || github.ref_name }}"
         shell: bash
 
+      - name: Verify tag matches asset-importer-sys version
+        if: ${{ steps.parse_version.outputs.crate == 'asset-importer-sys' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag_version="${{ steps.parse_version.outputs.version }}"
+          cargo_version="$(rg -n '^version\\s*=\\s*\"' asset-importer-sys/Cargo.toml | head -n 1 | sed -E 's/.*\"(.*)\".*/\\1/')"
+          if [ "$tag_version" != "$cargo_version" ]; then
+            echo "Tag version ($tag_version) does not match asset-importer-sys/Cargo.toml version ($cargo_version)"
+            exit 1
+          fi
+
       - name: Check if this is a sys crate release
         run: |
           if [ "${{ steps.parse_version.outputs.crate }}" != "asset-importer-sys" ]; then
@@ -198,6 +210,23 @@ jobs:
           ASSET_IMPORTER_PACKAGE_DIR: ${{ github.workspace }}/packages
           ASSET_IMPORTER_FORCE_BUILD: "1"
           TARGET: ${{ matrix.target }}
+
+      - name: Verify package archive exists
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${{ steps.parse_version.outputs.version }}"
+          target="${{ matrix.target }}"
+          link="${{ matrix.link_type }}"
+          crt="${{ matrix.crt || '' }}"
+          if [ -n "$crt" ]; then
+            expected="asset-importer-${version}-${target}-${link}-${crt}.tar.gz"
+          else
+            expected="asset-importer-${version}-${target}-${link}.tar.gz"
+          fi
+          ls -la "${{ github.workspace }}/packages"
+          test -f "${{ github.workspace }}/packages/${expected}"
+          echo "✅ Found ${expected}"
 
       # Upload artifacts for release
       - name: Upload to release

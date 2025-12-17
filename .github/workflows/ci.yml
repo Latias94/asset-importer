@@ -201,6 +201,9 @@ jobs:
   prebuilt:
     name: Prebuilt Assimp (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    # Prebuilt binaries are validated in `.github/workflows/prebuilt-binaries.yml`.
+    # Running prebuilt tests in regular CI is brittle (it depends on release artifacts being available).
+    if: ${{ startsWith(github.ref, 'refs/tags/') }}
     strategy:
       fail-fast: false
       matrix:

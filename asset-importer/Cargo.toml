@@ -43,7 +43,7 @@ exclude = [
 ]
 
 [dependencies]
-asset-importer-sys = { path = "../asset-importer-sys", version = "0.3" }
+asset-importer-sys = { path = "../asset-importer-sys", version = "0.5" }
 thiserror = "2.0"
 bitflags = "2.0"
 glam = { version = "0.30", optional = true }

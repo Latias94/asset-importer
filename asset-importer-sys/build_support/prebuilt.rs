@@ -9,6 +9,9 @@ use crate::build_support::{
 use flate2_build::read::GzDecoder;
 use tar_build::Archive;
 
+const PACKAGE_PREFIX: &str = "asset-importer";
+const VENDORED_ASSIMP_VERSION: &str = "6.0.2";
+
 pub fn prepare(cfg: &BuildConfig, link_kind: LinkKind) -> BuildPlan {
     let crate_version = env::var("CARGO_PKG_VERSION").unwrap();
     let target = cfg.target.clone();
@@ -27,13 +30,13 @@ pub fn prepare(cfg: &BuildConfig, link_kind: LinkKind) -> BuildPlan {
     let mut archive_names: Vec<String> = Vec::new();
     if let Some(crt) = crt_suffix {
         archive_names.push(format!(
-            "asset-importer-{}-{}-{}-{}.tar.gz",
-            crate_version, target, link_type, crt
+            "{}-{}-{}-{}-{}.tar.gz",
+            PACKAGE_PREFIX, crate_version, target, link_type, crt
         ));
     }
     archive_names.push(format!(
-        "asset-importer-{}-{}-{}.tar.gz",
-        crate_version, target, link_type
+        "{}-{}-{}-{}.tar.gz",
+        PACKAGE_PREFIX, crate_version, target, link_type
     ));
 
     let cache_root = cache_root(cfg);
@@ -64,11 +67,15 @@ pub fn prepare(cfg: &BuildConfig, link_kind: LinkKind) -> BuildPlan {
         );
     }
 
+    validate_prebuilt_headers(&include_dir);
+
     let lib_name = if cfg.is_windows() {
         detect_windows_import_lib(&lib_dir).unwrap_or_else(|| "assimp".to_string())
     } else {
-        "assimp".to_string()
+        detect_unix_link_name(&lib_dir, cfg.is_debug()).unwrap_or_else(|| "assimp".to_string())
     };
+
+    validate_prebuilt_libs(cfg, &extract_dir, &lib_dir, link_kind, &lib_name);
 
     // Prebuilt static libs may require linking zlib explicitly.
     if matches!(link_kind, LinkKind::Static) && !cfg!(feature = "nozlib") {
@@ -90,6 +97,192 @@ pub fn prepare(cfg: &BuildConfig, link_kind: LinkKind) -> BuildPlan {
         link_lib: Some(lib_name),
         link_search: vec![lib_dir, cfg.out_dir.clone()],
         method: BuildMethod::Prebuilt,
+    }
+}
+
+fn validate_prebuilt_headers(include_dir: &std::path::Path) {
+    let header = include_dir.join("assimp").join("version.h");
+    let contents = std::fs::read_to_string(&header).unwrap_or_else(|e| {
+        panic!(
+            "prebuilt package is missing {}: {}\n\
+             Hint: rebuild and upload the prebuilt package.",
+            header.display(),
+            e
+        )
+    });
+
+    let Some(version) = parse_assimp_version_from_header(&contents) else {
+        util::warn(format!(
+            "could not parse Assimp version from {}; skipping version check",
+            header.display()
+        ));
+        return;
+    };
+
+    if version != VENDORED_ASSIMP_VERSION {
+        panic!(
+            "prebuilt Assimp headers are version {}, but this crate expects {}.\n\
+             Hint: rebuild the prebuilt package for this crate version, or use `--features build-assimp` / `--features system`.",
+            version, VENDORED_ASSIMP_VERSION
+        );
+    }
+}
+
+fn parse_assimp_version_from_header(contents: &str) -> Option<String> {
+    fn find_num(contents: &str, key: &str) -> Option<u32> {
+        for line in contents.lines() {
+            let line = line.trim();
+            if !line.starts_with("#define") {
+                continue;
+            }
+            let mut it = line.split_whitespace();
+            let _define = it.next()?;
+            let name = it.next()?;
+            let value = it.next()?;
+            if name != key {
+                continue;
+            }
+            return value.parse::<u32>().ok();
+        }
+        None
+    }
+
+    let major = find_num(contents, "ASSIMP_VERSION_MAJOR")?;
+    let minor = find_num(contents, "ASSIMP_VERSION_MINOR")?;
+    let patch = find_num(contents, "ASSIMP_VERSION_PATCH")?;
+    Some(format!("{major}.{minor}.{patch}"))
+}
+
+fn detect_unix_link_name(lib_dir: &std::path::Path, prefer_debug: bool) -> Option<String> {
+    let Ok(read) = fs::read_dir(lib_dir) else {
+        return None;
+    };
+
+    let mut has_assimp = false;
+    let mut has_assimpd = false;
+
+    for entry in read.flatten() {
+        let p = entry.path();
+        let Some(name) = p.file_name().and_then(|s| s.to_str()) else {
+            continue;
+        };
+        let lower = name.to_ascii_lowercase();
+        let is_lib = lower.ends_with(".a") || lower.ends_with(".dylib") || lower.contains(".so");
+        if !is_lib {
+            continue;
+        }
+        if lower.starts_with("libassimpd") {
+            has_assimpd = true;
+        } else if lower.starts_with("libassimp") {
+            has_assimp = true;
+        }
+    }
+
+    if prefer_debug && has_assimpd {
+        Some("assimpd".to_string())
+    } else if has_assimp {
+        Some("assimp".to_string())
+    } else if has_assimpd {
+        Some("assimpd".to_string())
+    } else {
+        None
+    }
+}
+
+fn validate_prebuilt_libs(
+    cfg: &BuildConfig,
+    extract_dir: &std::path::Path,
+    lib_dir: &std::path::Path,
+    link_kind: LinkKind,
+    link_name: &str,
+) {
+    let Ok(read) = fs::read_dir(lib_dir) else {
+        panic!(
+            "prebuilt package is missing library directory: {}\n\
+             Hint: rebuild and upload the prebuilt package.",
+            lib_dir.display()
+        );
+    };
+
+    let mut has_static = false;
+    let mut has_dynamic = false;
+    let mut has_windows_import_lib = false;
+
+    for entry in read.flatten() {
+        let p = entry.path();
+        let Some(name) = p.file_name().and_then(|s| s.to_str()) else {
+            continue;
+        };
+        let lower = name.to_ascii_lowercase();
+        if lower.ends_with(".a") && lower.contains(link_name) {
+            has_static = true;
+        }
+        if (lower.ends_with(".dylib") || lower.contains(".so")) && lower.contains(link_name) {
+            has_dynamic = true;
+        }
+        if cfg.is_windows() && lower.ends_with(".lib") && lower.contains("assimp") {
+            has_windows_import_lib = true;
+        }
+    }
+
+    if cfg.is_windows() {
+        match link_kind {
+            LinkKind::Static | LinkKind::Dynamic => {
+                if !has_windows_import_lib {
+                    panic!(
+                        "prebuilt package is missing assimp import library (*.lib) under {}.\n\
+                         Hint: rebuild and upload the prebuilt package.",
+                        lib_dir.display()
+                    );
+                }
+            }
+        }
+
+        if matches!(link_kind, LinkKind::Dynamic) {
+            let bin_dir = extract_dir.join("bin");
+            let has_dll = bin_dir.exists()
+                && fs::read_dir(&bin_dir)
+                    .ok()
+                    .into_iter()
+                    .flatten()
+                    .flatten()
+                    .any(|e| {
+                        e.path()
+                            .extension()
+                            .and_then(|s| s.to_str())
+                            .is_some_and(|ext| ext.eq_ignore_ascii_case("dll"))
+                    });
+            if !has_dll {
+                panic!(
+                    "prebuilt package is missing assimp DLLs under {}.\n\
+                     Hint: rebuild and upload the prebuilt package.",
+                    bin_dir.display()
+                );
+            }
+        }
+
+        return;
+    }
+
+    match link_kind {
+        LinkKind::Static => {
+            if !has_static {
+                panic!(
+                    "prebuilt package is missing static assimp library under {}.\n\
+                     Hint: rebuild and upload the prebuilt package.",
+                    lib_dir.display()
+                );
+            }
+        }
+        LinkKind::Dynamic => {
+            if !has_dynamic {
+                panic!(
+                    "prebuilt package is missing shared assimp library under {}.\n\
+                     Hint: rebuild and upload the prebuilt package.",
+                    lib_dir.display()
+                );
+            }
+        }
     }
 }
 
