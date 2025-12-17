@@ -261,22 +261,10 @@ pub struct ExportFormatDesc {
 impl ExportFormatDesc {
     /// Create from raw Assimp export format description
     pub(crate) fn from_raw(desc: &sys::aiExportFormatDesc) -> Self {
-        unsafe {
-            let id = std::ffi::CStr::from_ptr(desc.id)
-                .to_string_lossy()
-                .into_owned();
-            let description = std::ffi::CStr::from_ptr(desc.description)
-                .to_string_lossy()
-                .into_owned();
-            let file_extension = std::ffi::CStr::from_ptr(desc.fileExtension)
-                .to_string_lossy()
-                .into_owned();
-
-            Self {
-                id,
-                description,
-                file_extension,
-            }
+        Self {
+            id: crate::error::c_str_to_string_or_empty(desc.id),
+            description: crate::error::c_str_to_string_or_empty(desc.description),
+            file_extension: crate::error::c_str_to_string_or_empty(desc.fileExtension),
         }
     }
 }
