@@ -94,12 +94,11 @@ fn build_assimp_with_cmake(
         .define("ASSIMP_WARNINGS_AS_ERRORS", "OFF")
         .define("BUILD_SHARED_LIBS", if build_shared { "ON" } else { "OFF" });
 
-    // Export support (kept consistent with Rust feature `export`).
-    if cfg!(feature = "export") {
-        cmake_config.define("ASSIMP_BUILD_NO_EXPORT", "OFF");
-    } else {
-        cmake_config.define("ASSIMP_BUILD_NO_EXPORT", "ON");
-    }
+    // Keep Assimp's C "export" API enabled even when the Rust `export` feature is off.
+    //
+    // Assimp gates `aiCopyScene` / `aiFreeScene` behind `ASSIMP_BUILD_NO_EXPORT`, and this crate
+    // relies on them for safe deep-copy/ownership behavior (e.g. postprocess on shared scenes).
+    cmake_config.define("ASSIMP_NO_EXPORT", "OFF");
 
     // zlib strategy:
     // - Windows: build bundled zlib (default for Assimp)
@@ -133,6 +132,18 @@ fn build_assimp_with_cmake(
             "USE_STATIC_CRT",
             if cfg.use_static_crt() { "ON" } else { "OFF" },
         );
+
+        // Assimp's install rules for MSVC static-library PDBs can be brittle across generators/configs.
+        // Disabling PDB installation avoids spurious CI failures while keeping the library build intact.
+        // Set `ASSET_IMPORTER_ASSIMP_INSTALL_PDB=1` to re-enable if you need PDBs in the install tree.
+        let install_pdb = std::env::var("ASSET_IMPORTER_ASSIMP_INSTALL_PDB")
+            .ok()
+            .is_some_and(|v| {
+                v == "1" || v.eq_ignore_ascii_case("true") || v.eq_ignore_ascii_case("on")
+            });
+        if !install_pdb {
+            cmake_config.define("ASSIMP_INSTALL_PDB", "OFF");
+        }
     } else if cfg.is_macos() {
         cmake_config.define("CMAKE_OSX_DEPLOYMENT_TARGET", cfg.macos_deployment_target());
     }

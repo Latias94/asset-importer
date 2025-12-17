@@ -15,7 +15,7 @@ pub fn probe(cfg: &BuildConfig, link_kind: LinkKind) -> BuildPlan {
             && std::env::var("VCPKGRS_TRIPLET").is_err()
         {
             if let Some(triplet) = default_vcpkg_static_triplet(&cfg.target) {
-                vcpkg_cfg.triplet(triplet);
+                vcpkg_cfg.target_triplet(triplet);
             }
         }
 
