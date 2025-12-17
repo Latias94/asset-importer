@@ -25,7 +25,7 @@ fn test_file_import_obj_box() {
         .with_post_process(
             PostProcessSteps::TRIANGULATE | PostProcessSteps::JOIN_IDENTICAL_VERTICES,
         )
-        .import_file(model_path);
+        .import();
 
     match result {
         Ok(scene) => {
@@ -77,9 +77,7 @@ fn test_file_import_nonexistent() {
     // Test error handling for non-existent files
     let importer = Importer::new();
 
-    let result = importer
-        .read_file("nonexistent_file.obj")
-        .import_file("nonexistent_file.obj");
+    let result = importer.read_file("nonexistent_file.obj").import();
 
     assert!(result.is_err(), "Import of non-existent file should fail");
 
@@ -106,7 +104,7 @@ fn test_import_builder_chaining() {
         .read_file(model_path)
         .with_post_process(PostProcessSteps::TRIANGULATE)
         .with_post_process(PostProcessSteps::JOIN_IDENTICAL_VERTICES) // Should override previous
-        .import_file(model_path);
+        .import();
 
     assert!(result.is_ok(), "Chained import should succeed");
 }
@@ -129,7 +127,7 @@ fn test_multiple_imports_same_importer() {
     let result1 = importer
         .read_file(model_path)
         .with_post_process(PostProcessSteps::TRIANGULATE)
-        .import_file(model_path);
+        .import();
 
     assert!(result1.is_ok(), "First import should succeed");
 
@@ -137,7 +135,7 @@ fn test_multiple_imports_same_importer() {
     let result2 = importer
         .read_file(model_path)
         .with_post_process(PostProcessSteps::GEN_NORMALS)
-        .import_file(model_path);
+        .import();
 
     assert!(result2.is_ok(), "Second import should succeed");
 
@@ -179,7 +177,7 @@ fn test_scene_iteration() {
     let result = importer
         .read_file(model_path)
         .with_post_process(PostProcessSteps::TRIANGULATE)
-        .import_file(model_path);
+        .import();
 
     if let Ok(scene) = result {
         // Test mesh iteration
@@ -248,7 +246,7 @@ fn test_mesh_data_access() {
     let result = importer
         .read_file(model_path)
         .with_post_process(PostProcessSteps::TRIANGULATE | PostProcessSteps::GEN_NORMALS)
-        .import_file(model_path);
+        .import();
 
     if let Ok(scene) = result {
         if let Some(mesh) = scene.meshes().next() {

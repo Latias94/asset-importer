@@ -3,6 +3,7 @@
 use std::ffi::{CStr, CString};
 use std::os::raw::{c_char, c_void};
 use std::path::Path;
+use std::sync::Arc;
 
 use crate::{
     error::{Error, Result},
@@ -154,6 +155,9 @@ pub mod import_properties {
 
 /// Builder for configuring and executing scene imports
 pub struct ImportBuilder {
+    source_path: Option<std::path::PathBuf>,
+    source_memory: Option<Arc<[u8]>>,
+    source_memory_hint: Option<String>,
     post_process: PostProcessSteps,
     properties: Vec<(String, PropertyValue)>,
     file_system: Option<std::sync::Arc<std::sync::Mutex<dyn FileSystem>>>,
@@ -179,11 +183,60 @@ impl ImportBuilder {
     /// Create a new import builder
     pub fn new() -> Self {
         Self {
+            source_path: None,
+            source_memory: None,
+            source_memory_hint: None,
             post_process: PostProcessSteps::default(),
             properties: Vec::new(),
             file_system: None,
             progress_handler: None,
         }
+    }
+
+    /// Set the import source to a file path.
+    ///
+    /// This enables [`ImportBuilder::import`] without passing the path again.
+    pub fn with_source_file<P: AsRef<Path>>(mut self, path: P) -> Self {
+        self.source_path = Some(path.as_ref().to_path_buf());
+        self.source_memory = None;
+        self.source_memory_hint = None;
+        self
+    }
+
+    /// Set the import source to a memory buffer by copying `data`.
+    ///
+    /// Prefer [`ImportBuilder::with_source_memory_owned`] or [`ImportBuilder::with_source_memory_shared`]
+    /// when you already have an owned buffer.
+    pub fn with_source_memory_copy(mut self, data: &[u8]) -> Self {
+        self.source_path = None;
+        self.source_memory = Some(Arc::from(data.to_vec()));
+        self
+    }
+
+    /// Set the import source to an owned memory buffer.
+    pub fn with_source_memory_owned(mut self, data: Vec<u8>) -> Self {
+        self.source_path = None;
+        self.source_memory = Some(Arc::from(data));
+        self
+    }
+
+    /// Set the import source to a shared memory buffer.
+    pub fn with_source_memory_shared(mut self, data: Arc<[u8]>) -> Self {
+        self.source_path = None;
+        self.source_memory = Some(data);
+        self
+    }
+
+    /// Set the optional file format hint for memory imports (e.g. `"obj"`, `"fbx"`).
+    pub fn with_memory_hint<S: Into<String>>(mut self, hint: S) -> Self {
+        self.source_memory_hint = Some(hint.into());
+        self
+    }
+
+    /// Set the optional file format hint for memory imports.
+    pub fn with_memory_hint_opt(mut self, hint: Option<&str>) -> Self {
+        self.source_memory_hint = hint.map(|s| s.to_string());
+        self
     }
 
     /// Set the post-processing steps to apply
@@ -285,6 +338,31 @@ impl ImportBuilder {
         F: FnMut(f32, Option<&str>) -> bool + Send + 'static,
     {
         self.with_progress_handler(Box::new(crate::progress::ClosureProgressHandler::new(f)))
+    }
+
+    /// Import using the configured source.
+    ///
+    /// This is the preferred ergonomic entry point when the source was set via
+    /// [`Importer::read_file`], [`Importer::read_from_memory`], or the `with_source_*` methods.
+    pub fn import(mut self) -> Result<Scene> {
+        if self.source_path.is_some() && self.source_memory.is_some() {
+            return Err(Error::invalid_parameter(
+                "Both file and memory sources are set; choose exactly one",
+            ));
+        }
+
+        if let Some(path) = self.source_path.take() {
+            return self.import_file(path);
+        }
+
+        if let Some(data) = self.source_memory.take() {
+            let hint = self.source_memory_hint.take();
+            return self.import_from_memory(data.as_ref(), hint.as_deref());
+        }
+
+        Err(Error::invalid_parameter(
+            "Import source not set (use Importer::read_file/read_from_memory or ImportBuilder::with_source_*)",
+        ))
     }
 
     /// Import a scene from a file path
@@ -727,23 +805,27 @@ impl Importer {
     }
 
     /// Start building an import operation
-    pub fn read_file<P: AsRef<Path>>(&self, _path: P) -> ImportBuilder {
-        ImportBuilder::new()
+    pub fn read_file<P: AsRef<Path>>(&self, path: P) -> ImportBuilder {
+        ImportBuilder::new().with_source_file(path)
     }
 
     /// Start building an import operation from memory
-    pub fn read_from_memory(&self, _data: &[u8]) -> ImportBuilder {
-        ImportBuilder::new()
+    ///
+    /// Note: this copies `data` into an owned buffer so the builder can be `'static`.
+    pub fn read_from_memory(&self, data: &[u8]) -> ImportBuilder {
+        ImportBuilder::new().with_source_memory_copy(data)
     }
 
     /// Quick import with default settings
     pub fn import_file<P: AsRef<Path>>(&self, path: P) -> Result<Scene> {
-        ImportBuilder::new().import_file(path)
+        self.read_file(path).import()
     }
 
     /// Quick import from memory with default settings
     pub fn import_from_memory(&self, data: &[u8], hint: Option<&str>) -> Result<Scene> {
-        ImportBuilder::new().import_from_memory(data, hint)
+        self.read_from_memory(data)
+            .with_memory_hint_opt(hint)
+            .import()
     }
 }
 

@@ -302,7 +302,7 @@ impl Model {
                     | PostProcessSteps::GEN_SMOOTH_NORMALS
                     | PostProcessSteps::CALC_TANGENT_SPACE,
             )
-            .import_file(path)?;
+            .import()?;
 
         println!("Scene loaded successfully!");
         println!("  Meshes: {}", scene.num_meshes());
@@ -334,7 +334,7 @@ impl Model {
                     | PostProcessSteps::GEN_SMOOTH_NORMALS
                     | PostProcessSteps::CALC_TANGENT_SPACE,
             )
-            .import_file(path)?;
+            .import()?;
 
         println!("Scene loaded successfully!");
         println!("  Meshes: {}", scene.num_meshes());

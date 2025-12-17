@@ -87,9 +87,10 @@ fn test_import_with_property_store() {
     let importer = Importer::new();
     let result = importer
         .read_from_memory(SIMPLE_OBJ_CUBE.as_bytes())
+        .with_memory_hint("obj")
         .with_property_store(props)
         .with_post_process(PostProcessSteps::TRIANGULATE)
-        .import_from_memory(SIMPLE_OBJ_CUBE.as_bytes(), Some("obj"));
+        .import();
 
     assert!(result.is_ok(), "Import with PropertyStore should succeed");
     let scene = result.unwrap();
@@ -141,8 +142,9 @@ fn test_import_with_property_store_ref() {
     let importer = Importer::new();
     let result = importer
         .read_from_memory(SIMPLE_OBJ_CUBE.as_bytes())
+        .with_memory_hint("obj")
         .with_property_store_ref(&props)
-        .import_from_memory(SIMPLE_OBJ_CUBE.as_bytes(), Some("obj"));
+        .import();
 
     assert!(
         result.is_ok(),

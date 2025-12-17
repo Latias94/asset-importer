@@ -31,7 +31,7 @@ fn test_file_system_panic_does_not_unwind_over_ffi() {
     let result = importer
         .read_file("does-not-matter.obj")
         .with_file_system(PanicFs)
-        .import_file("does-not-matter.obj");
+        .import();
 
     assert!(result.is_err());
 }

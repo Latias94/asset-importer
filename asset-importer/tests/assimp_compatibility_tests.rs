@@ -139,10 +139,11 @@ fn test_memory_import_obj_cube() {
 
     let result = importer
         .read_from_memory(SIMPLE_OBJ_CUBE.as_bytes())
+        .with_memory_hint("obj")
         .with_post_process(
             PostProcessSteps::TRIANGULATE | PostProcessSteps::JOIN_IDENTICAL_VERTICES,
         )
-        .import_from_memory(SIMPLE_OBJ_CUBE.as_bytes(), Some("obj"));
+        .import();
 
     match result {
         Ok(scene) => {
@@ -186,8 +187,9 @@ fn test_memory_import_ply_triangle() {
 
     let result = importer
         .read_from_memory(SIMPLE_PLY_TRIANGLE.as_bytes())
+        .with_memory_hint("ply")
         .with_post_process(PostProcessSteps::VALIDATE_DATA_STRUCTURE)
-        .import_from_memory(SIMPLE_PLY_TRIANGLE.as_bytes(), Some("ply"));
+        .import();
 
     match result {
         Ok(scene) => {
@@ -218,9 +220,10 @@ fn test_import_builder_functionality() {
 
     let result = importer
         .read_from_memory(SIMPLE_OBJ_CUBE.as_bytes())
+        .with_memory_hint("obj")
         .with_property_int("AI_CONFIG_PP_RVC_FLAGS", 1)
         .with_post_process(PostProcessSteps::TRIANGULATE)
-        .import_from_memory(SIMPLE_OBJ_CUBE.as_bytes(), Some("obj"));
+        .import();
 
     assert!(result.is_ok(), "Import with properties should succeed");
 }
@@ -233,7 +236,8 @@ fn test_invalid_data_handling() {
     // Test with empty data
     let result = importer
         .read_from_memory(&[])
-        .import_from_memory(&[], Some("obj"));
+        .with_memory_hint("obj")
+        .import();
 
     assert!(result.is_err(), "Import of empty data should fail");
 
@@ -241,7 +245,8 @@ fn test_invalid_data_handling() {
     let invalid_data = b"This is not a valid 3D model file";
     let result = importer
         .read_from_memory(invalid_data)
-        .import_from_memory(invalid_data, Some("obj"));
+        .with_memory_hint("obj")
+        .import();
 
     // Note: Assimp might not always fail on invalid data immediately,
     // it depends on the format and validation settings
@@ -264,8 +269,9 @@ fn test_post_processing_steps() {
 
     let result = importer
         .read_from_memory(SIMPLE_OBJ_CUBE.as_bytes())
+        .with_memory_hint("obj")
         .with_post_process(steps)
-        .import_from_memory(SIMPLE_OBJ_CUBE.as_bytes(), Some("obj"));
+        .import();
 
     assert!(
         result.is_ok(),

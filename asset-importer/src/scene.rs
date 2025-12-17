@@ -236,7 +236,7 @@ impl Scene {
     /// Load a scene from a file with default settings
     ///
     /// This is a convenience method that provides a russimp-compatible interface.
-    /// For more control, use `Importer::new().read_file(path).import_file(path)`.
+    /// For more control, use `Importer::new().read_file(path).import()`.
     pub fn from_file<P: AsRef<std::path::Path>>(path: P) -> Result<Self> {
         Importer::new().import_file(path)
     }
@@ -252,7 +252,7 @@ impl Scene {
         Importer::new()
             .read_file(&path)
             .with_post_process(post_process)
-            .import_file(path)
+            .import()
     }
 
     /// Load a scene from a file with properties and post-processing steps
@@ -285,7 +285,7 @@ impl Scene {
             .read_file(&path)
             .with_post_process(post_process)
             .with_property_store_ref(props)
-            .import_file(path)
+            .import()
     }
 
     /// Load a scene from memory with default settings
@@ -305,8 +305,9 @@ impl Scene {
     ) -> Result<Self> {
         Importer::new()
             .read_from_memory(data)
+            .with_memory_hint_opt(hint)
             .with_post_process(post_process)
-            .import_from_memory(data, hint)
+            .import()
     }
 
     /// Load a scene from memory with properties and post-processing steps
@@ -320,9 +321,10 @@ impl Scene {
     ) -> Result<Self> {
         Importer::new()
             .read_from_memory(data)
+            .with_memory_hint_opt(hint)
             .with_post_process(post_process)
             .with_property_store_ref(props)
-            .import_from_memory(data, hint)
+            .import()
     }
 
     /// Get the scene flags

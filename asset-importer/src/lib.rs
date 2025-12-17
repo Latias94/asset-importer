@@ -23,7 +23,7 @@
 //! let scene = importer
 //!     .read_file("model.fbx")
 //!     .with_post_process(PostProcessSteps::TRIANGULATE | PostProcessSteps::FLIP_UVS)
-//!     .import_file("model.fbx")?;
+//!     .import()?;
 //!
 //! println!("Loaded {} meshes", scene.meshes().count());
 //! # Ok(())

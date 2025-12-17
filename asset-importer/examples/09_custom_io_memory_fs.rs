@@ -37,7 +37,7 @@ d 1.0
         .read_file("cube.obj")
         .with_post_process(PostProcessSteps::TRIANGULATE)
         .with_file_system(fs)
-        .import_file("cube.obj")?;
+        .import()?;
 
     println!("Imported from MemoryFileSystem.");
     println!(

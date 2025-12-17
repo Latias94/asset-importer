@@ -18,7 +18,7 @@ fn test_mesh_faces_raw_and_iter() {
     let scene = Importer::new()
         .read_file(model_path)
         .with_post_process(PostProcessSteps::TRIANGULATE)
-        .import_file(model_path)
+        .import()
         .expect("failed to import box.obj");
 
     let mesh = scene.meshes().next().expect("scene has no meshes");
@@ -49,7 +49,7 @@ fn test_mesh_vertices_raw_type_is_sys_free() {
     let scene = Importer::new()
         .read_file(model_path)
         .with_post_process(PostProcessSteps::TRIANGULATE)
-        .import_file(model_path)
+        .import()
         .expect("failed to import box.obj");
 
     let mesh = scene.meshes().next().expect("scene has no meshes");
@@ -69,7 +69,7 @@ fn test_bytemuck_mesh_bytes_views() {
     let scene = Importer::new()
         .read_file(model_path)
         .with_post_process(PostProcessSteps::TRIANGULATE)
-        .import_file(model_path)
+        .import()
         .expect("failed to import textured.obj");
 
     let mesh = scene.meshes().next().expect("scene has no meshes");
@@ -100,7 +100,7 @@ fn test_mesh_has_helpers() {
     let scene = Importer::new()
         .read_file(box_path)
         .with_post_process(PostProcessSteps::TRIANGULATE)
-        .import_file(box_path)
+        .import()
         .expect("failed to import box.obj");
 
     let mesh = scene.meshes().next().expect("scene has no meshes");
@@ -120,7 +120,7 @@ fn test_mesh_has_helpers() {
     let scene = Importer::new()
         .read_file(tri_path)
         .with_post_process(PostProcessSteps::TRIANGULATE)
-        .import_file(tri_path)
+        .import()
         .expect("failed to import textured.obj");
 
     let mesh = scene.meshes().next().expect("scene has no meshes");
@@ -149,7 +149,7 @@ fn test_material_texture_ref_path() {
     let scene = Importer::new()
         .read_file(model_path)
         .with_post_process(PostProcessSteps::TRIANGULATE)
-        .import_file(model_path)
+        .import()
         .expect("failed to import textured.obj");
 
     let material = scene

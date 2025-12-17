@@ -75,7 +75,7 @@ pub fn import_scene(
     let scene = Importer::new()
         .read_file(path)
         .with_post_process(steps)
-        .import_file(path)?;
+        .import()?;
     Ok(scene)
 }
 

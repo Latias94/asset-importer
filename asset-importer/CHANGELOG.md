@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Texture iter helpers**: Added `Scene::{compressed_textures_iter,uncompressed_textures_iter}` and `Scene::embedded_texture_by_cstr()` to avoid allocations in hot loops.
 - **More iter/list APIs**: Added `get_import_extensions_list()` (iterator-based), `get_export_formats_iter()`, and `get_all_importer_descs_iter()` to avoid `Vec` allocations in hot paths.
 - **Guided examples**: Added progressive examples for zero-copy mesh access, custom IO (in-memory FS), multithreading, and glam integration.
+- **Importer ergonomics**: Added `ImportBuilder::import()` so you can call `Importer::read_file(path)...import()` without repeating the path.
 
 ### Changed
 - **Scene ownership model (breaking)**: Scene-backed view types (`Mesh`, `Node`, `Material`, `Texture`, etc.) now own a cheap clone of `Scene` instead of borrowing via lifetimes, making them effectively `'static` and more ergonomic for async/multithreading.
@@ -42,6 +43,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Custom IO performance**: `MemoryFileSystem::open()` now returns a read-only stream backed by a shared `Arc<[u8]>` buffer (no per-open byte cloning).
 - **Builder ergonomics**: `ImportBuilder::with_file_system` and `ExportBuilder::with_file_system` now accept `impl FileSystem` directly; use `*_with_file_system_shared` when you need to share an `Arc<Mutex<dyn FileSystem>>`.
 - **Progress ergonomics**: Added `ImportBuilder::with_progress_handler_fn` for closure-based progress callbacks.
+- **Memory builder ergonomics**: `Importer::read_from_memory(data)` now stores an owned copy internally so `ImportBuilder` can be `'static` and support `ImportBuilder::import()`.
 - **Extension support API (breaking)**: `is_extension_supported()` now returns `Result<bool>` instead of silently treating embedded NUL bytes as unsupported.
 - **Examples build gating**: `model_loading_demo` is now behind the `demo` feature to avoid compiling heavy windowing/OpenGL deps during `cargo test`.
 - **Raw pointers opt-in (breaking)**: `Scene::as_raw()` (and similar `as_raw()` accessors on scene-backed view types) now require the `raw-sys` feature; the default API stays sys-free.
