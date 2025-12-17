@@ -80,7 +80,7 @@ tar = { version = "0.4", optional = true }
 flate2 = { version = "1.0", optional = true }
 
 [build-dependencies]
-bindgen = "0.72"
+bindgen = { version = "0.72", optional = true }
 cc = "1.0"
 cmake = "0.1"
 pkg-config = { version = "0.3", optional = true }
@@ -98,6 +98,13 @@ mint = ["dep:mint"]
 type-extensions = []
 # Enable export functionality (includes more symbols)
 export = []
+
+# Generate Rust bindings at build time using `bindgen`.
+#
+# By default this crate ships pregenerated bindings matching the vendored Assimp version.
+# Enabling `generate-bindings` is required for `system` builds (so the bindings match the
+# system headers you are linking against).
+generate-bindings = ["dep:bindgen"]
 
 # Use system-installed assimp instead of bundled
 system = ["pkg-config", "vcpkg"]

@@ -107,14 +107,6 @@ jobs:
           sudo apt-get install -y cmake build-essential
         shell: bash
 
-      - name: Install LLVM (libclang) for bindgen
-        if: runner.os == 'Linux'
-        uses: KyleMayes/install-llvm-action@v1
-        with:
-          directory: ${{ runner.temp }}/llvm
-          cached: true
-          version: '14.0'
-
       - name: Install macOS dependencies
         if: runner.os == 'macOS'
         run: |
@@ -124,7 +116,7 @@ jobs:
       - name: Install Windows dependencies
         if: runner.os == 'Windows'
         run: |
-          choco install -y llvm cmake
+          choco install -y cmake
         shell: pwsh
 
       # Set up cross-compilation for different targets

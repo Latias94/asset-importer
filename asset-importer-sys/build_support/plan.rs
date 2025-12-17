@@ -76,12 +76,7 @@ pub fn resolve(cfg: &BuildConfig) -> BuildPlan {
         }
         #[cfg(feature = "system")]
         {
-            if matches!(link_kind, LinkKind::Static) {
-                util::warn(
-                    "feature `static-link` is ignored with `system` linking; using dynamic system lib",
-                );
-            }
-            return crate::build_support::system::probe(cfg);
+            return crate::build_support::system::probe(cfg, link_kind);
         }
     }
 

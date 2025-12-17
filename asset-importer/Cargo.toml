@@ -60,7 +60,11 @@ raw-sys = []
 
 # Math library integrations
 mint = ["dep:mint", "asset-importer-sys/mint"]
-bytemuck = ["dep:bytemuck", "glam/bytemuck"]
+bytemuck = ["dep:bytemuck"]
+# Enable `bytemuck::{Pod, Zeroable}` for glam math types as well.
+glam-bytemuck = ["bytemuck", "glam/bytemuck"]
+# Convenience meta-feature for rendering backends: raw byte views + glam Pod.
+gpu = ["bytemuck", "glam-bytemuck"]
 
 # Functionality features
 export = ["asset-importer-sys/export"]
@@ -72,7 +76,7 @@ prebuilt = ["asset-importer-sys/prebuilt"]
 # Build assimp from source (slower but most compatible)
 build-assimp = ["asset-importer-sys/build-assimp"]
 # Use system-installed assimp
-system = ["asset-importer-sys/system"]
+system = ["asset-importer-sys/system", "asset-importer-sys/generate-bindings"]
 
 # Linking options
 static-link = ["asset-importer-sys/static-link"]

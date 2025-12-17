@@ -44,21 +44,13 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y cmake build-essential
 
-      - name: Install LLVM (libclang) for bindgen (Linux)
-        if: runner.os == 'Linux'
-        uses: KyleMayes/install-llvm-action@v1
-        with:
-          directory: ${{ runner.temp }}/llvm
-          cached: true
-          version: '14.0'
-
       - name: Install macOS dependencies
         if: runner.os == 'macOS'
         run: brew install cmake
 
       - name: Install Windows dependencies
         if: runner.os == 'Windows'
-        run: choco install -y llvm cmake
+        run: choco install -y cmake
 
       - name: Select static CRT (Windows)
         if: ${{ runner.os == 'Windows' && matrix.crt == 'static' }}
@@ -103,13 +95,6 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y cmake build-essential
 
-      - name: Install LLVM (libclang) for bindgen
-        uses: KyleMayes/install-llvm-action@v1
-        with:
-          directory: ${{ runner.temp }}/llvm
-          cached: true
-          version: '14.0'
-
       - name: Test (raw-sys)
         run: cargo test -p asset-importer --no-default-features --features "build-assimp,raw-sys"
         env:
@@ -143,6 +128,13 @@ jobs:
         run: |
           brew update
           brew install assimp pkg-config
+
+      - name: Install LLVM (libclang) for bindgen
+        uses: KyleMayes/install-llvm-action@v1
+        with:
+          directory: ${{ runner.temp }}/llvm
+          cached: true
+          version: '14.0'
 
       - name: Build + test (system)
         run: cargo test -p asset-importer --no-default-features --features system
@@ -197,18 +189,6 @@ jobs:
 
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
-
-      - name: Install LLVM (libclang) for bindgen (Linux)
-        if: runner.os == 'Linux'
-        uses: KyleMayes/install-llvm-action@v1
-        with:
-          directory: ${{ runner.temp }}/llvm
-          cached: true
-          version: '14.0'
-
-      - name: Install Windows dependencies
-        if: runner.os == 'Windows'
-        run: choco install -y llvm
 
       - name: Build + test (prebuilt)
         run: cargo test -p asset-importer --no-default-features --features prebuilt

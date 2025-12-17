@@ -1,5 +1,3 @@
-use std::path::PathBuf;
-
 use crate::build_support::{config::BuildConfig, plan::BuildPlan, util};
 
 pub fn run_docsrs(cfg: &BuildConfig) {
@@ -7,31 +5,95 @@ pub fn run_docsrs(cfg: &BuildConfig) {
     println!("cargo:rustc-cfg=docsrs");
 
     // Prefer pregenerated bindings when present.
-    if use_pregenerated_bindings(cfg) {
+    if copy_pregenerated_bindings(cfg) {
         return;
     }
 
-    // Best-effort: generate from vendored headers if available.
-    let assimp_include = cfg.assimp_source_dir().join("include");
-    if assimp_include.join("assimp").join("scene.h").exists() {
-        let plan = BuildPlan {
-            include_dirs: vec![assimp_include],
-            link_kind: crate::build_support::plan::LinkKind::Dynamic,
-            link_lib: None,
-            link_search: Vec::new(),
-            method: crate::build_support::plan::BuildMethod::Vendored,
-        };
-        run(cfg, &plan);
-        return;
+    // Best-effort: generate from vendored headers if available (only when bindgen is enabled).
+    #[cfg(feature = "generate-bindings")]
+    {
+        let assimp_include = cfg.assimp_source_dir().join("include");
+        if assimp_include.join("assimp").join("scene.h").exists() {
+            let plan = BuildPlan {
+                include_dirs: vec![assimp_include],
+                link_kind: crate::build_support::plan::LinkKind::Dynamic,
+                link_lib: None,
+                link_search: Vec::new(),
+                method: crate::build_support::plan::BuildMethod::Vendored,
+            };
+            run(cfg, &plan);
+            return;
+        }
     }
 
     panic!(
         "DOCS_RS build: Assimp headers not found and no pregenerated bindings present.\n\
-         Either vendor assimp headers in the published crate or add src/bindings_pregenerated.rs."
+         Either vendor assimp headers in the published crate, add src/bindings_pregenerated.rs, or enable feature `generate-bindings`."
     );
 }
 
 pub fn run(cfg: &BuildConfig, plan: &BuildPlan) {
+    #[cfg(feature = "system")]
+    let is_system = matches!(plan.method, crate::build_support::plan::BuildMethod::System);
+    #[cfg(not(feature = "system"))]
+    let is_system = false;
+
+    #[cfg(not(any(feature = "system", feature = "generate-bindings")))]
+    let _ = plan;
+
+    if is_system && !cfg!(feature = "generate-bindings") {
+        panic!(
+            "feature `system` requires feature `generate-bindings` so bindings match the system Assimp headers.\n\
+             Hint: enable `asset-importer-sys/generate-bindings` (or use vendored/prebuilt builds)."
+        );
+    }
+
+    // For non-system builds we strongly prefer the shipped pregenerated bindings, so builds are
+    // fast, deterministic, and do not require libclang.
+    if !is_system && copy_pregenerated_bindings(cfg) {
+        return;
+    }
+
+    #[cfg(feature = "generate-bindings")]
+    {
+        run_bindgen(cfg, plan);
+        return;
+    }
+
+    #[cfg(not(feature = "generate-bindings"))]
+    {
+        panic!(
+            "pregenerated bindings are missing and `generate-bindings` is not enabled.\n\
+             Hint: restore src/bindings_pregenerated.rs or enable feature `generate-bindings`."
+        );
+    }
+}
+
+fn copy_pregenerated_bindings(cfg: &BuildConfig) -> bool {
+    let pregenerated = cfg
+        .manifest_dir
+        .join("src")
+        .join("bindings_pregenerated.rs");
+    if !pregenerated.exists() {
+        return false;
+    }
+    let out_file = cfg.out_dir.join("bindings.rs");
+    let content = std::fs::read_to_string(&pregenerated).unwrap_or_else(|e| {
+        panic!(
+            "Failed to read pregenerated bindings {}: {}",
+            pregenerated.display(),
+            e
+        )
+    });
+    std::fs::write(&out_file, content)
+        .unwrap_or_else(|e| panic!("Failed to write bindings.rs to OUT_DIR: {}", e));
+    true
+}
+
+#[cfg(feature = "generate-bindings")]
+fn run_bindgen(cfg: &BuildConfig, plan: &BuildPlan) {
+    use std::path::PathBuf;
+
     let wrapper_h = cfg.manifest_dir.join("wrapper.h");
 
     let include_dirs = ensure_config_h(cfg, &plan.include_dirs);
@@ -87,32 +149,31 @@ pub fn run(cfg: &BuildConfig, plan: &BuildPlan) {
     bindings
         .write_to_file(&out_file)
         .expect("Couldn't write bindings.rs");
-}
 
-fn ensure_config_h(cfg: &BuildConfig, include_dirs: &[PathBuf]) -> Vec<PathBuf> {
-    // Assimp expects <assimp/config.h> to exist. In a pure source checkout, only config.h.in is present.
-    // For bindgen we can generate a minimal config.h into OUT_DIR and add it as the highest-priority include dir.
-    let has_config_h = include_dirs
-        .iter()
-        .any(|d| d.join("assimp").join("config.h").exists());
-    if has_config_h {
-        return include_dirs.to_vec();
-    }
+    fn ensure_config_h(cfg: &BuildConfig, include_dirs: &[PathBuf]) -> Vec<PathBuf> {
+        // Assimp expects <assimp/config.h> to exist. In a pure source checkout, only config.h.in is present.
+        // For bindgen we can generate a minimal config.h into OUT_DIR and add it as the highest-priority include dir.
+        let has_config_h = include_dirs
+            .iter()
+            .any(|d| d.join("assimp").join("config.h").exists());
+        if has_config_h {
+            return include_dirs.to_vec();
+        }
 
-    let has_config_h_in = include_dirs
-        .iter()
-        .any(|d| d.join("assimp").join("config.h.in").exists());
-    if !has_config_h_in {
-        return include_dirs.to_vec();
-    }
+        let has_config_h_in = include_dirs
+            .iter()
+            .any(|d| d.join("assimp").join("config.h.in").exists());
+        if !has_config_h_in {
+            return include_dirs.to_vec();
+        }
 
-    let out_include_root = cfg.out_dir.join("include");
-    let out_assimp_dir = out_include_root.join("assimp");
-    let out_config_h = out_assimp_dir.join("config.h");
-    let _ = std::fs::create_dir_all(&out_assimp_dir);
+        let out_include_root = cfg.out_dir.join("include");
+        let out_assimp_dir = out_include_root.join("assimp");
+        let out_config_h = out_assimp_dir.join("config.h");
+        let _ = std::fs::create_dir_all(&out_assimp_dir);
 
-    if !out_config_h.exists() {
-        let minimal = r#"#ifndef AI_CONFIG_H_INC
+        if !out_config_h.exists() {
+            let minimal = r#"#ifndef AI_CONFIG_H_INC
 #define AI_CONFIG_H_INC
 
 // Minimal config.h for bindgen/header parsing.
@@ -124,32 +185,12 @@ fn ensure_config_h(cfg: &BuildConfig, include_dirs: &[PathBuf]) -> Vec<PathBuf> 
 
 #endif // AI_CONFIG_H_INC
 "#;
-        let _ = std::fs::write(&out_config_h, minimal);
-    }
+            let _ = std::fs::write(&out_config_h, minimal);
+        }
 
-    let mut out = Vec::with_capacity(include_dirs.len() + 1);
-    out.push(out_include_root);
-    out.extend_from_slice(include_dirs);
-    out
-}
-
-fn use_pregenerated_bindings(cfg: &BuildConfig) -> bool {
-    let pregenerated = cfg
-        .manifest_dir
-        .join("src")
-        .join("bindings_pregenerated.rs");
-    if !pregenerated.exists() {
-        return false;
+        let mut out = Vec::with_capacity(include_dirs.len() + 1);
+        out.push(out_include_root);
+        out.extend_from_slice(include_dirs);
+        out
     }
-    let out_file = cfg.out_dir.join("bindings.rs");
-    let content = std::fs::read_to_string(&pregenerated).unwrap_or_else(|e| {
-        panic!(
-            "Failed to read pregenerated bindings {}: {}",
-            pregenerated.display(),
-            e
-        )
-    });
-    std::fs::write(&out_file, content)
-        .unwrap_or_else(|e| panic!("Failed to write bindings.rs to OUT_DIR: {}", e));
-    true
 }

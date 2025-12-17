@@ -4,14 +4,16 @@ use crate::build_support::{
     util,
 };
 
-pub fn probe(cfg: &BuildConfig) -> BuildPlan {
+pub fn probe(cfg: &BuildConfig, link_kind: LinkKind) -> BuildPlan {
     if cfg.is_windows() && cfg.is_msvc() {
         let mut vcpkg_cfg = vcpkg::Config::new();
         vcpkg_cfg.emit_includes(true);
 
         // Match Rust's CRT choice when possible.
         // Users can always override via VCPKGRS_TRIPLET / vcpkg env vars.
-        if cfg.use_static_crt() && std::env::var("VCPKGRS_TRIPLET").is_err() {
+        if (cfg.use_static_crt() || matches!(link_kind, LinkKind::Static))
+            && std::env::var("VCPKGRS_TRIPLET").is_err()
+        {
             if let Some(triplet) = default_vcpkg_static_triplet(&cfg.target) {
                 vcpkg_cfg.triplet(triplet);
             }
@@ -42,7 +44,7 @@ pub fn probe(cfg: &BuildConfig) -> BuildPlan {
 
         return BuildPlan {
             include_dirs,
-            link_kind: LinkKind::Dynamic,
+            link_kind,
             link_lib: None, // vcpkg emits all rustc link flags
             link_search: Vec::new(),
             method: BuildMethod::System,
@@ -50,7 +52,7 @@ pub fn probe(cfg: &BuildConfig) -> BuildPlan {
     }
 
     let lib = pkg_config::Config::new()
-        .statik(false)
+        .statik(matches!(link_kind, LinkKind::Static))
         .probe("assimp")
         .unwrap_or_else(|e| {
             panic!(
@@ -98,7 +100,7 @@ pub fn probe(cfg: &BuildConfig) -> BuildPlan {
 
     BuildPlan {
         include_dirs,
-        link_kind: LinkKind::Dynamic,
+        link_kind,
         link_lib: None, // pkg-config emits all rustc link flags
         link_search: Vec::new(),
         method: BuildMethod::System,

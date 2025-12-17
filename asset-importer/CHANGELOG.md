@@ -15,7 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Zero-copy material properties**: Added `Material::properties()` yielding `MaterialPropertyRef` (borrowed key + raw bytes), plus raw animation key accessors on `NodeAnimation`.
 - **Mesh presence helpers**: Added `Mesh::{has_vertices,has_normals,has_tangents,has_bitangents,has_texture_coords,has_vertex_colors}` (and the same on `AnimMesh`) for quick capability checks.
 - **Triangle index iterators**: Added `Mesh::{triangles_iter,triangles,triangle_indices_iter}` for allocation-free access to triangulated index buffers.
-- **GPU-friendly byte views**: Added optional `bytemuck` feature plus `Mesh::*_bytes()`/`*_f32()` helpers (and `Texture::data_bytes_ref()`) for feeding rendering backends without extra copies.
+- **GPU-friendly byte views**: Added optional `bytemuck`/`glam-bytemuck` features plus `Mesh::*_bytes()`/`*_f32()` helpers (and `Texture::data_bytes_ref()`) for feeding rendering backends without extra copies; `gpu` is provided as a convenience meta-feature.
 - **More typed property reads**: Added `MaterialPropertyRef::{data_u32,as_i32,as_u32,as_bool,as_f32,as_f64}` for ergonomic scalar/typed reads.
 - **Typed vectors/colors**: Added `MaterialPropertyRef::{as_f32_array,as_f64_array,as_vec2,as_vec3,as_vec4,as_color3,as_color4}` for unaligned-safe, allocation-free decoding of common float payloads.
 - **Allocation-free string properties**: Added `MaterialPropertyRef::string_ref()` to decode `aiString` payloads without heap allocation.

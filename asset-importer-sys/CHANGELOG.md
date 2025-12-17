@@ -7,9 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Deterministic bindings by default**: Non-`system` builds now use the shipped pregenerated bindings by default (no libclang required), avoiding header/version skew and speeding up builds.
+- **Opt-in bindgen**: Added feature `generate-bindings` to regenerate bindings at build time when needed.
+
 ### Changed
 - **Bundled Assimp updated**: Updated the `assimp` submodule to `v6.0.2` (`fb375dd8c66f1c47dd000548f44d81b47f4466df`).
 - **Windows vcpkg ergonomics**: When building with MSVC + `crt-static`, system linking now defaults to a `*-windows-static` vcpkg triplet (unless `VCPKGRS_TRIPLET` is set).
+- **System + static-link**: `static-link` is now respected for `system` builds where supported (pkg-config `--static`; vcpkg via `*-windows-static` triplets).
 
 ### Fixed
 - **System Assimp version mismatch**: `system` builds now fail fast when discovered headers are older than Assimp 6 (including when pkg-config omits include paths), avoiding confusing missing-symbol errors during compilation.
