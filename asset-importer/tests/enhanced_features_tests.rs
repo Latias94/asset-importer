@@ -418,7 +418,7 @@ fn test_importer_desc_functionality() -> Result<(), Box<dyn std::error::Error>> 
     use asset_importer::{ImporterFlags, get_all_importer_descs, get_importer_desc};
 
     // Test getting description for OBJ format
-    let obj_desc = get_importer_desc("obj");
+    let obj_desc = get_importer_desc("obj")?;
     assert!(obj_desc.is_some(), "OBJ format should be supported");
 
     if let Some(desc) = obj_desc {
@@ -441,7 +441,7 @@ fn test_importer_desc_functionality() -> Result<(), Box<dyn std::error::Error>> 
     }
 
     // Test invalid extension
-    let invalid_desc = get_importer_desc("invalid_xyz");
+    let invalid_desc = get_importer_desc("invalid_xyz")?;
     assert!(invalid_desc.is_none());
 
     // Test flags functionality

@@ -159,17 +159,32 @@ impl ImporterDesc {
 /// ```rust,no_run
 /// use asset_importer::get_importer_desc;
 ///
-/// if let Some(desc) = get_importer_desc("obj") {
+/// if let Some(desc) = get_importer_desc("obj")? {
 ///     println!("OBJ files are supported by: {}", desc.name);
 ///     println!("Author: {}", desc.author);
 ///     println!("Supported extensions: {:?}", desc.file_extensions);
 /// }
+/// # Ok::<(), asset_importer::Error>(())
 /// ```
-pub fn get_importer_desc(extension: &str) -> Option<ImporterDesc> {
-    let c_extension = CString::new(extension).ok()?;
+pub fn get_importer_desc(extension: &str) -> crate::Result<Option<ImporterDesc>> {
+    let c_extension = CString::new(extension).map_err(|_| {
+        crate::Error::invalid_parameter("file extension contains NUL byte".to_string())
+    })?;
 
     unsafe {
         let desc_ptr = sys::aiGetImporterDesc(c_extension.as_ptr());
+        if desc_ptr.is_null() {
+            Ok(None)
+        } else {
+            Ok(Some(ImporterDesc::from_raw(&*desc_ptr)))
+        }
+    }
+}
+
+/// Get importer description for a given file extension (zero allocation).
+pub fn get_importer_desc_cstr(extension: &std::ffi::CStr) -> Option<ImporterDesc> {
+    unsafe {
+        let desc_ptr = sys::aiGetImporterDesc(extension.as_ptr());
         if desc_ptr.is_null() {
             None
         } else {
@@ -227,7 +242,7 @@ mod tests {
     #[test]
     fn test_get_importer_desc() {
         // Test with a common format that should be supported
-        let desc = get_importer_desc("obj");
+        let desc = get_importer_desc("obj").unwrap();
         assert!(desc.is_some(), "OBJ format should be supported");
 
         if let Some(desc) = desc {
@@ -239,7 +254,7 @@ mod tests {
     #[test]
     fn test_get_importer_desc_invalid() {
         // Test with an invalid extension
-        let desc = get_importer_desc("invalid_extension_xyz");
+        let desc = get_importer_desc("invalid_extension_xyz").unwrap();
         assert!(desc.is_none());
     }
 

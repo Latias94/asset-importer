@@ -4,6 +4,7 @@
 
 use crate::raw;
 use crate::{
+    error::{Error, Result},
     ffi,
     ptr::SharedPtr,
     scene::Scene,
@@ -201,9 +202,10 @@ impl Material {
     }
 
     /// Get a string property from the material (allocates, convenience).
-    pub fn get_string_property_str(&self, key: &str) -> Option<String> {
-        let c_key = CString::new(key).ok()?;
-        self.get_string_property(c_key.as_c_str())
+    pub fn get_string_property_str(&self, key: &str) -> Result<Option<String>> {
+        let c_key = CString::new(key)
+            .map_err(|_| Error::invalid_parameter("material key contains NUL byte".to_string()))?;
+        Ok(self.get_string_property(c_key.as_c_str()))
     }
 
     /// Get a float property from the material
@@ -230,9 +232,10 @@ impl Material {
     }
 
     /// Get a float property from the material (allocates, convenience).
-    pub fn get_float_property_str(&self, key: &str) -> Option<f32> {
-        let c_key = CString::new(key).ok()?;
-        self.get_float_property(c_key.as_c_str())
+    pub fn get_float_property_str(&self, key: &str) -> Result<Option<f32>> {
+        let c_key = CString::new(key)
+            .map_err(|_| Error::invalid_parameter("material key contains NUL byte".to_string()))?;
+        Ok(self.get_float_property(c_key.as_c_str()))
     }
 
     /// Get an integer property from the material
@@ -259,9 +262,10 @@ impl Material {
     }
 
     /// Get an integer property from the material (allocates, convenience).
-    pub fn get_integer_property_str(&self, key: &str) -> Option<i32> {
-        let c_key = CString::new(key).ok()?;
-        self.get_integer_property(c_key.as_c_str())
+    pub fn get_integer_property_str(&self, key: &str) -> Result<Option<i32>> {
+        let c_key = CString::new(key)
+            .map_err(|_| Error::invalid_parameter("material key contains NUL byte".to_string()))?;
+        Ok(self.get_integer_property(c_key.as_c_str()))
     }
 
     /// Get a color property from the material
@@ -291,9 +295,10 @@ impl Material {
     }
 
     /// Get a color property from the material (allocates, convenience).
-    pub fn get_color_property_str(&self, key: &str) -> Option<Color4D> {
-        let c_key = CString::new(key).ok()?;
-        self.get_color_property(c_key.as_c_str())
+    pub fn get_color_property_str(&self, key: &str) -> Result<Option<Color4D>> {
+        let c_key = CString::new(key)
+            .map_err(|_| Error::invalid_parameter("material key contains NUL byte".to_string()))?;
+        Ok(self.get_color_property(c_key.as_c_str()))
     }
 
     /// Get the diffuse color

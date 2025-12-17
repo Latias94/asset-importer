@@ -830,16 +830,11 @@ impl Scene {
     }
 
     /// Get embedded texture by filename hint (e.g. "*0", "*1")
-    pub fn embedded_texture_by_name(&self, name: &str) -> Option<Texture> {
-        let c = std::ffi::CString::new(name).ok()?;
-        unsafe {
-            let tex = sys::aiGetEmbeddedTexture(self.inner.scene_ptr.as_ptr(), c.as_ptr());
-            if tex.is_null() {
-                None
-            } else {
-                Texture::from_raw(self.clone(), tex).ok()
-            }
-        }
+    pub fn embedded_texture_by_name(&self, name: &str) -> Result<Option<Texture>> {
+        let c = std::ffi::CString::new(name).map_err(|_| {
+            Error::invalid_parameter("embedded texture name contains NUL byte".to_string())
+        })?;
+        Ok(self.embedded_texture_by_cstr(c.as_c_str()))
     }
 
     /// Get embedded texture by filename hint (e.g. "*0", "*1") without allocating.
