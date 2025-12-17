@@ -52,10 +52,10 @@ Basic usage:
 
 ```rust
 use asset_importer::Importer;
+use asset_importer::postprocess::PostProcessSteps;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let importer = Importer::new();
-    let scene = importer.import_file("model.obj")?;
+    let scene = Importer::new().import_file("model.obj")?;
     
     println!("Loaded {} meshes", scene.num_meshes());
     
@@ -67,6 +67,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("Mesh has {} vertices (copied)", vertices.len());
     }
     
+    Ok(())
+}
+```
+
+Builder-style usage (no repeated path):
+
+```rust
+use asset_importer::{Importer, postprocess::PostProcessSteps};
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let scene = Importer::new().read_file("model.fbx")
+        .with_post_process(PostProcessSteps::TRIANGULATE | PostProcessSteps::FLIP_UVS)
+        .import()?;
     Ok(())
 }
 ```

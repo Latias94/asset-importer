@@ -827,6 +827,39 @@ impl Importer {
             .with_memory_hint_opt(hint)
             .import()
     }
+
+    /// Import a file with a builder configuration closure.
+    ///
+    /// This avoids repeating the path and keeps call sites compact.
+    ///
+    /// # Example
+    /// ```rust,no_run
+    /// use asset_importer::{Importer, postprocess::PostProcessSteps};
+    ///
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let scene = Importer::new().import_file_with("model.fbx", |b| {
+    ///     b.with_post_process(PostProcessSteps::TRIANGULATE | PostProcessSteps::FLIP_UVS)
+    /// })?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn import_file_with<P, F>(&self, path: P, f: F) -> Result<Scene>
+    where
+        P: AsRef<Path>,
+        F: FnOnce(ImportBuilder) -> ImportBuilder,
+    {
+        f(self.read_file(path)).import()
+    }
+
+    /// Import from memory with a builder configuration closure.
+    ///
+    /// This copies `data` into an owned buffer so the builder can be `'static`.
+    pub fn import_from_memory_with<F>(&self, data: &[u8], hint: Option<&str>, f: F) -> Result<Scene>
+    where
+        F: FnOnce(ImportBuilder) -> ImportBuilder,
+    {
+        f(self.read_from_memory(data).with_memory_hint_opt(hint)).import()
+    }
 }
 
 impl Default for Importer {

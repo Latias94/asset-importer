@@ -19,11 +19,9 @@
 //! use asset_importer::{Importer, postprocess::PostProcessSteps};
 //!
 //! # fn main() -> Result<(), Box<dyn std::error::Error>> {
-//! let importer = Importer::new();
-//! let scene = importer
-//!     .read_file("model.fbx")
-//!     .with_post_process(PostProcessSteps::TRIANGULATE | PostProcessSteps::FLIP_UVS)
-//!     .import()?;
+//! let scene = Importer::new().import_file_with("model.fbx", |b| {
+//!     b.with_post_process(PostProcessSteps::TRIANGULATE | PostProcessSteps::FLIP_UVS)
+//! })?;
 //!
 //! println!("Loaded {} meshes", scene.meshes().count());
 //! # Ok(())
