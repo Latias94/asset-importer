@@ -147,7 +147,15 @@ impl Node {
     }
 
     /// Get the raw mesh index array (zero-copy).
-    pub fn mesh_indices_raw(&self) -> Option<&[u32]> {
+    pub fn mesh_indices_raw(&self) -> &[u32] {
+        unsafe {
+            let node = &*self.node_ptr.as_ptr();
+            ffi::slice_from_ptr_len(self, node.mMeshes as *const u32, node.mNumMeshes as usize)
+        }
+    }
+
+    /// Get the raw mesh index array (zero-copy), returning `None` when absent.
+    pub fn mesh_indices_raw_opt(&self) -> Option<&[u32]> {
         unsafe {
             let node = &*self.node_ptr.as_ptr();
             ffi::slice_from_ptr_len_opt(self, node.mMeshes as *const u32, node.mNumMeshes as usize)
@@ -156,9 +164,7 @@ impl Node {
 
     /// Iterate mesh indices without allocation.
     pub fn mesh_indices_iter(&self) -> impl Iterator<Item = usize> + '_ {
-        self.mesh_indices_raw()
-            .into_iter()
-            .flat_map(|xs| xs.iter().map(|&x| x as usize))
+        self.mesh_indices_raw().iter().map(|&x| x as usize)
     }
 
     /// Find a child node by name (recursive search)

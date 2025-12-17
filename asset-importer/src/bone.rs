@@ -127,7 +127,19 @@ impl Bone {
     }
 
     /// Get the raw vertex weight array (zero-copy).
-    pub fn weights_raw(&self) -> Option<&[raw::AiVertexWeight]> {
+    pub fn weights_raw(&self) -> &[raw::AiVertexWeight] {
+        unsafe {
+            let bone = &*self.bone_ptr.as_ptr();
+            ffi::slice_from_ptr_len(
+                self,
+                bone.mWeights as *const raw::AiVertexWeight,
+                bone.mNumWeights as usize,
+            )
+        }
+    }
+
+    /// Get the raw vertex weight array (zero-copy), returning `None` when absent.
+    pub fn weights_raw_opt(&self) -> Option<&[raw::AiVertexWeight]> {
         unsafe {
             let bone = &*self.bone_ptr.as_ptr();
             ffi::slice_from_ptr_len_opt(
@@ -140,14 +152,12 @@ impl Bone {
 
     /// Iterate vertex weights without allocation.
     pub fn weights_iter(&self) -> impl Iterator<Item = VertexWeight> + '_ {
-        self.weights_raw()
-            .into_iter()
-            .flat_map(|ws| ws.iter().map(VertexWeight::from))
+        self.weights_raw().iter().map(VertexWeight::from)
     }
 
     /// Get a specific vertex weight by index
     pub fn weight(&self, index: usize) -> Option<VertexWeight> {
-        self.weights_raw()?.get(index).map(VertexWeight::from)
+        self.weights_raw().get(index).map(VertexWeight::from)
     }
 
     /// Get the offset matrix for this bone
@@ -191,9 +201,7 @@ impl Bone {
 
     /// Get the average weight value
     pub fn average_weight(&self) -> f32 {
-        let Some(ws) = self.weights_raw() else {
-            return 0.0;
-        };
+        let ws = self.weights_raw();
         if ws.is_empty() {
             return 0.0;
         }

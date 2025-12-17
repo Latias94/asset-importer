@@ -18,17 +18,15 @@ fn test_mesh_faces_raw_and_iter() {
         .expect("failed to import box.obj");
 
     let mesh = scene.meshes().next().expect("scene has no meshes");
-    let raw_faces = mesh.faces_raw().expect("mesh has no raw faces");
+    let raw_faces = mesh.faces_raw();
+    assert!(!raw_faces.is_empty(), "mesh has no raw faces");
     assert_eq!(raw_faces.len(), mesh.num_faces());
     assert_eq!(mesh.faces_iter().count(), mesh.num_faces());
 
     for (i, face) in mesh.faces_iter().enumerate() {
         assert_eq!(face.num_indices(), raw_faces[i].mNumIndices as usize);
         assert_eq!(face.indices().len(), face.num_indices());
-        assert_eq!(
-            face.indices_raw().map(|s| s.len()).unwrap_or(0),
-            face.num_indices()
-        );
+        assert_eq!(face.indices_raw().len(), face.num_indices());
     }
 }
 
@@ -47,8 +45,8 @@ fn test_mesh_vertices_raw_type_is_sys_free() {
         .expect("failed to import box.obj");
 
     let mesh = scene.meshes().next().expect("scene has no meshes");
-    let raw = mesh.vertices_raw().expect("mesh has no vertices");
-    assert!(!raw.is_empty());
+    let raw = mesh.vertices_raw();
+    assert!(!raw.is_empty(), "mesh has no vertices");
 }
 
 #[test]

@@ -59,23 +59,29 @@ impl Mesh {
 
     /// Get the vertices of the mesh
     pub fn vertices(&self) -> Vec<Vector3D> {
-        self.vertices_raw()
-            .map(|vs| vs.iter().map(|v| Vector3D::new(v.x, v.y, v.z)).collect())
-            .unwrap_or_default()
+        self.vertices_iter().collect()
     }
 
     /// Get the raw vertex buffer (zero-copy).
-    pub fn vertices_raw(&self) -> Option<&[raw::AiVector3D]> {
+    pub fn vertices_raw(&self) -> &[raw::AiVector3D] {
         unsafe {
             let mesh = &*self.mesh_ptr.as_ptr();
-            if mesh.mVertices.is_null() {
+            let n = mesh.mNumVertices as usize;
+            debug_assert!(n == 0 || !mesh.mVertices.is_null());
+            ffi::slice_from_ptr_len(self, mesh.mVertices as *const raw::AiVector3D, n)
+        }
+    }
+
+    /// Get the raw vertex buffer (zero-copy), returning `None` when absent.
+    pub fn vertices_raw_opt(&self) -> Option<&[raw::AiVector3D]> {
+        unsafe {
+            let mesh = &*self.mesh_ptr.as_ptr();
+            let n = mesh.mNumVertices as usize;
+            let ptr = mesh.mVertices as *const raw::AiVector3D;
+            if ptr.is_null() {
                 None
             } else {
-                Some(ffi::slice_from_ptr_len(
-                    self,
-                    mesh.mVertices as *const raw::AiVector3D,
-                    mesh.mNumVertices as usize,
-                ))
+                Some(ffi::slice_from_ptr_len(self, ptr, n))
             }
         }
     }
@@ -83,26 +89,39 @@ impl Mesh {
     /// Iterate vertices without allocation.
     pub fn vertices_iter(&self) -> impl Iterator<Item = Vector3D> + '_ {
         self.vertices_raw()
-            .into_iter()
-            .flat_map(|vs| vs.iter().map(|v| Vector3D::new(v.x, v.y, v.z)))
+            .iter()
+            .map(|v| Vector3D::new(v.x, v.y, v.z))
     }
 
     /// Get the normals of the mesh
     pub fn normals(&self) -> Option<Vec<Vector3D>> {
-        self.normals_raw()
+        self.normals_raw_opt()
             .map(|ns| ns.iter().map(|v| Vector3D::new(v.x, v.y, v.z)).collect())
     }
 
     /// Get the raw normal buffer (zero-copy).
-    pub fn normals_raw(&self) -> Option<&[raw::AiVector3D]> {
+    pub fn normals_raw(&self) -> &[raw::AiVector3D] {
         unsafe {
             let mesh = &*self.mesh_ptr.as_ptr();
-            if mesh.mNormals.is_null() {
+            ffi::slice_from_ptr_len(
+                self,
+                mesh.mNormals as *const raw::AiVector3D,
+                mesh.mNumVertices as usize,
+            )
+        }
+    }
+
+    /// Get the raw normal buffer (zero-copy), returning `None` when absent.
+    pub fn normals_raw_opt(&self) -> Option<&[raw::AiVector3D]> {
+        unsafe {
+            let mesh = &*self.mesh_ptr.as_ptr();
+            let ptr = mesh.mNormals as *const raw::AiVector3D;
+            if ptr.is_null() {
                 None
             } else {
                 Some(ffi::slice_from_ptr_len(
                     self,
-                    mesh.mNormals as *const raw::AiVector3D,
+                    ptr,
                     mesh.mNumVertices as usize,
                 ))
             }
@@ -112,26 +131,39 @@ impl Mesh {
     /// Iterate normals without allocation.
     pub fn normals_iter(&self) -> impl Iterator<Item = Vector3D> + '_ {
         self.normals_raw()
-            .into_iter()
-            .flat_map(|ns| ns.iter().map(|v| Vector3D::new(v.x, v.y, v.z)))
+            .iter()
+            .map(|v| Vector3D::new(v.x, v.y, v.z))
     }
 
     /// Get the tangents of the mesh
     pub fn tangents(&self) -> Option<Vec<Vector3D>> {
-        self.tangents_raw()
+        self.tangents_raw_opt()
             .map(|ts| ts.iter().map(|v| Vector3D::new(v.x, v.y, v.z)).collect())
     }
 
     /// Get the raw tangent buffer (zero-copy).
-    pub fn tangents_raw(&self) -> Option<&[raw::AiVector3D]> {
+    pub fn tangents_raw(&self) -> &[raw::AiVector3D] {
         unsafe {
             let mesh = &*self.mesh_ptr.as_ptr();
-            if mesh.mTangents.is_null() {
+            ffi::slice_from_ptr_len(
+                self,
+                mesh.mTangents as *const raw::AiVector3D,
+                mesh.mNumVertices as usize,
+            )
+        }
+    }
+
+    /// Get the raw tangent buffer (zero-copy), returning `None` when absent.
+    pub fn tangents_raw_opt(&self) -> Option<&[raw::AiVector3D]> {
+        unsafe {
+            let mesh = &*self.mesh_ptr.as_ptr();
+            let ptr = mesh.mTangents as *const raw::AiVector3D;
+            if ptr.is_null() {
                 None
             } else {
                 Some(ffi::slice_from_ptr_len(
                     self,
-                    mesh.mTangents as *const raw::AiVector3D,
+                    ptr,
                     mesh.mNumVertices as usize,
                 ))
             }
@@ -141,26 +173,39 @@ impl Mesh {
     /// Iterate tangents without allocation.
     pub fn tangents_iter(&self) -> impl Iterator<Item = Vector3D> + '_ {
         self.tangents_raw()
-            .into_iter()
-            .flat_map(|ts| ts.iter().map(|v| Vector3D::new(v.x, v.y, v.z)))
+            .iter()
+            .map(|v| Vector3D::new(v.x, v.y, v.z))
     }
 
     /// Get the bitangents of the mesh
     pub fn bitangents(&self) -> Option<Vec<Vector3D>> {
-        self.bitangents_raw()
+        self.bitangents_raw_opt()
             .map(|bs| bs.iter().map(|v| Vector3D::new(v.x, v.y, v.z)).collect())
     }
 
     /// Get the raw bitangent buffer (zero-copy).
-    pub fn bitangents_raw(&self) -> Option<&[raw::AiVector3D]> {
+    pub fn bitangents_raw(&self) -> &[raw::AiVector3D] {
         unsafe {
             let mesh = &*self.mesh_ptr.as_ptr();
-            if mesh.mBitangents.is_null() {
+            ffi::slice_from_ptr_len(
+                self,
+                mesh.mBitangents as *const raw::AiVector3D,
+                mesh.mNumVertices as usize,
+            )
+        }
+    }
+
+    /// Get the raw bitangent buffer (zero-copy), returning `None` when absent.
+    pub fn bitangents_raw_opt(&self) -> Option<&[raw::AiVector3D]> {
+        unsafe {
+            let mesh = &*self.mesh_ptr.as_ptr();
+            let ptr = mesh.mBitangents as *const raw::AiVector3D;
+            if ptr.is_null() {
                 None
             } else {
                 Some(ffi::slice_from_ptr_len(
                     self,
-                    mesh.mBitangents as *const raw::AiVector3D,
+                    ptr,
                     mesh.mNumVertices as usize,
                 ))
             }
@@ -170,31 +215,47 @@ impl Mesh {
     /// Iterate bitangents without allocation.
     pub fn bitangents_iter(&self) -> impl Iterator<Item = Vector3D> + '_ {
         self.bitangents_raw()
-            .into_iter()
-            .flat_map(|bs| bs.iter().map(|v| Vector3D::new(v.x, v.y, v.z)))
+            .iter()
+            .map(|v| Vector3D::new(v.x, v.y, v.z))
     }
 
     /// Get texture coordinates for a specific channel
     pub fn texture_coords(&self, channel: usize) -> Option<Vec<Vector3D>> {
-        self.texture_coords_raw(channel)
+        self.texture_coords_raw_opt(channel)
             .map(|uvs| uvs.iter().map(|v| Vector3D::new(v.x, v.y, v.z)).collect())
     }
 
     /// Get raw texture coordinates for a specific channel (zero-copy).
-    pub fn texture_coords_raw(&self, channel: usize) -> Option<&[raw::AiVector3D]> {
+    pub fn texture_coords_raw(&self, channel: usize) -> &[raw::AiVector3D] {
         if channel >= sys::AI_MAX_NUMBER_OF_TEXTURECOORDS as usize {
-            return None;
+            return &[];
         }
 
         unsafe {
             let mesh = &*self.mesh_ptr.as_ptr();
             let tex_coords_ptr = mesh.mTextureCoords[channel];
-            if tex_coords_ptr.is_null() {
+            ffi::slice_from_ptr_len(
+                self,
+                tex_coords_ptr as *const raw::AiVector3D,
+                mesh.mNumVertices as usize,
+            )
+        }
+    }
+
+    /// Get raw texture coordinates for a specific channel (zero-copy), returning `None` when absent.
+    pub fn texture_coords_raw_opt(&self, channel: usize) -> Option<&[raw::AiVector3D]> {
+        if channel >= sys::AI_MAX_NUMBER_OF_TEXTURECOORDS as usize {
+            return None;
+        }
+        unsafe {
+            let mesh = &*self.mesh_ptr.as_ptr();
+            let ptr = mesh.mTextureCoords[channel] as *const raw::AiVector3D;
+            if ptr.is_null() {
                 None
             } else {
                 Some(ffi::slice_from_ptr_len(
                     self,
-                    tex_coords_ptr as *const raw::AiVector3D,
+                    ptr,
                     mesh.mNumVertices as usize,
                 ))
             }
@@ -204,13 +265,13 @@ impl Mesh {
     /// Iterate texture coordinates without allocation.
     pub fn texture_coords_iter(&self, channel: usize) -> impl Iterator<Item = Vector3D> + '_ {
         self.texture_coords_raw(channel)
-            .into_iter()
-            .flat_map(|uvs| uvs.iter().map(|v| Vector3D::new(v.x, v.y, v.z)))
+            .iter()
+            .map(|v| Vector3D::new(v.x, v.y, v.z))
     }
 
     /// Get vertex colors for a specific channel
     pub fn vertex_colors(&self, channel: usize) -> Option<Vec<Color4D>> {
-        self.vertex_colors_raw(channel).map(|cs| {
+        self.vertex_colors_raw_opt(channel).map(|cs| {
             cs.iter()
                 .map(|c| Color4D::new(c.r, c.g, c.b, c.a))
                 .collect()
@@ -218,20 +279,36 @@ impl Mesh {
     }
 
     /// Get raw vertex colors for a specific channel (zero-copy).
-    pub fn vertex_colors_raw(&self, channel: usize) -> Option<&[raw::AiColor4D]> {
+    pub fn vertex_colors_raw(&self, channel: usize) -> &[raw::AiColor4D] {
         if channel >= sys::AI_MAX_NUMBER_OF_COLOR_SETS as usize {
-            return None;
+            return &[];
         }
 
         unsafe {
             let mesh = &*self.mesh_ptr.as_ptr();
             let colors_ptr = mesh.mColors[channel];
-            if colors_ptr.is_null() {
+            ffi::slice_from_ptr_len(
+                self,
+                colors_ptr as *const raw::AiColor4D,
+                mesh.mNumVertices as usize,
+            )
+        }
+    }
+
+    /// Get raw vertex colors for a specific channel (zero-copy), returning `None` when absent.
+    pub fn vertex_colors_raw_opt(&self, channel: usize) -> Option<&[raw::AiColor4D]> {
+        if channel >= sys::AI_MAX_NUMBER_OF_COLOR_SETS as usize {
+            return None;
+        }
+        unsafe {
+            let mesh = &*self.mesh_ptr.as_ptr();
+            let ptr = mesh.mColors[channel] as *const raw::AiColor4D;
+            if ptr.is_null() {
                 None
             } else {
                 Some(ffi::slice_from_ptr_len(
                     self,
-                    colors_ptr as *const raw::AiColor4D,
+                    ptr,
                     mesh.mNumVertices as usize,
                 ))
             }
@@ -241,8 +318,8 @@ impl Mesh {
     /// Iterate vertex colors without allocation.
     pub fn vertex_colors_iter(&self, channel: usize) -> impl Iterator<Item = Color4D> + '_ {
         self.vertex_colors_raw(channel)
-            .into_iter()
-            .flat_map(|cs| cs.iter().map(|c| Color4D::new(c.r, c.g, c.b, c.a)))
+            .iter()
+            .map(|c| Color4D::new(c.r, c.g, c.b, c.a))
     }
 
     /// Get the number of faces in the mesh
@@ -260,17 +337,25 @@ impl Mesh {
     }
 
     /// Get the raw face array (zero-copy).
-    pub fn faces_raw(&self) -> Option<&[raw::AiFace]> {
+    pub fn faces_raw(&self) -> &[raw::AiFace] {
         unsafe {
             let mesh = &*self.mesh_ptr.as_ptr();
-            if mesh.mFaces.is_null() || mesh.mNumFaces == 0 {
+            let n = mesh.mNumFaces as usize;
+            debug_assert!(n == 0 || !mesh.mFaces.is_null());
+            ffi::slice_from_ptr_len(self, mesh.mFaces as *const raw::AiFace, n)
+        }
+    }
+
+    /// Get the raw face array (zero-copy), returning `None` when absent.
+    pub fn faces_raw_opt(&self) -> Option<&[raw::AiFace]> {
+        unsafe {
+            let mesh = &*self.mesh_ptr.as_ptr();
+            let n = mesh.mNumFaces as usize;
+            let ptr = mesh.mFaces as *const raw::AiFace;
+            if ptr.is_null() {
                 None
             } else {
-                Some(ffi::slice_from_ptr_len(
-                    self,
-                    mesh.mFaces as *const raw::AiFace,
-                    mesh.mNumFaces as usize,
-                ))
+                Some(ffi::slice_from_ptr_len(self, ptr, n))
             }
         }
     }
@@ -444,7 +529,15 @@ impl Face {
     }
 
     /// Get the raw index slice (zero-copy).
-    pub fn indices_raw(&self) -> Option<&[u32]> {
+    pub fn indices_raw(&self) -> &[u32] {
+        unsafe {
+            let face = &*self.face_ptr.as_ptr();
+            ffi::slice_from_ptr_len(self, face.mIndices as *const u32, face.mNumIndices as usize)
+        }
+    }
+
+    /// Get the raw index slice (zero-copy), returning `None` when absent.
+    pub fn indices_raw_opt(&self) -> Option<&[u32]> {
         unsafe {
             let face = &*self.face_ptr.as_ptr();
             ffi::slice_from_ptr_len_opt(
@@ -457,7 +550,7 @@ impl Face {
 
     /// Get the indices of this face.
     pub fn indices(&self) -> &[u32] {
-        self.indices_raw().unwrap_or(&[])
+        self.indices_raw()
     }
 }
 
@@ -526,87 +619,131 @@ impl AnimMesh {
 
     /// Replacement positions (if present)
     pub fn vertices(&self) -> Option<Vec<Vector3D>> {
-        self.vertices_raw()
+        self.vertices_raw_opt()
             .map(|vs| vs.iter().map(|v| Vector3D::new(v.x, v.y, v.z)).collect())
     }
 
     /// Raw replacement positions (zero-copy).
-    pub fn vertices_raw(&self) -> Option<&[raw::AiVector3D]> {
+    pub fn vertices_raw(&self) -> &[raw::AiVector3D] {
         unsafe {
             let m = &*self.anim_ptr.as_ptr();
-            (!m.mVertices.is_null()).then(|| {
-                ffi::slice_from_ptr_len(
-                    self,
-                    m.mVertices as *const raw::AiVector3D,
-                    m.mNumVertices as usize,
-                )
-            })
+            ffi::slice_from_ptr_len(
+                self,
+                m.mVertices as *const raw::AiVector3D,
+                m.mNumVertices as usize,
+            )
+        }
+    }
+
+    /// Raw replacement positions (zero-copy), returning `None` when absent.
+    pub fn vertices_raw_opt(&self) -> Option<&[raw::AiVector3D]> {
+        unsafe {
+            let m = &*self.anim_ptr.as_ptr();
+            let ptr = m.mVertices as *const raw::AiVector3D;
+            if ptr.is_null() {
+                None
+            } else {
+                Some(ffi::slice_from_ptr_len(self, ptr, m.mNumVertices as usize))
+            }
         }
     }
 
     /// Replacement normals (if present)
     pub fn normals(&self) -> Option<Vec<Vector3D>> {
-        self.normals_raw()
+        self.normals_raw_opt()
             .map(|ns| ns.iter().map(|v| Vector3D::new(v.x, v.y, v.z)).collect())
     }
 
     /// Raw replacement normals (zero-copy).
-    pub fn normals_raw(&self) -> Option<&[raw::AiVector3D]> {
+    pub fn normals_raw(&self) -> &[raw::AiVector3D] {
         unsafe {
             let m = &*self.anim_ptr.as_ptr();
-            (!m.mNormals.is_null()).then(|| {
-                ffi::slice_from_ptr_len(
-                    self,
-                    m.mNormals as *const raw::AiVector3D,
-                    m.mNumVertices as usize,
-                )
-            })
+            ffi::slice_from_ptr_len(
+                self,
+                m.mNormals as *const raw::AiVector3D,
+                m.mNumVertices as usize,
+            )
+        }
+    }
+
+    /// Raw replacement normals (zero-copy), returning `None` when absent.
+    pub fn normals_raw_opt(&self) -> Option<&[raw::AiVector3D]> {
+        unsafe {
+            let m = &*self.anim_ptr.as_ptr();
+            let ptr = m.mNormals as *const raw::AiVector3D;
+            if ptr.is_null() {
+                None
+            } else {
+                Some(ffi::slice_from_ptr_len(self, ptr, m.mNumVertices as usize))
+            }
         }
     }
 
     /// Replacement tangents (if present)
     pub fn tangents(&self) -> Option<Vec<Vector3D>> {
-        self.tangents_raw()
+        self.tangents_raw_opt()
             .map(|ts| ts.iter().map(|v| Vector3D::new(v.x, v.y, v.z)).collect())
     }
 
     /// Raw replacement tangents (zero-copy).
-    pub fn tangents_raw(&self) -> Option<&[raw::AiVector3D]> {
+    pub fn tangents_raw(&self) -> &[raw::AiVector3D] {
         unsafe {
             let m = &*self.anim_ptr.as_ptr();
-            (!m.mTangents.is_null()).then(|| {
-                ffi::slice_from_ptr_len(
-                    self,
-                    m.mTangents as *const raw::AiVector3D,
-                    m.mNumVertices as usize,
-                )
-            })
+            ffi::slice_from_ptr_len(
+                self,
+                m.mTangents as *const raw::AiVector3D,
+                m.mNumVertices as usize,
+            )
+        }
+    }
+
+    /// Raw replacement tangents (zero-copy), returning `None` when absent.
+    pub fn tangents_raw_opt(&self) -> Option<&[raw::AiVector3D]> {
+        unsafe {
+            let m = &*self.anim_ptr.as_ptr();
+            let ptr = m.mTangents as *const raw::AiVector3D;
+            if ptr.is_null() {
+                None
+            } else {
+                Some(ffi::slice_from_ptr_len(self, ptr, m.mNumVertices as usize))
+            }
         }
     }
 
     /// Replacement bitangents (if present)
     pub fn bitangents(&self) -> Option<Vec<Vector3D>> {
-        self.bitangents_raw()
+        self.bitangents_raw_opt()
             .map(|bs| bs.iter().map(|v| Vector3D::new(v.x, v.y, v.z)).collect())
     }
 
     /// Raw replacement bitangents (zero-copy).
-    pub fn bitangents_raw(&self) -> Option<&[raw::AiVector3D]> {
+    pub fn bitangents_raw(&self) -> &[raw::AiVector3D] {
         unsafe {
             let m = &*self.anim_ptr.as_ptr();
-            (!m.mBitangents.is_null()).then(|| {
-                ffi::slice_from_ptr_len(
-                    self,
-                    m.mBitangents as *const raw::AiVector3D,
-                    m.mNumVertices as usize,
-                )
-            })
+            ffi::slice_from_ptr_len(
+                self,
+                m.mBitangents as *const raw::AiVector3D,
+                m.mNumVertices as usize,
+            )
+        }
+    }
+
+    /// Raw replacement bitangents (zero-copy), returning `None` when absent.
+    pub fn bitangents_raw_opt(&self) -> Option<&[raw::AiVector3D]> {
+        unsafe {
+            let m = &*self.anim_ptr.as_ptr();
+            let ptr = m.mBitangents as *const raw::AiVector3D;
+            if ptr.is_null() {
+                None
+            } else {
+                Some(ffi::slice_from_ptr_len(self, ptr, m.mNumVertices as usize))
+            }
         }
     }
 
     /// Replacement vertex colors for a specific channel
     pub fn vertex_colors(&self, channel: usize) -> Option<Vec<Color4D>> {
-        self.vertex_colors_raw(channel).map(|cs| {
+        self.vertex_colors_raw_opt(channel).map(|cs| {
             cs.iter()
                 .map(|c| Color4D::new(c.r, c.g, c.b, c.a))
                 .collect()
@@ -614,47 +751,63 @@ impl AnimMesh {
     }
 
     /// Raw replacement vertex colors for a specific channel (zero-copy).
-    pub fn vertex_colors_raw(&self, channel: usize) -> Option<&[raw::AiColor4D]> {
+    pub fn vertex_colors_raw(&self, channel: usize) -> &[raw::AiColor4D] {
+        if channel >= sys::AI_MAX_NUMBER_OF_COLOR_SETS as usize {
+            return &[];
+        }
+        unsafe {
+            let m = &*self.anim_ptr.as_ptr();
+            let ptr = m.mColors[channel];
+            ffi::slice_from_ptr_len(self, ptr as *const raw::AiColor4D, m.mNumVertices as usize)
+        }
+    }
+
+    /// Raw replacement vertex colors for a specific channel (zero-copy), returning `None` when absent.
+    pub fn vertex_colors_raw_opt(&self, channel: usize) -> Option<&[raw::AiColor4D]> {
         if channel >= sys::AI_MAX_NUMBER_OF_COLOR_SETS as usize {
             return None;
         }
         unsafe {
             let m = &*self.anim_ptr.as_ptr();
-            let ptr = m.mColors[channel];
+            let ptr = m.mColors[channel] as *const raw::AiColor4D;
             if ptr.is_null() {
                 None
             } else {
-                Some(ffi::slice_from_ptr_len(
-                    self,
-                    ptr as *const raw::AiColor4D,
-                    m.mNumVertices as usize,
-                ))
+                Some(ffi::slice_from_ptr_len(self, ptr, m.mNumVertices as usize))
             }
         }
     }
 
     /// Replacement texture coordinates for a specific channel
     pub fn texture_coords(&self, channel: usize) -> Option<Vec<Vector3D>> {
-        self.texture_coords_raw(channel)
+        self.texture_coords_raw_opt(channel)
             .map(|uvs| uvs.iter().map(|v| Vector3D::new(v.x, v.y, v.z)).collect())
     }
 
     /// Raw replacement texture coordinates for a specific channel (zero-copy).
-    pub fn texture_coords_raw(&self, channel: usize) -> Option<&[raw::AiVector3D]> {
+    pub fn texture_coords_raw(&self, channel: usize) -> &[raw::AiVector3D] {
+        if channel >= sys::AI_MAX_NUMBER_OF_TEXTURECOORDS as usize {
+            return &[];
+        }
+        unsafe {
+            let m = &*self.anim_ptr.as_ptr();
+            let ptr = m.mTextureCoords[channel];
+            ffi::slice_from_ptr_len(self, ptr as *const raw::AiVector3D, m.mNumVertices as usize)
+        }
+    }
+
+    /// Raw replacement texture coordinates for a specific channel (zero-copy), returning `None` when absent.
+    pub fn texture_coords_raw_opt(&self, channel: usize) -> Option<&[raw::AiVector3D]> {
         if channel >= sys::AI_MAX_NUMBER_OF_TEXTURECOORDS as usize {
             return None;
         }
         unsafe {
             let m = &*self.anim_ptr.as_ptr();
-            let ptr = m.mTextureCoords[channel];
+            let ptr = m.mTextureCoords[channel] as *const raw::AiVector3D;
             if ptr.is_null() {
                 None
             } else {
-                Some(ffi::slice_from_ptr_len(
-                    self,
-                    ptr as *const raw::AiVector3D,
-                    m.mNumVertices as usize,
-                ))
+                Some(ffi::slice_from_ptr_len(self, ptr, m.mNumVertices as usize))
             }
         }
     }

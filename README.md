@@ -61,7 +61,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     
     for mesh in scene.meshes() {
         // Zero-copy options are available:
-        // - mesh.vertices_raw(): Option<&[asset_importer::raw::AiVector3D]>
+        // - mesh.vertices_raw(): &[asset_importer::raw::AiVector3D]
         // - mesh.vertices_iter(): Iterator<Item = Vector3D>
         let vertices = mesh.vertices();
         println!("Mesh has {} vertices (copied)", vertices.len());

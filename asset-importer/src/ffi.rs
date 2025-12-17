@@ -26,9 +26,7 @@ pub(crate) unsafe fn slice_from_ptr_len<O: ?Sized, T>(
 }
 
 /// Borrow a slice from a raw pointer and element count, returning `None` when
-/// `len > 0` but `ptr` is null.
-///
-/// Returns `Some(&[])` when `len == 0` (even if `ptr` is null).
+/// `ptr` is null.
 ///
 /// # Safety
 /// Same as [`slice_from_ptr_len`].
@@ -38,11 +36,8 @@ pub(crate) unsafe fn slice_from_ptr_len_opt<O: ?Sized, T>(
     len: usize,
 ) -> Option<&[T]> {
     let _ = owner;
-    if len == 0 {
-        return Some(&[]);
-    }
     if ptr.is_null() {
         return None;
     }
-    Some(unsafe { std::slice::from_raw_parts(ptr, len) })
+    Some(unsafe { slice_from_ptr_len(owner, ptr, len) })
 }

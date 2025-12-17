@@ -66,8 +66,8 @@ fn main() -> Result<(), Box<dyn Error>> {
                 ch.num_keys()
             );
             if let Some(k0) = ch.key(0) {
-                let values_len = k0.values().map(|v| v.len()).unwrap_or(0);
-                let weights_len = k0.weights().map(|v| v.len()).unwrap_or(0);
+                let values_len = k0.values().len();
+                let weights_len = k0.weights().len();
                 println!(
                     "    key0: time={:.3} values={} weights={}",
                     k0.time(),

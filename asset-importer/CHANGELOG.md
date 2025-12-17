@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Export blob ergonomics (breaking)**: `ExportBlobView` no longer borrows `ExportBlob`; export blob views now keep the underlying blob chain alive internally (Arc-backed), making them easier to pass around.
 - **Thread-safety boundaries**: `SharedPtr<T>` is no longer `Send + Sync` for all `T`; cross-thread sharing is now only enabled for explicitly approved, read-only Assimp/FFI target types.
 - **FFI slice borrowing**: Centralized raw pointer + length slice construction into internal helpers to keep `unsafe` small and consistent across the codebase.
+- **Raw accessor ergonomics (breaking)**: Most `*_raw()` accessors now return `&[...]` and treat missing buffers as empty slices; use the new `*_raw_opt()` variants when you need to distinguish "absent" vs "present/empty".
 - **Assimp version helpers**: `version::assimp_version()` now reports `major.minor.patch` and new helpers expose patch/branch/legal strings.
 - **Bundled Assimp updated**: Vendored Assimp (via `asset-importer-sys`) is now pinned to `v6.0.2`.
 - **Thread-safety internals**: Centralized Assimp pointer sharing logic to reduce scattered `unsafe impl Send/Sync` across the codebase.

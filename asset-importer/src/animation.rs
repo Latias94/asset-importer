@@ -540,8 +540,9 @@ impl MeshAnimation {
     pub fn keys(&self) -> &[MeshKey] {
         unsafe {
             let ch = &*self.channel_ptr.as_ptr();
-            ffi::slice_from_ptr_len_opt(self, ch.mKeys as *const MeshKey, ch.mNumKeys as usize)
-                .unwrap_or(&[])
+            let n = ch.mNumKeys as usize;
+            debug_assert!(n == 0 || !ch.mKeys.is_null());
+            ffi::slice_from_ptr_len(self, ch.mKeys as *const MeshKey, n)
         }
     }
 }
@@ -610,20 +611,22 @@ impl MorphMeshKey {
     }
 
     /// Morph target indices (zero-copy).
-    pub fn values(&self) -> Option<&[u32]> {
+    pub fn values(&self) -> &[u32] {
         unsafe {
             let k = &*self.key_ptr.as_ptr();
             let n = k.mNumValuesAndWeights as usize;
-            ffi::slice_from_ptr_len_opt(self, k.mValues as *const u32, n)
+            debug_assert!(n == 0 || !k.mValues.is_null());
+            ffi::slice_from_ptr_len(self, k.mValues as *const u32, n)
         }
     }
 
     /// Morph target weights (zero-copy).
-    pub fn weights(&self) -> Option<&[f64]> {
+    pub fn weights(&self) -> &[f64] {
         unsafe {
             let k = &*self.key_ptr.as_ptr();
             let n = k.mNumValuesAndWeights as usize;
-            ffi::slice_from_ptr_len_opt(self, k.mWeights as *const f64, n)
+            debug_assert!(n == 0 || !k.mWeights.is_null());
+            ffi::slice_from_ptr_len(self, k.mWeights as *const f64, n)
         }
     }
 }
