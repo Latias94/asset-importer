@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - **Scene ownership model (breaking)**: Scene-backed view types (`Mesh`, `Node`, `Material`, `Texture`, etc.) now own a cheap clone of `Scene` instead of borrowing via lifetimes, making them effectively `'static` and more ergonomic for async/multithreading.
 - **View trait changes (breaking)**: Many scene-backed view types are no longer `Copy`; prefer cloning the view handle when needed.
+- **Export blob ergonomics (breaking)**: `ExportBlobView` no longer borrows `ExportBlob`; export blob views now keep the underlying blob chain alive internally (Arc-backed), making them easier to pass around.
 - **Assimp version helpers**: `version::assimp_version()` now reports `major.minor.patch` and new helpers expose patch/branch/legal strings.
 - **Bundled Assimp updated**: Vendored Assimp (via `asset-importer-sys`) is now pinned to `v6.0.2`.
 - **Thread-safety internals**: Centralized Assimp pointer sharing logic to reduce scattered `unsafe impl Send/Sync` across the codebase.

@@ -1,8 +1,8 @@
 //! Scene export functionality
 
 use std::ffi::CString;
-use std::marker::PhantomData;
 use std::path::Path;
+use std::sync::Arc;
 
 use crate::{
     error::{Error, Result},
@@ -110,8 +110,9 @@ impl ExportBuilder {
 }
 
 /// A blob containing exported scene data
+#[derive(Clone)]
 pub struct ExportBlob {
-    blob_ptr: SharedPtr<sys::aiExportDataBlob>,
+    inner: Arc<ExportBlobInner>,
 }
 
 impl ExportBlob {
@@ -119,13 +120,23 @@ impl ExportBlob {
     fn from_raw(blob_ptr: *const sys::aiExportDataBlob) -> Self {
         debug_assert!(!blob_ptr.is_null());
         let blob_ptr = unsafe { SharedPtr::new_unchecked(blob_ptr) };
-        Self { blob_ptr }
+        Self {
+            inner: Arc::new(ExportBlobInner { root: blob_ptr }),
+        }
+    }
+
+    /// Create a view of the root blob in the chain.
+    pub fn view(&self) -> ExportBlobView {
+        ExportBlobView {
+            inner: self.inner.clone(),
+            blob_ptr: self.inner.root,
+        }
     }
 
     /// Get the data as a byte slice
     pub fn data(&self) -> &[u8] {
         unsafe {
-            let blob = &*self.blob_ptr.as_ptr();
+            let blob = &*self.inner.root.as_ptr();
             if blob.size == 0 || blob.data.is_null() {
                 &[]
             } else {
@@ -136,55 +147,54 @@ impl ExportBlob {
 
     /// Get the size of the data
     pub fn size(&self) -> usize {
-        unsafe { (*self.blob_ptr.as_ptr()).size }
+        unsafe { (*self.inner.root.as_ptr()).size }
     }
 
     /// Get the name/hint for this blob
     pub fn name(&self) -> String {
-        ExportBlobView::new(self.blob_ptr).name()
+        self.view().name()
     }
 
     /// Check if this blob has a next blob (for multi-file exports)
     pub fn has_next(&self) -> bool {
-        ExportBlobView::new(self.blob_ptr).has_next()
+        self.view().has_next()
     }
 
     /// Get the next blob in the chain
-    pub fn next(&self) -> Option<ExportBlobView<'_>> {
-        ExportBlobView::new(self.blob_ptr).next()
+    pub fn next(&self) -> Option<ExportBlobView> {
+        self.view().next()
     }
 
     /// Iterate over all blobs in the chain (primary + auxiliaries).
-    pub fn iter(&self) -> ExportBlobIterator<'_> {
+    pub fn iter(&self) -> ExportBlobIterator {
         ExportBlobIterator {
-            current: Some(self.blob_ptr),
-            _marker: PhantomData,
+            inner: self.inner.clone(),
+            current: Some(self.inner.root),
         }
     }
 }
 
-impl Drop for ExportBlob {
+#[derive(Debug)]
+struct ExportBlobInner {
+    root: SharedPtr<sys::aiExportDataBlob>,
+}
+
+impl Drop for ExportBlobInner {
     fn drop(&mut self) {
         unsafe {
-            sys::aiReleaseExportBlob(self.blob_ptr.as_ptr());
+            sys::aiReleaseExportBlob(self.root.as_ptr());
         }
     }
 }
 
 /// A non-owning view into an export blob inside a blob chain.
-pub struct ExportBlobView<'a> {
+#[derive(Clone)]
+pub struct ExportBlobView {
+    inner: Arc<ExportBlobInner>,
     blob_ptr: SharedPtr<sys::aiExportDataBlob>,
-    _marker: PhantomData<&'a ()>,
 }
 
-impl<'a> ExportBlobView<'a> {
-    fn new(blob_ptr: SharedPtr<sys::aiExportDataBlob>) -> Self {
-        Self {
-            blob_ptr,
-            _marker: PhantomData,
-        }
-    }
-
+impl ExportBlobView {
     /// Get the data as a byte slice.
     pub fn data(&self) -> &[u8] {
         unsafe {
@@ -220,22 +230,25 @@ impl<'a> ExportBlobView<'a> {
     }
 
     /// Get the next blob in the chain.
-    pub fn next(&self) -> Option<ExportBlobView<'a>> {
+    pub fn next(&self) -> Option<ExportBlobView> {
         unsafe {
             let next = (*self.blob_ptr.as_ptr()).next as *const sys::aiExportDataBlob;
-            SharedPtr::new(next).map(ExportBlobView::new)
+            SharedPtr::new(next).map(|blob_ptr| ExportBlobView {
+                inner: self.inner.clone(),
+                blob_ptr,
+            })
         }
     }
 }
 
 /// Iterator over blobs in an export blob chain.
-pub struct ExportBlobIterator<'a> {
+pub struct ExportBlobIterator {
+    inner: Arc<ExportBlobInner>,
     current: Option<SharedPtr<sys::aiExportDataBlob>>,
-    _marker: PhantomData<&'a ()>,
 }
 
-impl<'a> Iterator for ExportBlobIterator<'a> {
-    type Item = ExportBlobView<'a>;
+impl Iterator for ExportBlobIterator {
+    type Item = ExportBlobView;
 
     fn next(&mut self) -> Option<Self::Item> {
         let current = self.current?;
@@ -243,7 +256,10 @@ impl<'a> Iterator for ExportBlobIterator<'a> {
             let next = (*current.as_ptr()).next as *const sys::aiExportDataBlob;
             self.current = SharedPtr::new(next);
         }
-        Some(ExportBlobView::new(current))
+        Some(ExportBlobView {
+            inner: self.inner.clone(),
+            blob_ptr: current,
+        })
     }
 }
 
