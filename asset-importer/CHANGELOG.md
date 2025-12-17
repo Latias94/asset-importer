@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Zero-copy material properties**: Added `Material::properties()` yielding `MaterialPropertyRef` (borrowed key + raw bytes), plus raw animation key accessors on `NodeAnimation`.
 - **Mesh presence helpers**: Added `Mesh::{has_vertices,has_normals,has_tangents,has_bitangents,has_texture_coords,has_vertex_colors}` (and the same on `AnimMesh`) for quick capability checks.
 - **More typed property reads**: Added `MaterialPropertyRef::{data_u32,as_i32,as_u32,as_bool,as_f32,as_f64}` for ergonomic scalar/typed reads.
+- **Allocation-free string properties**: Added `MaterialPropertyRef::string_ref()` to decode `aiString` payloads without heap allocation.
 
 ### Changed
 - **Scene ownership model (breaking)**: Scene-backed view types (`Mesh`, `Node`, `Material`, `Texture`, etc.) now own a cheap clone of `Scene` instead of borrowing via lifetimes, making them effectively `'static` and more ergonomic for async/multithreading.

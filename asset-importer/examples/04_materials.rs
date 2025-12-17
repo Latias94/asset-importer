@@ -62,7 +62,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             );
             match p.type_info() {
                 PropertyTypeInfo::String => {
-                    if let Some(s) = mat.get_string_property_str(key.as_ref()) {
+                    if let Some(s) = p.string_ref() {
                         println!(" value=\"{}\"", s);
                     } else {
                         println!();

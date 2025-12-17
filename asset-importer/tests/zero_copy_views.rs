@@ -1,6 +1,10 @@
 //! Zero-copy / low-allocation view tests
 
-use asset_importer::{Importer, material::TextureType, postprocess::PostProcessSteps};
+use asset_importer::{
+    Importer,
+    material::{PropertyTypeInfo, TextureType},
+    postprocess::PostProcessSteps,
+};
 use std::path::Path;
 
 #[test]
@@ -123,4 +127,12 @@ fn test_material_texture_ref_path() {
         .texture(TextureType::Diffuse, 0)
         .expect("missing owned diffuse texture 0");
     assert_eq!(owned2.path, "dummy.png");
+
+    // If Assimp exposes any string-typed material properties, ensure they can be decoded
+    // without additional queries back into the material API.
+    for p in material.properties() {
+        if p.type_info() == PropertyTypeInfo::String {
+            assert!(p.string_ref().is_some());
+        }
+    }
 }

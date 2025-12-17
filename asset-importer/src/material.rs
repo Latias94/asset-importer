@@ -630,7 +630,7 @@ impl Material {
                     PropertyTypeInfo::Float => std::mem::size_of::<f32>(),
                     PropertyTypeInfo::Double => std::mem::size_of::<f64>(),
                     PropertyTypeInfo::Integer => std::mem::size_of::<i32>(),
-                    _ => unreachable!(),
+                    _ => return None,
                 };
                 let count = (info.data_length as usize) / elem_size;
                 let mut out = vec![0f32; count];
@@ -1161,6 +1161,45 @@ impl MaterialPropertyRef {
         (self.type_info() == PropertyTypeInfo::Double)
             .then(|| self.data_cast_slice_opt())
             .flatten()
+    }
+
+    /// Interpret the property payload as an `aiString` when stored as `String` (no heap allocation).
+    ///
+    /// Assimp material properties store strings in a compact `aiString`-compatible binary layout:
+    /// a 32-bit byte length followed by the UTF-8 (usually) bytes (typically including a trailing NUL).
+    /// We decode this representation into an owned `aiString` buffer for safe, allocation-free use.
+    pub fn string_ref(&self) -> Option<MaterialStringRef> {
+        if self.type_info() != PropertyTypeInfo::String {
+            return None;
+        }
+        unsafe {
+            let p = &*self.prop_ptr.as_ptr();
+            if p.mData.is_null() {
+                return None;
+            }
+            let total = p.mDataLength as usize;
+            if total < std::mem::size_of::<u32>() {
+                return None;
+            }
+
+            // Read the explicit byte length (unaligned-safe) and clamp to the available payload.
+            let declared_len = std::ptr::read_unaligned(p.mData as *const u32) as usize;
+            let payload = total - std::mem::size_of::<u32>();
+            let max = (sys::AI_MAXLEN as usize).saturating_sub(1);
+            let copy_len = declared_len.min(payload).min(max);
+
+            let mut value = sys::aiString {
+                length: copy_len as u32,
+                data: [0; sys::AI_MAXLEN as usize],
+            };
+
+            let src = (p.mData as *const u8).add(std::mem::size_of::<u32>());
+            let dst = value.data.as_mut_ptr();
+            std::ptr::copy_nonoverlapping(src as *const i8, dst, copy_len);
+            value.data[copy_len] = 0;
+
+            Some(MaterialStringRef { value })
+        }
     }
 
     /// Read the first element as `i32` when stored as `Integer`.
