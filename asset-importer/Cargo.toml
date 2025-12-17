@@ -62,8 +62,6 @@ raw-sys = []
 bytemuck = ["dep:bytemuck"]
 glam = ["dep:glam"]
 mint = ["dep:mint", "asset-importer-sys/mint"]
-# Convenience meta-feature for rendering backends: raw byte views + glam conversion helpers.
-gpu = ["bytemuck", "glam"]
 
 # Functionality features
 export = ["asset-importer-sys/export"]

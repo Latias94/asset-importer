@@ -128,7 +128,6 @@ asset-importer = {
         "glam",            # Enable `glam` conversions
         "mint",            # Enable mint math library integration
         "bytemuck",        # Enable zero-copy byte casts for raw views
-        "gpu",             # Convenience meta-feature: bytemuck + glam
         "static-link",     # Prefer static linking (source/prebuilt)
         "nozlib"           # Disable zlib compression support
     ]
