@@ -16,6 +16,7 @@ use std::borrow::Cow;
 
 /// A texel (texture element) in ARGB8888 format
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "bytemuck", derive(bytemuck::Pod, bytemuck::Zeroable))]
 #[repr(C)]
 pub struct Texel {
     /// Blue component (0-255)
@@ -204,6 +205,18 @@ impl Texture {
                 };
                 Ok(TextureDataRef::Texels(texels))
             }
+        }
+    }
+
+    /// Get a borrowed view of the texture data as raw bytes (zero-copy).
+    ///
+    /// - Compressed textures return the compressed byte payload.
+    /// - Uncompressed textures return the in-memory texel bytes (ARGB8888).
+    #[cfg(feature = "bytemuck")]
+    pub fn data_bytes_ref(&self) -> Result<&[u8]> {
+        match self.data_ref()? {
+            TextureDataRef::Compressed(bytes) => Ok(bytes),
+            TextureDataRef::Texels(texels) => Ok(bytemuck::cast_slice(texels)),
         }
     }
 

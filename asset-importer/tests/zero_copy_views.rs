@@ -57,6 +57,38 @@ fn test_mesh_vertices_raw_type_is_sys_free() {
     assert!(!raw.is_empty(), "mesh has no vertices");
 }
 
+#[cfg(feature = "bytemuck")]
+#[test]
+fn test_bytemuck_mesh_bytes_views() {
+    let model_path = Path::new("tests/models/textured.obj");
+    if !model_path.exists() {
+        println!("Skipping test - model file not found: {:?}", model_path);
+        return;
+    }
+
+    let scene = Importer::new()
+        .read_file(model_path)
+        .with_post_process(PostProcessSteps::TRIANGULATE)
+        .import_file(model_path)
+        .expect("failed to import textured.obj");
+
+    let mesh = scene.meshes().next().expect("scene has no meshes");
+    assert_eq!(mesh.vertices_bytes().len(), mesh.vertices_raw().len() * 12);
+    assert_eq!(mesh.vertices_f32().len(), mesh.vertices_raw().len() * 3);
+
+    assert_eq!(mesh.normals_bytes().len(), mesh.normals_raw().len() * 12);
+    assert_eq!(mesh.normals_f32().len(), mesh.normals_raw().len() * 3);
+
+    assert_eq!(
+        mesh.texture_coords_bytes(0).len(),
+        mesh.texture_coords_raw(0).len() * 12
+    );
+    assert_eq!(
+        mesh.texture_coords_f32(0).len(),
+        mesh.texture_coords_raw(0).len() * 3
+    );
+}
+
 #[test]
 fn test_mesh_has_helpers() {
     let box_path = Path::new("tests/models/box.obj");

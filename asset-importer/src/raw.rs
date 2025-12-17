@@ -7,6 +7,7 @@
 
 /// Mirror of Assimp `aiVector3D`.
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(feature = "bytemuck", derive(bytemuck::Pod, bytemuck::Zeroable))]
 #[repr(C)]
 pub struct AiVector3D {
     /// X component
@@ -19,6 +20,7 @@ pub struct AiVector3D {
 
 /// Mirror of Assimp `aiColor4D`.
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(feature = "bytemuck", derive(bytemuck::Pod, bytemuck::Zeroable))]
 #[repr(C)]
 pub struct AiColor4D {
     /// Red component
@@ -33,6 +35,7 @@ pub struct AiColor4D {
 
 /// Mirror of Assimp `aiTexel` (ARGB8888).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "bytemuck", derive(bytemuck::Pod, bytemuck::Zeroable))]
 #[repr(C)]
 pub struct AiTexel {
     /// Blue component
@@ -78,6 +81,7 @@ impl AiFace {
 
 /// Mirror of Assimp `aiQuaternion`.
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(feature = "bytemuck", derive(bytemuck::Pod, bytemuck::Zeroable))]
 #[repr(C)]
 pub struct AiQuaternion {
     /// W component
@@ -116,6 +120,7 @@ pub struct AiQuatKey {
 
 /// Mirror of Assimp `aiVertexWeight`.
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(feature = "bytemuck", derive(bytemuck::Pod, bytemuck::Zeroable))]
 #[repr(C)]
 pub struct AiVertexWeight {
     /// Vertex index.

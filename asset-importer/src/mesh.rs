@@ -126,6 +126,18 @@ impl Mesh {
         }
     }
 
+    /// Get the raw vertex buffer as bytes (zero-copy).
+    #[cfg(feature = "bytemuck")]
+    pub fn vertices_bytes(&self) -> &[u8] {
+        bytemuck::cast_slice(self.vertices_raw())
+    }
+
+    /// Get the raw vertex buffer as a flat `f32` slice (x,y,z interleaved).
+    #[cfg(feature = "bytemuck")]
+    pub fn vertices_f32(&self) -> &[f32] {
+        bytemuck::cast_slice(self.vertices_raw())
+    }
+
     /// Get the raw vertex buffer (zero-copy), returning `None` when absent.
     pub fn vertices_raw_opt(&self) -> Option<&[raw::AiVector3D]> {
         unsafe {
@@ -163,6 +175,18 @@ impl Mesh {
                 mesh.mNumVertices as usize,
             )
         }
+    }
+
+    /// Get the raw normal buffer as bytes (zero-copy).
+    #[cfg(feature = "bytemuck")]
+    pub fn normals_bytes(&self) -> &[u8] {
+        bytemuck::cast_slice(self.normals_raw())
+    }
+
+    /// Get the raw normal buffer as a flat `f32` slice (x,y,z interleaved).
+    #[cfg(feature = "bytemuck")]
+    pub fn normals_f32(&self) -> &[f32] {
+        bytemuck::cast_slice(self.normals_raw())
     }
 
     /// Get the raw normal buffer (zero-copy), returning `None` when absent.
@@ -207,6 +231,18 @@ impl Mesh {
         }
     }
 
+    /// Get the raw tangent buffer as bytes (zero-copy).
+    #[cfg(feature = "bytemuck")]
+    pub fn tangents_bytes(&self) -> &[u8] {
+        bytemuck::cast_slice(self.tangents_raw())
+    }
+
+    /// Get the raw tangent buffer as a flat `f32` slice (x,y,z interleaved).
+    #[cfg(feature = "bytemuck")]
+    pub fn tangents_f32(&self) -> &[f32] {
+        bytemuck::cast_slice(self.tangents_raw())
+    }
+
     /// Get the raw tangent buffer (zero-copy), returning `None` when absent.
     pub fn tangents_raw_opt(&self) -> Option<&[raw::AiVector3D]> {
         unsafe {
@@ -247,6 +283,18 @@ impl Mesh {
                 mesh.mNumVertices as usize,
             )
         }
+    }
+
+    /// Get the raw bitangent buffer as bytes (zero-copy).
+    #[cfg(feature = "bytemuck")]
+    pub fn bitangents_bytes(&self) -> &[u8] {
+        bytemuck::cast_slice(self.bitangents_raw())
+    }
+
+    /// Get the raw bitangent buffer as a flat `f32` slice (x,y,z interleaved).
+    #[cfg(feature = "bytemuck")]
+    pub fn bitangents_f32(&self) -> &[f32] {
+        bytemuck::cast_slice(self.bitangents_raw())
     }
 
     /// Get the raw bitangent buffer (zero-copy), returning `None` when absent.
@@ -302,6 +350,18 @@ impl Mesh {
                 mesh.mNumVertices as usize,
             )
         }
+    }
+
+    /// Get raw texture coordinates for a specific channel as bytes (zero-copy).
+    #[cfg(feature = "bytemuck")]
+    pub fn texture_coords_bytes(&self, channel: usize) -> &[u8] {
+        bytemuck::cast_slice(self.texture_coords_raw(channel))
+    }
+
+    /// Get raw texture coordinates for a specific channel as a flat `f32` slice (x,y,z interleaved).
+    #[cfg(feature = "bytemuck")]
+    pub fn texture_coords_f32(&self, channel: usize) -> &[f32] {
+        bytemuck::cast_slice(self.texture_coords_raw(channel))
     }
 
     /// Get raw texture coordinates for a specific channel (zero-copy), returning `None` when absent.
@@ -364,6 +424,18 @@ impl Mesh {
                 mesh.mNumVertices as usize,
             )
         }
+    }
+
+    /// Get raw vertex colors for a specific channel as bytes (zero-copy).
+    #[cfg(feature = "bytemuck")]
+    pub fn vertex_colors_bytes(&self, channel: usize) -> &[u8] {
+        bytemuck::cast_slice(self.vertex_colors_raw(channel))
+    }
+
+    /// Get raw vertex colors for a specific channel as a flat `f32` slice (r,g,b,a interleaved).
+    #[cfg(feature = "bytemuck")]
+    pub fn vertex_colors_f32(&self, channel: usize) -> &[f32] {
+        bytemuck::cast_slice(self.vertex_colors_raw(channel))
     }
 
     /// Get raw vertex colors for a specific channel (zero-copy), returning `None` when absent.
@@ -633,6 +705,12 @@ impl Face {
         }
     }
 
+    /// Get the raw index slice as bytes (zero-copy).
+    #[cfg(feature = "bytemuck")]
+    pub fn indices_bytes(&self) -> &[u8] {
+        bytemuck::cast_slice(self.indices_raw())
+    }
+
     /// Get the raw index slice (zero-copy), returning `None` when absent.
     pub fn indices_raw_opt(&self) -> Option<&[u32]> {
         unsafe {
@@ -786,6 +864,18 @@ impl AnimMesh {
         }
     }
 
+    /// Raw replacement positions as bytes (zero-copy).
+    #[cfg(feature = "bytemuck")]
+    pub fn vertices_bytes(&self) -> &[u8] {
+        bytemuck::cast_slice(self.vertices_raw())
+    }
+
+    /// Raw replacement positions as a flat `f32` slice (x,y,z interleaved).
+    #[cfg(feature = "bytemuck")]
+    pub fn vertices_f32(&self) -> &[f32] {
+        bytemuck::cast_slice(self.vertices_raw())
+    }
+
     /// Raw replacement positions (zero-copy), returning `None` when absent.
     pub fn vertices_raw_opt(&self) -> Option<&[raw::AiVector3D]> {
         unsafe {
@@ -815,6 +905,18 @@ impl AnimMesh {
                 m.mNumVertices as usize,
             )
         }
+    }
+
+    /// Raw replacement normals as bytes (zero-copy).
+    #[cfg(feature = "bytemuck")]
+    pub fn normals_bytes(&self) -> &[u8] {
+        bytemuck::cast_slice(self.normals_raw())
+    }
+
+    /// Raw replacement normals as a flat `f32` slice (x,y,z interleaved).
+    #[cfg(feature = "bytemuck")]
+    pub fn normals_f32(&self) -> &[f32] {
+        bytemuck::cast_slice(self.normals_raw())
     }
 
     /// Raw replacement normals (zero-copy), returning `None` when absent.
@@ -848,6 +950,18 @@ impl AnimMesh {
         }
     }
 
+    /// Raw replacement tangents as bytes (zero-copy).
+    #[cfg(feature = "bytemuck")]
+    pub fn tangents_bytes(&self) -> &[u8] {
+        bytemuck::cast_slice(self.tangents_raw())
+    }
+
+    /// Raw replacement tangents as a flat `f32` slice (x,y,z interleaved).
+    #[cfg(feature = "bytemuck")]
+    pub fn tangents_f32(&self) -> &[f32] {
+        bytemuck::cast_slice(self.tangents_raw())
+    }
+
     /// Raw replacement tangents (zero-copy), returning `None` when absent.
     pub fn tangents_raw_opt(&self) -> Option<&[raw::AiVector3D]> {
         unsafe {
@@ -877,6 +991,18 @@ impl AnimMesh {
                 m.mNumVertices as usize,
             )
         }
+    }
+
+    /// Raw replacement bitangents as bytes (zero-copy).
+    #[cfg(feature = "bytemuck")]
+    pub fn bitangents_bytes(&self) -> &[u8] {
+        bytemuck::cast_slice(self.bitangents_raw())
+    }
+
+    /// Raw replacement bitangents as a flat `f32` slice (x,y,z interleaved).
+    #[cfg(feature = "bytemuck")]
+    pub fn bitangents_f32(&self) -> &[f32] {
+        bytemuck::cast_slice(self.bitangents_raw())
     }
 
     /// Raw replacement bitangents (zero-copy), returning `None` when absent.
@@ -953,6 +1079,18 @@ impl AnimMesh {
             let ptr = m.mTextureCoords[channel];
             ffi::slice_from_ptr_len(self, ptr as *const raw::AiVector3D, m.mNumVertices as usize)
         }
+    }
+
+    /// Raw replacement texture coordinates for a specific channel as bytes (zero-copy).
+    #[cfg(feature = "bytemuck")]
+    pub fn texture_coords_bytes(&self, channel: usize) -> &[u8] {
+        bytemuck::cast_slice(self.texture_coords_raw(channel))
+    }
+
+    /// Raw replacement texture coordinates for a specific channel as a flat `f32` slice (x,y,z interleaved).
+    #[cfg(feature = "bytemuck")]
+    pub fn texture_coords_f32(&self, channel: usize) -> &[f32] {
+        bytemuck::cast_slice(self.texture_coords_raw(channel))
     }
 
     /// Raw replacement texture coordinates for a specific channel (zero-copy), returning `None` when absent.
