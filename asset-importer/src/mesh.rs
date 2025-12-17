@@ -398,6 +398,31 @@ impl Mesh {
         unsafe { (*self.mesh_ptr.as_ptr()).mNumFaces as usize }
     }
 
+    /// Iterate triangle index triplets (`[u32; 3]`) without allocation.
+    ///
+    /// This yields only faces whose index count is exactly 3. If you run Assimp with
+    /// `PostProcessSteps::TRIANGULATE`, this will typically yield one item per face.
+    pub fn triangles_iter(&self) -> impl Iterator<Item = [u32; 3]> + '_ {
+        self.faces_iter().filter_map(|face| {
+            let idx = face.indices_raw();
+            (idx.len() == 3).then(|| [idx[0], idx[1], idx[2]])
+        })
+    }
+
+    /// Collect triangle index triplets (`[u32; 3]`) into a `Vec`.
+    ///
+    /// Prefer [`Mesh::triangles_iter`] for a zero-allocation option.
+    pub fn triangles(&self) -> Vec<[u32; 3]> {
+        self.triangles_iter().collect()
+    }
+
+    /// Iterate triangle indices as a flat stream (`u32`) without allocation.
+    ///
+    /// This is convenient for feeding graphics APIs expecting a contiguous index buffer.
+    pub fn triangle_indices_iter(&self) -> impl Iterator<Item = u32> + '_ {
+        self.triangles_iter().flatten()
+    }
+
     /// Get the faces of the mesh
     pub fn faces(&self) -> FaceIterator {
         FaceIterator {

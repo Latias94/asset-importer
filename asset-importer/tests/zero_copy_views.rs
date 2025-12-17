@@ -26,12 +26,16 @@ fn test_mesh_faces_raw_and_iter() {
     assert!(!raw_faces.is_empty(), "mesh has no raw faces");
     assert_eq!(raw_faces.len(), mesh.num_faces());
     assert_eq!(mesh.faces_iter().count(), mesh.num_faces());
+    assert_eq!(mesh.triangles_iter().count(), mesh.num_faces());
 
     for (i, face) in mesh.faces_iter().enumerate() {
         assert_eq!(face.num_indices(), raw_faces[i].mNumIndices as usize);
         assert_eq!(face.indices().len(), face.num_indices());
         assert_eq!(face.indices_raw().len(), face.num_indices());
     }
+
+    // Flat triangle index stream should have 3 indices per face under triangulation.
+    assert_eq!(mesh.triangle_indices_iter().count(), mesh.num_faces() * 3);
 }
 
 #[test]

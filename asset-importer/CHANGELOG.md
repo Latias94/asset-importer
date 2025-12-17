@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Raw zero-copy views**: Added `asset_importer::raw` with `repr(C)` mirrors so `*_raw()` APIs no longer depend on exposing `asset_importer::sys` by default.
 - **Zero-copy material properties**: Added `Material::properties()` yielding `MaterialPropertyRef` (borrowed key + raw bytes), plus raw animation key accessors on `NodeAnimation`.
 - **Mesh presence helpers**: Added `Mesh::{has_vertices,has_normals,has_tangents,has_bitangents,has_texture_coords,has_vertex_colors}` (and the same on `AnimMesh`) for quick capability checks.
+- **Triangle index iterators**: Added `Mesh::{triangles_iter,triangles,triangle_indices_iter}` for allocation-free access to triangulated index buffers.
 - **More typed property reads**: Added `MaterialPropertyRef::{data_u32,as_i32,as_u32,as_bool,as_f32,as_f64}` for ergonomic scalar/typed reads.
 - **Typed vectors/colors**: Added `MaterialPropertyRef::{as_f32_array,as_f64_array,as_vec2,as_vec3,as_vec4,as_color3,as_color4}` for unaligned-safe, allocation-free decoding of common float payloads.
 - **Allocation-free string properties**: Added `MaterialPropertyRef::string_ref()` to decode `aiString` payloads without heap allocation.
