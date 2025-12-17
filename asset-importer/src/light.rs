@@ -1,9 +1,8 @@
 //! Light representation and utilities
 
-use std::marker::PhantomData;
-
 use crate::{
     ptr::SharedPtr,
+    scene::Scene,
     sys,
     types::{
         Color3D, Vector2D, Vector3D, ai_string_to_string, from_ai_color3d, from_ai_vector2d,
@@ -12,24 +11,22 @@ use crate::{
 };
 
 /// A light source in the scene
-#[derive(Clone, Copy)]
-pub struct Light<'a> {
+#[derive(Clone)]
+pub struct Light {
+    #[allow(dead_code)]
+    scene: Scene,
     light_ptr: SharedPtr<sys::aiLight>,
-    _marker: PhantomData<&'a ()>,
 }
 
-impl<'a> Light<'a> {
+impl Light {
     /// Create a Light from a raw Assimp light pointer
     ///
     /// # Safety
     /// Caller must ensure `light_ptr` is non-null and points into a live `aiScene`.
-    pub(crate) unsafe fn from_raw(light_ptr: *const sys::aiLight) -> Self {
+    pub(crate) unsafe fn from_raw(scene: Scene, light_ptr: *const sys::aiLight) -> Self {
         debug_assert!(!light_ptr.is_null());
         let light_ptr = unsafe { SharedPtr::new_unchecked(light_ptr) };
-        Self {
-            light_ptr,
-            _marker: PhantomData,
-        }
+        Self { scene, light_ptr }
     }
 
     #[allow(dead_code)]

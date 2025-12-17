@@ -1,34 +1,30 @@
 //! Scene node representation and hierarchy
 
-use std::marker::PhantomData;
-
 use crate::{
     error::Result,
     metadata::Metadata,
     ptr::SharedPtr,
+    scene::Scene,
     sys,
     types::{Matrix4x4, ai_string_to_str, ai_string_to_string, from_ai_matrix4x4},
 };
 
 /// A node in the scene hierarchy
-#[derive(Clone, Copy)]
-pub struct Node<'a> {
+#[derive(Clone)]
+pub struct Node {
+    scene: Scene,
     node_ptr: SharedPtr<sys::aiNode>,
-    _marker: PhantomData<&'a ()>,
 }
 
-impl<'a> Node<'a> {
+impl Node {
     /// Create a Node from a raw Assimp node pointer
     ///
     /// # Safety
     /// Caller must ensure `node_ptr` is non-null and points into a live `aiScene`.
-    pub(crate) unsafe fn from_raw(node_ptr: *const sys::aiNode) -> Self {
+    pub(crate) unsafe fn from_raw(scene: Scene, node_ptr: *const sys::aiNode) -> Self {
         debug_assert!(!node_ptr.is_null());
         let node_ptr = unsafe { SharedPtr::new_unchecked(node_ptr) };
-        Self {
-            node_ptr,
-            _marker: PhantomData,
-        }
+        Self { scene, node_ptr }
     }
 
     #[allow(dead_code)]
@@ -61,13 +57,13 @@ impl<'a> Node<'a> {
     }
 
     /// Get the parent node
-    pub fn parent(&self) -> Option<Node<'a>> {
+    pub fn parent(&self) -> Option<Node> {
         unsafe {
             let node = &*self.node_ptr.as_ptr();
             if node.mParent.is_null() {
                 None
             } else {
-                Some(Node::from_raw(node.mParent))
+                Some(Node::from_raw(self.scene.clone(), node.mParent))
             }
         }
     }
@@ -85,7 +81,7 @@ impl<'a> Node<'a> {
     }
 
     /// Get a child node by index
-    pub fn child(&self, index: usize) -> Option<Node<'a>> {
+    pub fn child(&self, index: usize) -> Option<Node> {
         if index >= self.num_children() {
             return None;
         }
@@ -99,17 +95,17 @@ impl<'a> Node<'a> {
             if child_ptr.is_null() {
                 None
             } else {
-                Some(Node::from_raw(child_ptr))
+                Some(Node::from_raw(self.scene.clone(), child_ptr))
             }
         }
     }
 
     /// Get an iterator over all child nodes
-    pub fn children(&self) -> NodeIterator<'a> {
+    pub fn children(&self) -> NodeIterator {
         NodeIterator {
+            scene: self.scene.clone(),
             node_ptr: self.node_ptr,
             index: 0,
-            _marker: PhantomData,
         }
     }
 
@@ -141,16 +137,16 @@ impl<'a> Node<'a> {
     }
 
     /// Get an iterator over all mesh indices
-    pub fn mesh_indices(&self) -> MeshIndexIterator<'a> {
+    pub fn mesh_indices(&self) -> MeshIndexIterator {
         MeshIndexIterator {
+            scene: self.scene.clone(),
             node_ptr: self.node_ptr,
             index: 0,
-            _marker: PhantomData,
         }
     }
 
     /// Get the raw mesh index array (zero-copy).
-    pub fn mesh_indices_raw(&self) -> Option<&'a [u32]> {
+    pub fn mesh_indices_raw(&self) -> Option<&[u32]> {
         unsafe {
             let node = &*self.node_ptr.as_ptr();
             if node.mMeshes.is_null() || node.mNumMeshes == 0 {
@@ -172,9 +168,9 @@ impl<'a> Node<'a> {
     }
 
     /// Find a child node by name (recursive search)
-    pub fn find_node(&self, name: &str) -> Option<Node<'a>> {
+    pub fn find_node(&self, name: &str) -> Option<Node> {
         if self.name_str().as_ref() == name {
-            return Some(*self);
+            return Some(self.clone());
         }
 
         for child in self.children() {
@@ -188,14 +184,14 @@ impl<'a> Node<'a> {
 }
 
 /// Iterator over child nodes
-pub struct NodeIterator<'a> {
+pub struct NodeIterator {
+    scene: Scene,
     node_ptr: SharedPtr<sys::aiNode>,
     index: usize,
-    _marker: PhantomData<&'a ()>,
 }
 
-impl<'a> Iterator for NodeIterator<'a> {
-    type Item = Node<'a>;
+impl Iterator for NodeIterator {
+    type Item = Node;
 
     fn next(&mut self) -> Option<Self::Item> {
         unsafe {
@@ -209,7 +205,7 @@ impl<'a> Iterator for NodeIterator<'a> {
                 if child_ptr.is_null() {
                     continue;
                 }
-                return Some(Node::from_raw(child_ptr));
+                return Some(Node::from_raw(self.scene.clone(), child_ptr));
             }
             None
         }
@@ -229,13 +225,14 @@ impl<'a> Iterator for NodeIterator<'a> {
 }
 
 /// Iterator over mesh indices in a node
-pub struct MeshIndexIterator<'a> {
+pub struct MeshIndexIterator {
+    #[allow(dead_code)]
+    scene: Scene,
     node_ptr: SharedPtr<sys::aiNode>,
     index: usize,
-    _marker: PhantomData<&'a ()>,
 }
 
-impl<'a> Iterator for MeshIndexIterator<'a> {
+impl Iterator for MeshIndexIterator {
     type Item = usize;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -267,9 +264,9 @@ impl<'a> Iterator for MeshIndexIterator<'a> {
     }
 }
 
-impl<'a> ExactSizeIterator for MeshIndexIterator<'a> {}
+impl ExactSizeIterator for MeshIndexIterator {}
 
-impl<'a> Node<'a> {
+impl Node {
     /// Get node metadata
     pub fn metadata(&self) -> Result<Metadata> {
         unsafe {

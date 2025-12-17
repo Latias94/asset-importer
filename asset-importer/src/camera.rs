@@ -1,32 +1,29 @@
 //! Camera representation and utilities
 
-use std::marker::PhantomData;
-
 use crate::{
     ptr::SharedPtr,
+    scene::Scene,
     sys,
     types::{Vector3D, ai_string_to_string, from_ai_vector3d},
 };
 
 /// A camera in the scene
-#[derive(Clone, Copy)]
-pub struct Camera<'a> {
+#[derive(Clone)]
+pub struct Camera {
+    #[allow(dead_code)]
+    scene: Scene,
     camera_ptr: SharedPtr<sys::aiCamera>,
-    _marker: PhantomData<&'a ()>,
 }
 
-impl<'a> Camera<'a> {
+impl Camera {
     /// Create a Camera from a raw Assimp camera pointer
     ///
     /// # Safety
     /// Caller must ensure `camera_ptr` is non-null and points into a live `aiScene`.
-    pub(crate) unsafe fn from_raw(camera_ptr: *const sys::aiCamera) -> Self {
+    pub(crate) unsafe fn from_raw(scene: Scene, camera_ptr: *const sys::aiCamera) -> Self {
         debug_assert!(!camera_ptr.is_null());
         let camera_ptr = unsafe { SharedPtr::new_unchecked(camera_ptr) };
-        Self {
-            camera_ptr,
-            _marker: PhantomData,
-        }
+        Self { scene, camera_ptr }
     }
 
     #[allow(dead_code)]

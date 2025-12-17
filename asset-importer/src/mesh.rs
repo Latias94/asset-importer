@@ -2,34 +2,32 @@
 
 #![allow(clippy::unnecessary_cast)]
 
-use std::marker::PhantomData;
-
 use crate::{
     aabb::AABB,
     bone::{Bone, BoneIterator},
     ptr::SharedPtr,
-    raw, sys,
+    raw,
+    scene::Scene,
+    sys,
     types::{Color4D, Vector3D, ai_string_to_str, ai_string_to_string},
 };
 
 /// A mesh containing vertices, faces, and other geometric data
-pub struct Mesh<'a> {
+#[derive(Clone)]
+pub struct Mesh {
+    scene: Scene,
     mesh_ptr: SharedPtr<sys::aiMesh>,
-    _marker: PhantomData<&'a ()>,
 }
 
-impl<'a> Mesh<'a> {
+impl Mesh {
     /// Create a Mesh from a raw Assimp mesh pointer
     ///
     /// # Safety
     /// Caller must ensure `mesh_ptr` is non-null and points into a live `aiScene`.
-    pub(crate) unsafe fn from_raw(mesh_ptr: *const sys::aiMesh) -> Self {
+    pub(crate) unsafe fn from_raw(scene: Scene, mesh_ptr: *const sys::aiMesh) -> Self {
         debug_assert!(!mesh_ptr.is_null());
         let mesh_ptr = unsafe { SharedPtr::new_unchecked(mesh_ptr) };
-        Self {
-            mesh_ptr,
-            _marker: PhantomData,
-        }
+        Self { scene, mesh_ptr }
     }
 
     #[allow(dead_code)]
@@ -66,7 +64,7 @@ impl<'a> Mesh<'a> {
     }
 
     /// Get the raw vertex buffer (zero-copy).
-    pub fn vertices_raw(&self) -> Option<&'a [raw::AiVector3D]> {
+    pub fn vertices_raw(&self) -> Option<&[raw::AiVector3D]> {
         unsafe {
             let mesh = &*self.mesh_ptr.as_ptr();
             if mesh.mVertices.is_null() {
@@ -94,7 +92,7 @@ impl<'a> Mesh<'a> {
     }
 
     /// Get the raw normal buffer (zero-copy).
-    pub fn normals_raw(&self) -> Option<&'a [raw::AiVector3D]> {
+    pub fn normals_raw(&self) -> Option<&[raw::AiVector3D]> {
         unsafe {
             let mesh = &*self.mesh_ptr.as_ptr();
             if mesh.mNormals.is_null() {
@@ -122,7 +120,7 @@ impl<'a> Mesh<'a> {
     }
 
     /// Get the raw tangent buffer (zero-copy).
-    pub fn tangents_raw(&self) -> Option<&'a [raw::AiVector3D]> {
+    pub fn tangents_raw(&self) -> Option<&[raw::AiVector3D]> {
         unsafe {
             let mesh = &*self.mesh_ptr.as_ptr();
             if mesh.mTangents.is_null() {
@@ -150,7 +148,7 @@ impl<'a> Mesh<'a> {
     }
 
     /// Get the raw bitangent buffer (zero-copy).
-    pub fn bitangents_raw(&self) -> Option<&'a [raw::AiVector3D]> {
+    pub fn bitangents_raw(&self) -> Option<&[raw::AiVector3D]> {
         unsafe {
             let mesh = &*self.mesh_ptr.as_ptr();
             if mesh.mBitangents.is_null() {
@@ -178,7 +176,7 @@ impl<'a> Mesh<'a> {
     }
 
     /// Get raw texture coordinates for a specific channel (zero-copy).
-    pub fn texture_coords_raw(&self, channel: usize) -> Option<&'a [raw::AiVector3D]> {
+    pub fn texture_coords_raw(&self, channel: usize) -> Option<&[raw::AiVector3D]> {
         if channel >= sys::AI_MAX_NUMBER_OF_TEXTURECOORDS as usize {
             return None;
         }
@@ -214,7 +212,7 @@ impl<'a> Mesh<'a> {
     }
 
     /// Get raw vertex colors for a specific channel (zero-copy).
-    pub fn vertex_colors_raw(&self, channel: usize) -> Option<&'a [raw::AiColor4D]> {
+    pub fn vertex_colors_raw(&self, channel: usize) -> Option<&[raw::AiColor4D]> {
         if channel >= sys::AI_MAX_NUMBER_OF_COLOR_SETS as usize {
             return None;
         }
@@ -246,16 +244,16 @@ impl<'a> Mesh<'a> {
     }
 
     /// Get the faces of the mesh
-    pub fn faces(&self) -> FaceIterator<'a> {
+    pub fn faces(&self) -> FaceIterator {
         FaceIterator {
+            scene: self.scene.clone(),
             mesh_ptr: self.mesh_ptr,
             index: 0,
-            _marker: PhantomData,
         }
     }
 
     /// Get the raw face array (zero-copy).
-    pub fn faces_raw(&self) -> Option<&'a [raw::AiFace]> {
+    pub fn faces_raw(&self) -> Option<&[raw::AiFace]> {
         unsafe {
             let mesh = &*self.mesh_ptr.as_ptr();
             if mesh.mFaces.is_null() || mesh.mNumFaces == 0 {
@@ -270,7 +268,7 @@ impl<'a> Mesh<'a> {
     }
 
     /// Iterate faces without allocation.
-    pub fn faces_iter(&self) -> impl Iterator<Item = Face<'a>> + '_ {
+    pub fn faces_iter(&self) -> impl Iterator<Item = Face> + '_ {
         self.faces()
     }
 
@@ -325,7 +323,7 @@ impl<'a> Mesh<'a> {
     }
 
     /// Get an animation mesh by index
-    pub fn anim_mesh(&self, index: usize) -> Option<AnimMesh<'a>> {
+    pub fn anim_mesh(&self, index: usize) -> Option<AnimMesh> {
         if index >= self.num_anim_meshes() {
             return None;
         }
@@ -340,19 +338,19 @@ impl<'a> Mesh<'a> {
             } else {
                 let anim_ptr = SharedPtr::new(ptr)?;
                 Some(AnimMesh {
+                    scene: self.scene.clone(),
                     anim_ptr,
-                    _marker: PhantomData,
                 })
             }
         }
     }
 
     /// Iterate over animation meshes
-    pub fn anim_meshes(&self) -> AnimMeshIterator<'a> {
+    pub fn anim_meshes(&self) -> AnimMeshIterator {
         AnimMeshIterator {
+            scene: self.scene.clone(),
             mesh_ptr: self.mesh_ptr,
             index: 0,
-            _marker: PhantomData,
         }
     }
 
@@ -369,7 +367,7 @@ impl<'a> Mesh<'a> {
     }
 
     /// Get a bone by index
-    pub fn bone(&self, index: usize) -> Option<Bone<'a>> {
+    pub fn bone(&self, index: usize) -> Option<Bone> {
         if index >= self.num_bones() {
             return None;
         }
@@ -383,16 +381,19 @@ impl<'a> Mesh<'a> {
             if bone_ptr.is_null() {
                 None
             } else {
-                Bone::from_raw(bone_ptr).ok()
+                Bone::from_raw(self.scene.clone(), bone_ptr).ok()
             }
         }
     }
 
     /// Get an iterator over all bones in the mesh
-    pub fn bones(&self) -> BoneIterator<'a> {
+    pub fn bones(&self) -> BoneIterator {
         unsafe {
-            let mesh = &*self.mesh_ptr.as_ptr();
-            BoneIterator::new(mesh.mBones, self.num_bones())
+            BoneIterator::new(
+                self.scene.clone(),
+                (*self.mesh_ptr.as_ptr()).mBones,
+                self.num_bones(),
+            )
         }
     }
 
@@ -402,7 +403,7 @@ impl<'a> Mesh<'a> {
     }
 
     /// Find a bone by name
-    pub fn find_bone_by_name(&self, name: &str) -> Option<Bone<'a>> {
+    pub fn find_bone_by_name(&self, name: &str) -> Option<Bone> {
         self.bones().find(|bone| bone.name_str().as_ref() == name)
     }
 
@@ -421,19 +422,21 @@ impl<'a> Mesh<'a> {
 }
 
 /// A face in a mesh
-pub struct Face<'a> {
+#[derive(Clone)]
+pub struct Face {
+    #[allow(dead_code)]
+    scene: Scene,
     face_ptr: SharedPtr<raw::AiFace>,
-    _marker: PhantomData<&'a ()>,
 }
 
-impl<'a> Face<'a> {
+impl Face {
     /// Get the number of indices in this face
     pub fn num_indices(&self) -> usize {
         unsafe { (*self.face_ptr.as_ptr()).mNumIndices as usize }
     }
 
     /// Get the raw index slice (zero-copy).
-    pub fn indices_raw(&self) -> Option<&'a [u32]> {
+    pub fn indices_raw(&self) -> Option<&[u32]> {
         unsafe {
             let face = &*self.face_ptr.as_ptr();
             if face.mIndices.is_null() || face.mNumIndices == 0 {
@@ -448,20 +451,20 @@ impl<'a> Face<'a> {
     }
 
     /// Get the indices of this face.
-    pub fn indices(&self) -> &'a [u32] {
+    pub fn indices(&self) -> &[u32] {
         self.indices_raw().unwrap_or(&[])
     }
 }
 
 /// Iterator over faces in a mesh
-pub struct FaceIterator<'a> {
+pub struct FaceIterator {
+    scene: Scene,
     mesh_ptr: SharedPtr<sys::aiMesh>,
     index: usize,
-    _marker: PhantomData<&'a ()>,
 }
 
-impl<'a> Iterator for FaceIterator<'a> {
-    type Item = Face<'a>;
+impl Iterator for FaceIterator {
+    type Item = Face;
 
     fn next(&mut self) -> Option<Self::Item> {
         unsafe {
@@ -476,8 +479,8 @@ impl<'a> Iterator for FaceIterator<'a> {
                 self.index += 1;
                 let face_ptr = SharedPtr::new(face_ptr as *const raw::AiFace)?;
                 Some(Face {
+                    scene: self.scene.clone(),
                     face_ptr,
-                    _marker: PhantomData,
                 })
             }
         }
@@ -496,15 +499,17 @@ impl<'a> Iterator for FaceIterator<'a> {
     }
 }
 
-impl<'a> ExactSizeIterator for FaceIterator<'a> {}
+impl ExactSizeIterator for FaceIterator {}
 
 /// An animation mesh (morph target) that replaces certain vertex streams
-pub struct AnimMesh<'a> {
+#[derive(Clone)]
+pub struct AnimMesh {
+    #[allow(dead_code)]
+    scene: Scene,
     anim_ptr: SharedPtr<sys::aiAnimMesh>,
-    _marker: PhantomData<&'a ()>,
 }
 
-impl<'a> AnimMesh<'a> {
+impl AnimMesh {
     /// Name of this anim mesh (if present)
     pub fn name(&self) -> String {
         unsafe { crate::types::ai_string_to_string(&(*self.anim_ptr.as_ptr()).mName) }
@@ -521,7 +526,7 @@ impl<'a> AnimMesh<'a> {
     }
 
     /// Raw replacement positions (zero-copy).
-    pub fn vertices_raw(&self) -> Option<&'a [raw::AiVector3D]> {
+    pub fn vertices_raw(&self) -> Option<&[raw::AiVector3D]> {
         unsafe {
             let m = &*self.anim_ptr.as_ptr();
             (!m.mVertices.is_null()).then(|| {
@@ -540,7 +545,7 @@ impl<'a> AnimMesh<'a> {
     }
 
     /// Raw replacement normals (zero-copy).
-    pub fn normals_raw(&self) -> Option<&'a [raw::AiVector3D]> {
+    pub fn normals_raw(&self) -> Option<&[raw::AiVector3D]> {
         unsafe {
             let m = &*self.anim_ptr.as_ptr();
             (!m.mNormals.is_null()).then(|| {
@@ -559,7 +564,7 @@ impl<'a> AnimMesh<'a> {
     }
 
     /// Raw replacement tangents (zero-copy).
-    pub fn tangents_raw(&self) -> Option<&'a [raw::AiVector3D]> {
+    pub fn tangents_raw(&self) -> Option<&[raw::AiVector3D]> {
         unsafe {
             let m = &*self.anim_ptr.as_ptr();
             (!m.mTangents.is_null()).then(|| {
@@ -578,7 +583,7 @@ impl<'a> AnimMesh<'a> {
     }
 
     /// Raw replacement bitangents (zero-copy).
-    pub fn bitangents_raw(&self) -> Option<&'a [raw::AiVector3D]> {
+    pub fn bitangents_raw(&self) -> Option<&[raw::AiVector3D]> {
         unsafe {
             let m = &*self.anim_ptr.as_ptr();
             (!m.mBitangents.is_null()).then(|| {
@@ -600,7 +605,7 @@ impl<'a> AnimMesh<'a> {
     }
 
     /// Raw replacement vertex colors for a specific channel (zero-copy).
-    pub fn vertex_colors_raw(&self, channel: usize) -> Option<&'a [raw::AiColor4D]> {
+    pub fn vertex_colors_raw(&self, channel: usize) -> Option<&[raw::AiColor4D]> {
         if channel >= sys::AI_MAX_NUMBER_OF_COLOR_SETS as usize {
             return None;
         }
@@ -625,7 +630,7 @@ impl<'a> AnimMesh<'a> {
     }
 
     /// Raw replacement texture coordinates for a specific channel (zero-copy).
-    pub fn texture_coords_raw(&self, channel: usize) -> Option<&'a [raw::AiVector3D]> {
+    pub fn texture_coords_raw(&self, channel: usize) -> Option<&[raw::AiVector3D]> {
         if channel >= sys::AI_MAX_NUMBER_OF_TEXTURECOORDS as usize {
             return None;
         }
@@ -650,14 +655,14 @@ impl<'a> AnimMesh<'a> {
 }
 
 /// Iterator over anim meshes
-pub struct AnimMeshIterator<'a> {
+pub struct AnimMeshIterator {
+    scene: Scene,
     mesh_ptr: SharedPtr<sys::aiMesh>,
     index: usize,
-    _marker: PhantomData<&'a ()>,
 }
 
-impl<'a> Iterator for AnimMeshIterator<'a> {
-    type Item = AnimMesh<'a>;
+impl Iterator for AnimMeshIterator {
+    type Item = AnimMesh;
 
     fn next(&mut self) -> Option<Self::Item> {
         unsafe {
@@ -673,8 +678,8 @@ impl<'a> Iterator for AnimMeshIterator<'a> {
                 }
                 let anim_ptr = SharedPtr::new(ptr)?;
                 return Some(AnimMesh {
+                    scene: self.scene.clone(),
                     anim_ptr,
-                    _marker: PhantomData,
                 });
             }
             None

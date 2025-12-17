@@ -3,12 +3,12 @@
 //! This module provides functionality for working with bones and vertex weights,
 //! which are essential for skeletal animation in 3D models.
 
-use std::marker::PhantomData;
-
 use crate::{
     error::{Error, Result},
     ptr::SharedPtr,
-    raw, sys,
+    raw,
+    scene::Scene,
+    sys,
     types::{Matrix4x4, ai_string_to_str, ai_string_to_string, from_ai_matrix4x4},
 };
 
@@ -67,26 +67,24 @@ impl From<&raw::AiVertexWeight> for VertexWeight {
 ///
 /// Bones define how vertices are transformed during animation.
 /// Each bone has a name, an offset matrix, and a list of vertex weights.
-#[derive(Debug)]
-pub struct Bone<'a> {
+#[derive(Debug, Clone)]
+pub struct Bone {
+    #[allow(dead_code)]
+    scene: Scene,
     bone_ptr: SharedPtr<sys::aiBone>,
-    _marker: PhantomData<&'a ()>,
 }
 
-impl<'a> Bone<'a> {
+impl Bone {
     /// Create a bone wrapper from a raw Assimp bone pointer
     ///
     /// # Safety
     /// The caller must ensure that the pointer is valid and that the bone
     /// will not be freed while this Bone instance exists.
-    pub(crate) unsafe fn from_raw(bone_ptr: *const sys::aiBone) -> Result<Self> {
+    pub(crate) unsafe fn from_raw(scene: Scene, bone_ptr: *const sys::aiBone) -> Result<Self> {
         let bone_ptr =
             SharedPtr::new(bone_ptr).ok_or_else(|| Error::invalid_scene("Bone pointer is null"))?;
 
-        Ok(Self {
-            bone_ptr,
-            _marker: PhantomData,
-        })
+        Ok(Self { scene, bone_ptr })
     }
 
     #[allow(dead_code)]
@@ -128,7 +126,7 @@ impl<'a> Bone<'a> {
     }
 
     /// Get the raw vertex weight array (zero-copy).
-    pub fn weights_raw(&self) -> Option<&'a [raw::AiVertexWeight]> {
+    pub fn weights_raw(&self) -> Option<&[raw::AiVertexWeight]> {
         unsafe {
             let bone = &*self.bone_ptr.as_ptr();
             if bone.mWeights.is_null() || bone.mNumWeights == 0 {
@@ -233,32 +231,32 @@ impl<'a> Bone<'a> {
 }
 
 /// Iterator over bones in a mesh
-pub struct BoneIterator<'a> {
+pub struct BoneIterator {
+    scene: Scene,
     bones: Option<SharedPtr<*mut sys::aiBone>>,
     count: usize,
     index: usize,
-    _marker: PhantomData<&'a ()>,
 }
 
-impl<'a> BoneIterator<'a> {
+impl BoneIterator {
     /// Create a new bone iterator
     ///
     /// # Safety
     /// The caller must ensure that the bones pointer and count are valid.
-    pub(crate) unsafe fn new(bones: *mut *mut sys::aiBone, count: usize) -> Self {
+    pub(crate) unsafe fn new(scene: Scene, bones: *mut *mut sys::aiBone, count: usize) -> Self {
         let bones_ptr = SharedPtr::new(bones as *const *mut sys::aiBone);
         let count = if bones_ptr.is_some() { count } else { 0 };
         Self {
+            scene,
             bones: bones_ptr,
             count,
             index: 0,
-            _marker: PhantomData,
         }
     }
 }
 
-impl<'a> Iterator for BoneIterator<'a> {
-    type Item = Bone<'a>;
+impl Iterator for BoneIterator {
+    type Item = Bone;
 
     fn next(&mut self) -> Option<Self::Item> {
         let bones = self.bones?;
@@ -269,7 +267,7 @@ impl<'a> Iterator for BoneIterator<'a> {
                 if bone_ptr.is_null() {
                     continue;
                 }
-                if let Ok(bone) = Bone::from_raw(bone_ptr) {
+                if let Ok(bone) = Bone::from_raw(self.scene.clone(), bone_ptr) {
                     return Some(bone);
                 }
             }
@@ -289,9 +287,7 @@ pub mod utils {
     use std::collections::HashMap;
 
     /// Normalize vertex weights so that the total weight per vertex equals 1.0
-    pub fn normalize_vertex_weights<'scene>(
-        bones: &[Bone<'scene>],
-    ) -> HashMap<u32, Vec<(usize, f32)>> {
+    pub fn normalize_vertex_weights(bones: &[Bone]) -> HashMap<u32, Vec<(usize, f32)>> {
         let mut vertex_weights: HashMap<u32, Vec<(usize, f32)>> = HashMap::new();
 
         // Collect all weights per vertex
@@ -318,10 +314,7 @@ pub mod utils {
     }
 
     /// Find bones by name
-    pub fn find_bones_by_name<'a, 'scene>(
-        bones: &'a [Bone<'scene>],
-        name: &str,
-    ) -> Vec<&'a Bone<'scene>> {
+    pub fn find_bones_by_name<'a>(bones: &'a [Bone], name: &str) -> Vec<&'a Bone> {
         bones
             .iter()
             .filter(|bone| bone.name_str().as_ref() == name)
@@ -329,7 +322,7 @@ pub mod utils {
     }
 
     /// Get the maximum number of bones affecting any single vertex
-    pub fn max_bones_per_vertex<'scene>(bones: &[Bone<'scene>]) -> usize {
+    pub fn max_bones_per_vertex(bones: &[Bone]) -> usize {
         let mut vertex_bone_count: HashMap<u32, usize> = HashMap::new();
 
         for bone in bones {
@@ -342,7 +335,7 @@ pub mod utils {
     }
 
     /// Filter out bones with weights below a threshold
-    pub fn filter_significant_bones<'scene>(bones: &[Bone<'scene>], threshold: f32) -> Vec<usize> {
+    pub fn filter_significant_bones(bones: &[Bone], threshold: f32) -> Vec<usize> {
         bones
             .iter()
             .enumerate()

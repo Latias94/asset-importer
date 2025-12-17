@@ -2,17 +2,16 @@
 
 #![allow(clippy::unnecessary_cast)]
 
-use std::borrow::Cow;
-use std::ffi::CStr;
-use std::ffi::CString;
-use std::marker::PhantomData;
-
 use crate::raw;
 use crate::{
     ptr::SharedPtr,
+    scene::Scene,
     sys,
     types::{Color3D, Color4D, Vector2D, Vector3D, ai_string_to_str, ai_string_to_string},
 };
+use std::borrow::Cow;
+use std::ffi::CStr;
+use std::ffi::CString;
 
 /// Standard material property keys as defined by Assimp
 pub mod material_keys {
@@ -95,9 +94,10 @@ pub mod material_keys {
 }
 
 /// A material containing properties like colors, textures, and shading parameters
-pub struct Material<'a> {
+#[derive(Clone)]
+pub struct Material {
+    scene: Scene,
     material_ptr: SharedPtr<sys::aiMaterial>,
-    _marker: PhantomData<&'a ()>,
 }
 
 /// A borrowed-ish string result backed by an owned `aiString` (no heap allocation).
@@ -136,17 +136,17 @@ impl std::fmt::Display for MaterialStringRef {
     }
 }
 
-impl<'a> Material<'a> {
+impl Material {
     /// Create a Material from a raw Assimp material pointer
     ///
     /// # Safety
     /// Caller must ensure `material_ptr` is non-null and points into a live `aiScene`.
-    pub(crate) unsafe fn from_raw(material_ptr: *const sys::aiMaterial) -> Self {
+    pub(crate) unsafe fn from_raw(scene: Scene, material_ptr: *const sys::aiMaterial) -> Self {
         debug_assert!(!material_ptr.is_null());
         let material_ptr = unsafe { SharedPtr::new_unchecked(material_ptr) };
         Self {
+            scene,
             material_ptr,
-            _marker: PhantomData,
         }
     }
 
@@ -468,7 +468,7 @@ impl<'a> Material<'a> {
         index: u32,
     ) -> Option<MaterialPropertyInfo> {
         let prop_ptr = self.property_ptr(key, semantic, index)?;
-        Some(MaterialPropertyRef::from_ptr(prop_ptr).into_info())
+        Some(MaterialPropertyRef::from_ptr(self.scene.clone(), prop_ptr).into_info())
     }
 
     /// Get raw information about a material property by key/semantic/index (allocates, convenience).
@@ -529,7 +529,7 @@ impl<'a> Material<'a> {
         key: &CStr,
         semantic: Option<TextureType>,
         index: u32,
-    ) -> Option<&'a [u8]> {
+    ) -> Option<&[u8]> {
         let prop_ptr = self.property_ptr(key, semantic, index)?;
         unsafe {
             let prop = &*prop_ptr;
@@ -743,14 +743,14 @@ impl<'a> Material<'a> {
     }
 
     /// Iterate all material properties (zero allocation for keys and raw data).
-    pub fn properties(&self) -> MaterialPropertyIterator<'a> {
+    pub fn properties(&self) -> MaterialPropertyIterator {
         unsafe {
             let m = &*self.material_ptr.as_ptr();
             MaterialPropertyIterator {
+                scene: self.scene.clone(),
                 props: SharedPtr::new(m.mProperties as *const *mut sys::aiMaterialProperty),
                 count: m.mNumProperties as usize,
                 index: 0,
-                _marker: PhantomData,
             }
         }
     }
@@ -1065,7 +1065,7 @@ pub struct MaterialPropertyInfo {
 }
 
 impl MaterialPropertyInfo {
-    fn from_ref(p: MaterialPropertyRef<'_>) -> Self {
+    fn from_ref(p: MaterialPropertyRef) -> Self {
         let semantic = p.semantic();
         Self {
             key: p.key_string(),
@@ -1078,20 +1078,18 @@ impl MaterialPropertyInfo {
 }
 
 /// Zero-copy view of an Assimp material property.
-#[derive(Debug, Clone, Copy)]
-pub struct MaterialPropertyRef<'a> {
+#[derive(Debug, Clone)]
+pub struct MaterialPropertyRef {
+    #[allow(dead_code)]
+    scene: Scene,
     prop_ptr: SharedPtr<sys::aiMaterialProperty>,
-    _marker: PhantomData<&'a ()>,
 }
 
-impl<'a> MaterialPropertyRef<'a> {
-    fn from_ptr(prop_ptr: *const sys::aiMaterialProperty) -> Self {
+impl MaterialPropertyRef {
+    fn from_ptr(scene: Scene, prop_ptr: *const sys::aiMaterialProperty) -> Self {
         debug_assert!(!prop_ptr.is_null());
         let prop_ptr = unsafe { SharedPtr::new_unchecked(prop_ptr) };
-        Self {
-            prop_ptr,
-            _marker: PhantomData,
-        }
+        Self { scene, prop_ptr }
     }
 
     /// Property key as UTF-8 (lossy), without allocation.
@@ -1129,7 +1127,7 @@ impl<'a> MaterialPropertyRef<'a> {
     }
 
     /// Raw property bytes as stored by Assimp (zero-copy).
-    pub fn data(&self) -> &'a [u8] {
+    pub fn data(&self) -> &[u8] {
         unsafe {
             let p = &*self.prop_ptr.as_ptr();
             if p.mData.is_null() || p.mDataLength == 0 {
@@ -1141,27 +1139,27 @@ impl<'a> MaterialPropertyRef<'a> {
     }
 
     /// Interpret the property payload as an `i32` slice when stored as `Integer` (zero-copy).
-    pub fn data_i32(&self) -> Option<&'a [i32]> {
+    pub fn data_i32(&self) -> Option<&[i32]> {
         (self.type_info() == PropertyTypeInfo::Integer)
             .then(|| self.data_cast_slice_opt())
             .flatten()
     }
 
     /// Interpret the property payload as an `f32` slice when stored as `Float` (zero-copy).
-    pub fn data_f32(&self) -> Option<&'a [f32]> {
+    pub fn data_f32(&self) -> Option<&[f32]> {
         (self.type_info() == PropertyTypeInfo::Float)
             .then(|| self.data_cast_slice_opt())
             .flatten()
     }
 
     /// Interpret the property payload as an `f64` slice when stored as `Double` (zero-copy).
-    pub fn data_f64(&self) -> Option<&'a [f64]> {
+    pub fn data_f64(&self) -> Option<&[f64]> {
         (self.type_info() == PropertyTypeInfo::Double)
             .then(|| self.data_cast_slice_opt())
             .flatten()
     }
 
-    fn data_cast_slice_opt<T>(&self) -> Option<&'a [T]> {
+    fn data_cast_slice_opt<T>(&self) -> Option<&[T]> {
         unsafe {
             let p = &*self.prop_ptr.as_ptr();
             let len = p.mDataLength as usize;
@@ -1192,15 +1190,15 @@ impl<'a> MaterialPropertyRef<'a> {
 }
 
 /// Iterator over material properties (skips null entries).
-pub struct MaterialPropertyIterator<'a> {
+pub struct MaterialPropertyIterator {
+    scene: Scene,
     props: Option<SharedPtr<*mut sys::aiMaterialProperty>>,
     count: usize,
     index: usize,
-    _marker: PhantomData<&'a ()>,
 }
 
-impl<'a> Iterator for MaterialPropertyIterator<'a> {
-    type Item = MaterialPropertyRef<'a>;
+impl Iterator for MaterialPropertyIterator {
+    type Item = MaterialPropertyRef;
 
     fn next(&mut self) -> Option<Self::Item> {
         let props = self.props?;
@@ -1211,7 +1209,7 @@ impl<'a> Iterator for MaterialPropertyIterator<'a> {
                 if ptr.is_null() {
                     continue;
                 }
-                return Some(MaterialPropertyRef::from_ptr(ptr));
+                return Some(MaterialPropertyRef::from_ptr(self.scene.clone(), ptr));
             }
         }
         None
@@ -1335,7 +1333,7 @@ pub enum PbrWorkflow {
     Unknown,
 }
 
-impl<'a> Material<'a> {
+impl Material {
     /// Determine PBR workflow based on present factors
     pub fn pbr_workflow(&self) -> PbrWorkflow {
         if self.metallic_factor().is_some() || self.roughness_factor().is_some() {

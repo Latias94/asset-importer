@@ -78,7 +78,7 @@ and can be shared across threads (e.g. behind `Arc`) for read-only access.
 
 Important: do not mutate Assimp-owned scene memory through raw Assimp bindings (`asset_importer::sys` with feature `raw-sys`,
 or the `asset-importer-sys` crate) while a `Scene` (or any
-borrowed view) is shared across threads. Doing so violates the crate's safety contract and may cause
+scene-backed view type) is shared across threads. Doing so violates the crate's safety contract and may cause
 undefined behavior.
 
 ## Build Options

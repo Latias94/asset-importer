@@ -15,7 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Zero-copy material properties**: Added `Material::properties()` yielding `MaterialPropertyRef` (borrowed key + raw bytes), plus raw animation key accessors on `NodeAnimation`.
 
 ### Changed
-- **Stronger lifetime safety (breaking)**: Most scene-backed view types now borrow the owning `Scene` via lifetimes to prevent use-after-free in safe code.
+- **Scene ownership model (breaking)**: Scene-backed view types (`Mesh`, `Node`, `Material`, `Texture`, etc.) now own a cheap clone of `Scene` instead of borrowing via lifetimes, making them effectively `'static` and more ergonomic for async/multithreading.
+- **View trait changes (breaking)**: Many scene-backed view types are no longer `Copy`; prefer cloning the view handle when needed.
 - **Assimp version helpers**: `version::assimp_version()` now reports `major.minor.patch` and new helpers expose patch/branch/legal strings.
 - **Bundled Assimp updated**: Vendored Assimp (via `asset-importer-sys`) is now pinned to `v6.0.2`.
 - **Thread-safety internals**: Centralized Assimp pointer sharing logic to reduce scattered `unsafe impl Send/Sync` across the codebase.
@@ -25,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Zero-copy API types (breaking)**: `Mesh::vertices_raw()`/`normals_raw()`/etc and `Texture::data_ref()` now return `asset_importer::raw::*` or crate-owned types instead of `sys::*`, so users can consume zero-copy data without enabling `raw-sys`.
 - **Raw view safety (breaking)**: `asset_importer::raw::AiFace::indices_unchecked()` is now `unsafe` to prevent safe Rust from dereferencing arbitrary user-provided pointers.
 - **Postprocess ownership (breaking)**: `Scene::apply_postprocess` now consumes and returns `Scene` to avoid double-free/use-after-free if Assimp invalidates the scene pointer on failure.
+- **Postprocess with shared scenes**: `Scene::apply_postprocess` now post-processes a deep copy when the scene is shared, avoiding mutation of shared scene memory.
 - **Thread-safe callbacks (breaking)**: `io::FileSystem`/`io::FileStream` and `progress::ProgressHandler` are now `Send` (and `FileSystem` is `Sync`) so import/export configuration can be moved across threads safely.
 - **Material string ergonomics**: `MaterialStringRef` now implements `Display` (use `.to_string()` via `ToString`) and exposes `to_string_lossy()` as an explicit allocating conversion helper.
 

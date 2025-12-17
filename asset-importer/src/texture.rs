@@ -4,12 +4,11 @@
 //! including support for embedded textures that are stored directly within
 //! model files.
 
-use std::marker::PhantomData;
-
 use crate::types::ai_string_to_string;
 use crate::{
     error::{Error, Result},
     ptr::SharedPtr,
+    scene::Scene,
     sys,
 };
 
@@ -113,26 +112,27 @@ pub enum TextureDataRef<'a> {
 /// Textures can be either:
 /// 1. Uncompressed - stored as raw ARGB8888 texel data
 /// 2. Compressed - stored in a standard format like PNG, JPEG, etc.
-#[derive(Debug)]
-pub struct Texture<'a> {
+#[derive(Debug, Clone)]
+pub struct Texture {
+    #[allow(dead_code)]
+    scene: Scene,
     texture_ptr: SharedPtr<sys::aiTexture>,
-    _marker: PhantomData<&'a ()>,
 }
 
-impl<'a> Texture<'a> {
+impl Texture {
     /// Create a texture wrapper from a raw Assimp texture pointer
     ///
     /// # Safety
     /// The caller must ensure that the pointer is valid and that the texture
     /// will not be freed while this Texture instance exists.
-    pub(crate) unsafe fn from_raw(texture_ptr: *const sys::aiTexture) -> Result<Self> {
+    pub(crate) unsafe fn from_raw(
+        scene: Scene,
+        texture_ptr: *const sys::aiTexture,
+    ) -> Result<Self> {
         let texture_ptr = SharedPtr::new(texture_ptr)
             .ok_or_else(|| Error::invalid_scene("Texture pointer is null"))?;
 
-        Ok(Self {
-            texture_ptr,
-            _marker: PhantomData,
-        })
+        Ok(Self { scene, texture_ptr })
     }
 
     #[allow(dead_code)]
@@ -173,7 +173,7 @@ impl<'a> Texture<'a> {
     }
 
     /// Get a borrowed view of the texture data (zero-copy).
-    pub fn data_ref(&self) -> Result<TextureDataRef<'a>> {
+    pub fn data_ref(&self) -> Result<TextureDataRef<'_>> {
         unsafe {
             let texture = &*self.texture_ptr.as_ptr();
             if self.is_compressed() {
@@ -297,31 +297,35 @@ impl<'a> Texture<'a> {
 }
 
 /// Iterator over textures in a scene
-pub struct TextureIterator<'a> {
+pub struct TextureIterator {
+    scene: Scene,
     textures: Option<SharedPtr<*mut sys::aiTexture>>,
     count: usize,
     index: usize,
-    _marker: PhantomData<&'a ()>,
 }
 
-impl<'a> TextureIterator<'a> {
+impl TextureIterator {
     /// Create a new texture iterator
     ///
     /// # Safety
     /// The caller must ensure that the textures pointer and count are valid.
-    pub(crate) unsafe fn new(textures: *mut *mut sys::aiTexture, count: usize) -> Self {
+    pub(crate) unsafe fn new(
+        scene: Scene,
+        textures: *mut *mut sys::aiTexture,
+        count: usize,
+    ) -> Self {
         let textures_ptr = SharedPtr::new(textures as *const *mut sys::aiTexture);
         Self {
+            scene,
             textures: textures_ptr,
             count: if textures_ptr.is_some() { count } else { 0 },
             index: 0,
-            _marker: PhantomData,
         }
     }
 }
 
-impl<'a> Iterator for TextureIterator<'a> {
-    type Item = Texture<'a>;
+impl Iterator for TextureIterator {
+    type Item = Texture;
 
     fn next(&mut self) -> Option<Self::Item> {
         let textures = self.textures?;
@@ -333,7 +337,7 @@ impl<'a> Iterator for TextureIterator<'a> {
                     continue;
                 }
                 // `from_raw` only fails on null pointers; keep the iterator robust anyway.
-                if let Ok(tex) = Texture::from_raw(texture_ptr) {
+                if let Ok(tex) = Texture::from_raw(self.scene.clone(), texture_ptr) {
                     return Some(tex);
                 }
             }

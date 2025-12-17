@@ -1,5 +1,7 @@
 //! Scene representation and management
 
+use std::sync::Arc;
+
 use crate::{
     animation::Animation,
     camera::Camera,
@@ -94,16 +96,25 @@ impl Default for MemoryInfo {
 ///
 /// ## Thread safety
 /// `Scene` and all scene-backed view types (`Mesh`, `Material`, `Node`, `Texture`, etc.) are
-/// `Send + Sync` and can be used with `Arc` across threads for *read-only* access.
+/// `Send + Sync` and can be used across threads for *read-only* access.
+///
+/// Unlike lifetime-tied view types, scene-backed views in this crate keep the owning
+/// scene alive by holding a cheap clone of `Scene` internally. This makes views effectively
+/// `'static` (as long as you own the view value) and avoids borrow-checker friction in
+/// async and multithreaded code.
 ///
 /// This guarantee relies on the safe API treating the imported Assimp scene as immutable.
 /// If you call into raw Assimp bindings (`asset_importer::sys` with feature `raw-sys`, or the
 /// `asset-importer-sys` crate) and mutate internal pointers yourself, you can
 /// violate this contract and cause undefined behavior.
+#[derive(Clone, Debug)]
 pub struct Scene {
-    /// Raw pointer to the Assimp scene
+    inner: Arc<SceneInner>,
+}
+
+#[derive(Debug)]
+pub(crate) struct SceneInner {
     scene_ptr: SharedPtr<sys::aiScene>,
-    /// How to release the scene when dropped
     release_kind: SceneRelease,
 }
 
@@ -128,8 +139,10 @@ impl Scene {
         let scene_ptr = SharedPtr::new(scene_ptr).ok_or(Error::NullPointer)?;
 
         Ok(Self {
-            scene_ptr,
-            release_kind: SceneRelease::ReleaseImport,
+            inner: Arc::new(SceneInner {
+                scene_ptr,
+                release_kind: SceneRelease::ReleaseImport,
+            }),
         })
     }
 
@@ -150,8 +163,10 @@ impl Scene {
     pub(crate) unsafe fn from_raw_copied_sys(scene_ptr: *const sys::aiScene) -> Result<Self> {
         let scene_ptr = SharedPtr::new(scene_ptr).ok_or(Error::NullPointer)?;
         Ok(Self {
-            scene_ptr,
-            release_kind: SceneRelease::FreeScene,
+            inner: Arc::new(SceneInner {
+                scene_ptr,
+                release_kind: SceneRelease::FreeScene,
+            }),
         })
     }
 
@@ -166,7 +181,7 @@ impl Scene {
 
     #[allow(dead_code)]
     pub(crate) fn as_raw_sys(&self) -> *const sys::aiScene {
-        self.scene_ptr.as_ptr()
+        self.inner.scene_ptr.as_ptr()
     }
 
     /// Get the raw scene pointer (requires `raw-sys`).
@@ -180,23 +195,42 @@ impl Scene {
     /// This consumes the scene and returns the updated scene on success:
     /// `scene = scene.apply_postprocess(flags)?;`.
     ///
+    /// If the scene is shared (i.e. cloned), this function will post-process a deep copy
+    /// to avoid mutating shared scene memory.
+    ///
     /// Assimp documents that post-processing is in-place but may return `NULL` on failure
     /// (notably for `aiProcess_ValidateDataStructure`), potentially invalidating the input
     /// scene pointer. To avoid double-free or use-after-free in safe Rust, this API takes
     /// ownership of the scene and will not drop the original pointer on failure.
     pub fn apply_postprocess(self, flags: crate::postprocess::PostProcessSteps) -> Result<Self> {
-        let this = std::mem::ManuallyDrop::new(self);
+        let inner = match Arc::try_unwrap(self.inner) {
+            Ok(inner) => inner,
+            Err(shared) => {
+                // If the scene is shared, avoid mutating shared memory by post-processing a deep
+                // copy instead. This makes `apply_postprocess` deterministic and thread-friendly.
+                let copied = unsafe { copy_scene_sys(shared.scene_ptr.as_ptr()) }?;
+                SceneInner {
+                    scene_ptr: copied,
+                    release_kind: SceneRelease::FreeScene,
+                }
+            }
+        };
+
+        // Assimp may invalidate the input pointer on failure. Prefer leaking over UB.
+        let inner = std::mem::ManuallyDrop::new(inner);
 
         let new_ptr =
-            unsafe { sys::aiApplyPostProcessing(this.scene_ptr.as_ptr(), flags.as_raw()) };
+            unsafe { sys::aiApplyPostProcessing(inner.scene_ptr.as_ptr(), flags.as_raw()) };
         if new_ptr.is_null() {
             return Err(Error::invalid_scene("Post-processing failed"));
         }
 
         // Assimp promises this is the same scene pointer on success, but treat it as an update anyway.
-        let mut scene = std::mem::ManuallyDrop::into_inner(this);
-        scene.scene_ptr = SharedPtr::new(new_ptr).ok_or(Error::NullPointer)?;
-        Ok(scene)
+        let mut inner = std::mem::ManuallyDrop::into_inner(inner);
+        inner.scene_ptr = SharedPtr::new(new_ptr).ok_or(Error::NullPointer)?;
+        Ok(Self {
+            inner: Arc::new(inner),
+        })
     }
 
     /// Load a scene from a file with default settings
@@ -293,7 +327,7 @@ impl Scene {
 
     /// Get the scene flags
     pub fn flags(&self) -> u32 {
-        unsafe { (*self.scene_ptr.as_ptr()).mFlags }
+        unsafe { (*self.inner.scene_ptr.as_ptr()).mFlags }
     }
 
     /// Check if the scene is incomplete
@@ -328,7 +362,7 @@ impl Scene {
         };
 
         unsafe {
-            sys::aiGetMemoryRequirements(self.scene_ptr.as_ptr(), &mut info);
+            sys::aiGetMemoryRequirements(self.inner.scene_ptr.as_ptr(), &mut info);
         }
 
         Ok(MemoryInfo {
@@ -354,13 +388,13 @@ impl Scene {
     }
 
     /// Get the root node of the scene
-    pub fn root_node(&self) -> Option<Node<'_>> {
+    pub fn root_node(&self) -> Option<Node> {
         unsafe {
-            let scene = &*self.scene_ptr.as_ptr();
+            let scene = &*self.inner.scene_ptr.as_ptr();
             if scene.mRootNode.is_null() {
                 None
             } else {
-                Some(Node::from_raw(scene.mRootNode))
+                Some(Node::from_raw(self.clone(), scene.mRootNode))
             }
         }
     }
@@ -368,7 +402,7 @@ impl Scene {
     /// Get the number of meshes in the scene
     pub fn num_meshes(&self) -> usize {
         unsafe {
-            let scene = &*self.scene_ptr.as_ptr();
+            let scene = &*self.inner.scene_ptr.as_ptr();
             if scene.mMeshes.is_null() {
                 0
             } else {
@@ -378,13 +412,13 @@ impl Scene {
     }
 
     /// Get a mesh by index
-    pub fn mesh(&self, index: usize) -> Option<Mesh<'_>> {
+    pub fn mesh(&self, index: usize) -> Option<Mesh> {
         if index >= self.num_meshes() {
             return None;
         }
 
         unsafe {
-            let scene = &*self.scene_ptr.as_ptr();
+            let scene = &*self.inner.scene_ptr.as_ptr();
             if scene.mMeshes.is_null() {
                 return None;
             }
@@ -392,15 +426,15 @@ impl Scene {
             if mesh_ptr.is_null() {
                 None
             } else {
-                Some(Mesh::from_raw(mesh_ptr))
+                Some(Mesh::from_raw(self.clone(), mesh_ptr))
             }
         }
     }
 
     /// Get an iterator over all meshes
-    pub fn meshes(&self) -> MeshIterator<'_> {
+    pub fn meshes(&self) -> MeshIterator {
         MeshIterator {
-            scene: self,
+            scene: self.clone(),
             index: 0,
         }
     }
@@ -408,7 +442,7 @@ impl Scene {
     /// Get the number of materials in the scene
     pub fn num_materials(&self) -> usize {
         unsafe {
-            let scene = &*self.scene_ptr.as_ptr();
+            let scene = &*self.inner.scene_ptr.as_ptr();
             if scene.mMaterials.is_null() {
                 0
             } else {
@@ -418,13 +452,13 @@ impl Scene {
     }
 
     /// Get a material by index
-    pub fn material(&self, index: usize) -> Option<Material<'_>> {
+    pub fn material(&self, index: usize) -> Option<Material> {
         if index >= self.num_materials() {
             return None;
         }
 
         unsafe {
-            let scene = &*self.scene_ptr.as_ptr();
+            let scene = &*self.inner.scene_ptr.as_ptr();
             if scene.mMaterials.is_null() {
                 return None;
             }
@@ -432,15 +466,15 @@ impl Scene {
             if material_ptr.is_null() {
                 None
             } else {
-                Some(Material::from_raw(material_ptr))
+                Some(Material::from_raw(self.clone(), material_ptr))
             }
         }
     }
 
     /// Get an iterator over all materials
-    pub fn materials(&self) -> MaterialIterator<'_> {
+    pub fn materials(&self) -> MaterialIterator {
         MaterialIterator {
-            scene: self,
+            scene: self.clone(),
             index: 0,
         }
     }
@@ -448,7 +482,7 @@ impl Scene {
     /// Get the number of animations in the scene
     pub fn num_animations(&self) -> usize {
         unsafe {
-            let scene = &*self.scene_ptr.as_ptr();
+            let scene = &*self.inner.scene_ptr.as_ptr();
             if scene.mAnimations.is_null() {
                 0
             } else {
@@ -458,13 +492,13 @@ impl Scene {
     }
 
     /// Get an animation by index
-    pub fn animation(&self, index: usize) -> Option<Animation<'_>> {
+    pub fn animation(&self, index: usize) -> Option<Animation> {
         if index >= self.num_animations() {
             return None;
         }
 
         unsafe {
-            let scene = &*self.scene_ptr.as_ptr();
+            let scene = &*self.inner.scene_ptr.as_ptr();
             if scene.mAnimations.is_null() {
                 return None;
             }
@@ -472,15 +506,15 @@ impl Scene {
             if animation_ptr.is_null() {
                 None
             } else {
-                Some(Animation::from_raw(animation_ptr))
+                Some(Animation::from_raw(self.clone(), animation_ptr))
             }
         }
     }
 
     /// Get an iterator over all animations
-    pub fn animations(&self) -> AnimationIterator<'_> {
+    pub fn animations(&self) -> AnimationIterator {
         AnimationIterator {
-            scene: self,
+            scene: self.clone(),
             index: 0,
         }
     }
@@ -488,7 +522,7 @@ impl Scene {
     /// Get the number of cameras in the scene
     pub fn num_cameras(&self) -> usize {
         unsafe {
-            let scene = &*self.scene_ptr.as_ptr();
+            let scene = &*self.inner.scene_ptr.as_ptr();
             if scene.mCameras.is_null() {
                 0
             } else {
@@ -498,13 +532,13 @@ impl Scene {
     }
 
     /// Get a camera by index
-    pub fn camera(&self, index: usize) -> Option<Camera<'_>> {
+    pub fn camera(&self, index: usize) -> Option<Camera> {
         if index >= self.num_cameras() {
             return None;
         }
 
         unsafe {
-            let scene = &*self.scene_ptr.as_ptr();
+            let scene = &*self.inner.scene_ptr.as_ptr();
             if scene.mCameras.is_null() {
                 return None;
             }
@@ -512,15 +546,15 @@ impl Scene {
             if camera_ptr.is_null() {
                 None
             } else {
-                Some(Camera::from_raw(camera_ptr))
+                Some(Camera::from_raw(self.clone(), camera_ptr))
             }
         }
     }
 
     /// Get an iterator over all cameras
-    pub fn cameras(&self) -> CameraIterator<'_> {
+    pub fn cameras(&self) -> CameraIterator {
         CameraIterator {
-            scene: self,
+            scene: self.clone(),
             index: 0,
         }
     }
@@ -528,7 +562,7 @@ impl Scene {
     /// Get the number of lights in the scene
     pub fn num_lights(&self) -> usize {
         unsafe {
-            let scene = &*self.scene_ptr.as_ptr();
+            let scene = &*self.inner.scene_ptr.as_ptr();
             if scene.mLights.is_null() {
                 0
             } else {
@@ -538,13 +572,13 @@ impl Scene {
     }
 
     /// Get a light by index
-    pub fn light(&self, index: usize) -> Option<Light<'_>> {
+    pub fn light(&self, index: usize) -> Option<Light> {
         if index >= self.num_lights() {
             return None;
         }
 
         unsafe {
-            let scene = &*self.scene_ptr.as_ptr();
+            let scene = &*self.inner.scene_ptr.as_ptr();
             if scene.mLights.is_null() {
                 return None;
             }
@@ -552,21 +586,31 @@ impl Scene {
             if light_ptr.is_null() {
                 None
             } else {
-                Some(Light::from_raw(light_ptr))
+                Some(Light::from_raw(self.clone(), light_ptr))
             }
         }
     }
 
     /// Get an iterator over all lights
-    pub fn lights(&self) -> LightIterator<'_> {
+    pub fn lights(&self) -> LightIterator {
         LightIterator {
-            scene: self,
+            scene: self.clone(),
             index: 0,
         }
     }
 }
 
-impl Drop for Scene {
+/// # Safety
+/// `scene_ptr` must point to a valid `aiScene`.
+unsafe fn copy_scene_sys(scene_ptr: *const sys::aiScene) -> Result<SharedPtr<sys::aiScene>> {
+    debug_assert!(!scene_ptr.is_null());
+    let mut out: *mut sys::aiScene = std::ptr::null_mut();
+    unsafe { sys::aiCopyScene(scene_ptr, &mut out) };
+    let out = SharedPtr::new(out).ok_or(Error::invalid_scene("aiCopyScene returned null"))?;
+    Ok(out)
+}
+
+impl Drop for SceneInner {
     fn drop(&mut self) {
         unsafe {
             match self.release_kind {
@@ -578,13 +622,13 @@ impl Drop for Scene {
 }
 
 /// Iterator over meshes in a scene
-pub struct MeshIterator<'a> {
-    scene: &'a Scene,
+pub struct MeshIterator {
+    scene: Scene,
     index: usize,
 }
 
-impl<'a> Iterator for MeshIterator<'a> {
-    type Item = Mesh<'a>;
+impl Iterator for MeshIterator {
+    type Item = Mesh;
 
     fn next(&mut self) -> Option<Self::Item> {
         while self.index < self.scene.num_meshes() {
@@ -604,13 +648,13 @@ impl<'a> Iterator for MeshIterator<'a> {
 }
 
 /// Iterator over materials in a scene
-pub struct MaterialIterator<'a> {
-    scene: &'a Scene,
+pub struct MaterialIterator {
+    scene: Scene,
     index: usize,
 }
 
-impl<'a> Iterator for MaterialIterator<'a> {
-    type Item = Material<'a>;
+impl Iterator for MaterialIterator {
+    type Item = Material;
 
     fn next(&mut self) -> Option<Self::Item> {
         while self.index < self.scene.num_materials() {
@@ -630,13 +674,13 @@ impl<'a> Iterator for MaterialIterator<'a> {
 }
 
 /// Iterator over animations in a scene
-pub struct AnimationIterator<'a> {
-    scene: &'a Scene,
+pub struct AnimationIterator {
+    scene: Scene,
     index: usize,
 }
 
-impl<'a> Iterator for AnimationIterator<'a> {
-    type Item = Animation<'a>;
+impl Iterator for AnimationIterator {
+    type Item = Animation;
 
     fn next(&mut self) -> Option<Self::Item> {
         while self.index < self.scene.num_animations() {
@@ -656,13 +700,13 @@ impl<'a> Iterator for AnimationIterator<'a> {
 }
 
 /// Iterator over cameras in a scene
-pub struct CameraIterator<'a> {
-    scene: &'a Scene,
+pub struct CameraIterator {
+    scene: Scene,
     index: usize,
 }
 
-impl<'a> Iterator for CameraIterator<'a> {
-    type Item = Camera<'a>;
+impl Iterator for CameraIterator {
+    type Item = Camera;
 
     fn next(&mut self) -> Option<Self::Item> {
         while self.index < self.scene.num_cameras() {
@@ -682,13 +726,13 @@ impl<'a> Iterator for CameraIterator<'a> {
 }
 
 /// Iterator over lights in a scene
-pub struct LightIterator<'a> {
-    scene: &'a Scene,
+pub struct LightIterator {
+    scene: Scene,
     index: usize,
 }
 
-impl<'a> Iterator for LightIterator<'a> {
-    type Item = Light<'a>;
+impl Iterator for LightIterator {
+    type Item = Light;
 
     fn next(&mut self) -> Option<Self::Item> {
         while self.index < self.scene.num_lights() {
@@ -710,14 +754,14 @@ impl<'a> Iterator for LightIterator<'a> {
 impl Scene {
     /// Get scene metadata
     pub fn metadata(&self) -> Result<Metadata> {
-        let scene = unsafe { &*self.scene_ptr.as_ptr() };
+        let scene = unsafe { &*self.inner.scene_ptr.as_ptr() };
         unsafe { Metadata::from_raw_sys(scene.mMetaData) }
     }
 
     /// Get the number of textures in the scene
     pub fn num_textures(&self) -> usize {
         unsafe {
-            let scene = &*self.scene_ptr.as_ptr();
+            let scene = &*self.inner.scene_ptr.as_ptr();
             if scene.mTextures.is_null() {
                 0
             } else {
@@ -727,13 +771,13 @@ impl Scene {
     }
 
     /// Get a texture by index
-    pub fn texture(&self, index: usize) -> Option<Texture<'_>> {
+    pub fn texture(&self, index: usize) -> Option<Texture> {
         if index >= self.num_textures() {
             return None;
         }
 
         unsafe {
-            let scene = &*self.scene_ptr.as_ptr();
+            let scene = &*self.inner.scene_ptr.as_ptr();
             if scene.mTextures.is_null() {
                 return None;
             }
@@ -741,16 +785,16 @@ impl Scene {
             if texture_ptr.is_null() {
                 None
             } else {
-                Texture::from_raw(texture_ptr).ok()
+                Texture::from_raw(self.clone(), texture_ptr).ok()
             }
         }
     }
 
     /// Get an iterator over all textures in the scene
-    pub fn textures(&self) -> TextureIterator<'_> {
+    pub fn textures(&self) -> TextureIterator {
         unsafe {
-            let scene = &*self.scene_ptr.as_ptr();
-            TextureIterator::new(scene.mTextures, self.num_textures())
+            let scene = &*self.inner.scene_ptr.as_ptr();
+            TextureIterator::new(self.clone(), scene.mTextures, self.num_textures())
         }
     }
 
@@ -760,7 +804,7 @@ impl Scene {
     }
 
     /// Find a texture by filename
-    pub fn find_texture_by_filename(&self, filename: &str) -> Option<Texture<'_>> {
+    pub fn find_texture_by_filename(&self, filename: &str) -> Option<Texture> {
         self.textures().find(|texture| {
             texture
                 .filename()
@@ -770,28 +814,28 @@ impl Scene {
     }
 
     /// Get all compressed textures
-    pub fn compressed_textures(&self) -> Vec<Texture<'_>> {
+    pub fn compressed_textures(&self) -> Vec<Texture> {
         self.textures()
             .filter(|texture| texture.is_compressed())
             .collect()
     }
 
     /// Get all uncompressed textures
-    pub fn uncompressed_textures(&self) -> Vec<Texture<'_>> {
+    pub fn uncompressed_textures(&self) -> Vec<Texture> {
         self.textures()
             .filter(|texture| texture.is_uncompressed())
             .collect()
     }
 
     /// Get embedded texture by filename hint (e.g. "*0", "*1")
-    pub fn embedded_texture_by_name(&self, name: &str) -> Option<Texture<'_>> {
+    pub fn embedded_texture_by_name(&self, name: &str) -> Option<Texture> {
         let c = std::ffi::CString::new(name).ok()?;
         unsafe {
-            let tex = sys::aiGetEmbeddedTexture(self.scene_ptr.as_ptr(), c.as_ptr());
+            let tex = sys::aiGetEmbeddedTexture(self.inner.scene_ptr.as_ptr(), c.as_ptr());
             if tex.is_null() {
                 None
             } else {
-                Texture::from_raw(tex).ok()
+                Texture::from_raw(self.clone(), tex).ok()
             }
         }
     }
