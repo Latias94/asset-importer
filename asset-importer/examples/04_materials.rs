@@ -69,7 +69,9 @@ fn main() -> Result<(), Box<dyn Error>> {
                     }
                 }
                 PropertyTypeInfo::Integer => {
-                    if let Some(v) =
+                    if let Some(v) = p.data_i32() {
+                        println!(" ints={:?}", preview(v));
+                    } else if let Some(v) =
                         mat.get_property_i32_array_str(key.as_ref(), p.semantic(), p.index())
                     {
                         println!(" ints={:?}", preview(&v[..]));
@@ -78,7 +80,9 @@ fn main() -> Result<(), Box<dyn Error>> {
                     }
                 }
                 PropertyTypeInfo::Float => {
-                    if let Some(v) =
+                    if let Some(v) = p.data_f32() {
+                        println!(" floats={:?}", preview(v));
+                    } else if let Some(v) =
                         mat.get_property_f32_array_str(key.as_ref(), p.semantic(), p.index())
                     {
                         println!(" floats={:?}", preview(&v[..]));
@@ -87,7 +91,9 @@ fn main() -> Result<(), Box<dyn Error>> {
                     }
                 }
                 PropertyTypeInfo::Double => {
-                    if let Some(v) =
+                    if let Some(v) = p.data_f64() {
+                        println!(" doubles={:?}", preview(v));
+                    } else if let Some(v) =
                         mat.get_property_f64_array_str(key.as_ref(), p.semantic(), p.index())
                     {
                         println!(" doubles={:?}", preview(&v[..]));

@@ -286,7 +286,7 @@ pub mod utils {
 
         // Collect all weights per vertex
         for (bone_index, bone) in bones.iter().enumerate() {
-            for weight in bone.weights() {
+            for weight in bone.weights_iter() {
                 vertex_weights
                     .entry(weight.vertex_id)
                     .or_default()
@@ -323,7 +323,7 @@ pub mod utils {
         let mut vertex_bone_count: HashMap<u32, usize> = HashMap::new();
 
         for bone in bones {
-            for weight in bone.weights() {
+            for weight in bone.weights_iter() {
                 *vertex_bone_count.entry(weight.vertex_id).or_insert(0) += 1;
             }
         }

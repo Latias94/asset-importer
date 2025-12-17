@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **More zero-allocation views**: Added `Mesh::faces_raw()` and `Face::indices_raw()`, plus `Material::texture_ref()` / `Material::texture_refs()` with `TextureInfoRef` to query texture metadata without allocating the path `String`.
 - **More zero-copy iterators**: Added `Bone::weights_raw()` / `Bone::weights_iter()` and `Node::mesh_indices_raw()` / `Node::mesh_indices_iter()` to avoid repeated allocations in common skeletal/scene traversal code.
 - **Raw zero-copy views**: Added `asset_importer::raw` with `repr(C)` mirrors so `*_raw()` APIs no longer depend on exposing `asset_importer::sys` by default.
+- **Zero-copy material properties**: Added `Material::properties()` yielding `MaterialPropertyRef` (borrowed key + raw bytes), plus raw animation key accessors on `NodeAnimation`.
 
 ### Changed
 - **Stronger lifetime safety (breaking)**: Most scene-backed view types now borrow the owning `Scene` via lifetimes to prevent use-after-free in safe code.

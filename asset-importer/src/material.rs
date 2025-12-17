@@ -1085,6 +1085,15 @@ impl<'a> MaterialPropertyRef<'a> {
         unsafe { ai_string_to_str(&(*self.prop_ptr.as_ptr()).mKey) }
     }
 
+    /// Raw bytes of the key (without assuming NUL-termination).
+    pub fn key_bytes(&self) -> &[u8] {
+        unsafe {
+            let s = &(*self.prop_ptr.as_ptr()).mKey;
+            let len = (s.length as usize).min(s.data.len());
+            std::slice::from_raw_parts(s.data.as_ptr() as *const u8, len)
+        }
+    }
+
     /// Property key as owned `String` (allocates).
     pub fn key_string(&self) -> String {
         unsafe { ai_string_to_string(&(*self.prop_ptr.as_ptr()).mKey) }
@@ -1114,6 +1123,44 @@ impl<'a> MaterialPropertyRef<'a> {
             } else {
                 std::slice::from_raw_parts(p.mData as *const u8, p.mDataLength as usize)
             }
+        }
+    }
+
+    /// Interpret the property payload as an `i32` slice when stored as `Integer` (zero-copy).
+    pub fn data_i32(&self) -> Option<&'a [i32]> {
+        (self.type_info() == PropertyTypeInfo::Integer)
+            .then(|| self.data_cast_slice_opt())
+            .flatten()
+    }
+
+    /// Interpret the property payload as an `f32` slice when stored as `Float` (zero-copy).
+    pub fn data_f32(&self) -> Option<&'a [f32]> {
+        (self.type_info() == PropertyTypeInfo::Float)
+            .then(|| self.data_cast_slice_opt())
+            .flatten()
+    }
+
+    /// Interpret the property payload as an `f64` slice when stored as `Double` (zero-copy).
+    pub fn data_f64(&self) -> Option<&'a [f64]> {
+        (self.type_info() == PropertyTypeInfo::Double)
+            .then(|| self.data_cast_slice_opt())
+            .flatten()
+    }
+
+    fn data_cast_slice_opt<T>(&self) -> Option<&'a [T]> {
+        unsafe {
+            let p = &*self.prop_ptr.as_ptr();
+            let ptr = p.mData as *const u8;
+            let len = p.mDataLength as usize;
+            let size = std::mem::size_of::<T>();
+            let align = std::mem::align_of::<T>();
+            if size == 0 || len == 0 {
+                return Some(&[]);
+            }
+            if (ptr as usize) % align != 0 || len % size != 0 {
+                return None;
+            }
+            Some(std::slice::from_raw_parts(ptr as *const T, len / size))
         }
     }
 
