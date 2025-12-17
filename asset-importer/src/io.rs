@@ -12,7 +12,7 @@ use std::sync::{Arc, Mutex};
 use crate::{error::Result, sys};
 
 /// Trait for custom file I/O implementations
-pub trait FileSystem: std::fmt::Debug {
+pub trait FileSystem: std::fmt::Debug + Send + Sync {
     /// Check if a file exists
     fn exists(&self, path: &str) -> bool;
 
@@ -39,7 +39,7 @@ pub trait FileSystem: std::fmt::Debug {
 }
 
 /// Trait for file stream operations
-pub trait FileStream {
+pub trait FileStream: Send {
     /// Read data from the stream
     fn read(&mut self, buffer: &mut [u8]) -> Result<usize>;
 

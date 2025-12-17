@@ -1,7 +1,7 @@
 //! Progress reporting for import/export operations
 
 /// Trait for receiving progress updates during import/export operations
-pub trait ProgressHandler {
+pub trait ProgressHandler: Send {
     /// Called to report progress
     ///
     /// # Parameters
@@ -106,14 +106,14 @@ impl ProgressHandler for SilentProgressHandler {
 /// A progress handler that calls a closure
 pub struct ClosureProgressHandler<F>
 where
-    F: FnMut(f32, Option<&str>) -> bool,
+    F: FnMut(f32, Option<&str>) -> bool + Send,
 {
     closure: F,
 }
 
 impl<F> ClosureProgressHandler<F>
 where
-    F: FnMut(f32, Option<&str>) -> bool,
+    F: FnMut(f32, Option<&str>) -> bool + Send,
 {
     /// Create a new closure-based progress handler
     pub fn new(closure: F) -> Self {
@@ -123,7 +123,7 @@ where
 
 impl<F> ProgressHandler for ClosureProgressHandler<F>
 where
-    F: FnMut(f32, Option<&str>) -> bool,
+    F: FnMut(f32, Option<&str>) -> bool + Send,
 {
     fn update(&mut self, percentage: f32, message: Option<&str>) -> bool {
         (self.closure)(percentage, message)

@@ -24,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Zero-copy API types (breaking)**: `Mesh::vertices_raw()`/`normals_raw()`/etc and `Texture::data_ref()` now return `asset_importer::raw::*` or crate-owned types instead of `sys::*`, so users can consume zero-copy data without enabling `raw-sys`.
 - **Raw view safety (breaking)**: `asset_importer::raw::AiFace::indices_unchecked()` is now `unsafe` to prevent safe Rust from dereferencing arbitrary user-provided pointers.
 - **Postprocess ownership (breaking)**: `Scene::apply_postprocess` now consumes and returns `Scene` to avoid double-free/use-after-free if Assimp invalidates the scene pointer on failure.
+- **Thread-safe callbacks (breaking)**: `io::FileSystem`/`io::FileStream` and `progress::ProgressHandler` are now `Send` (and `FileSystem` is `Sync`) so import/export configuration can be moved across threads safely.
 
 ### Fixed
 - **Send/Sync on scene-backed views**: `Texture` and other scene-backed view types now implement `Send + Sync`, matching the multithreading guarantees promised by the crate.
