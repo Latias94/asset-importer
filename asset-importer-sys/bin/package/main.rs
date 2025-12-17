@@ -1,4 +1,7 @@
-use std::{env, fs, path::PathBuf};
+use std::{
+    env, fs,
+    path::{Path, PathBuf},
+};
 
 use flate2::{Compression, write::GzEncoder};
 
@@ -77,7 +80,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         if let Ok(dir) = env::var("ASSET_IMPORTER_BUILD_OUT_DIR") {
             PathBuf::from(dir)
         } else {
-            locate_build_out_dir(workspace_root, &target)?
+            locate_build_out_dir(workspace_root, &target, link_type, &target_os)?
         }
     } else {
         // This shouldn't happen in package mode, but fallback
@@ -86,6 +89,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     fs::create_dir_all(&ar_dst_dir)?;
     println!("Packaging at: {}", ar_dst_dir.display());
+
+    validate_from_dir(&from_dir, link_type, &target_os)?;
 
     let tar_file = fs::File::create(ar_dst_dir.join(&ar_filename))?;
     let mut archive = tar::Builder::new(GzEncoder::new(tar_file, Compression::best()));
@@ -147,9 +152,124 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+fn validate_from_dir(
+    from_dir: &Path,
+    link_type: &str,
+    target_os: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let include_version = from_dir.join("include").join("assimp").join("version.h");
+    if !include_version.exists() {
+        return Err(format!(
+            "Assimp headers not found (missing {}); refusing to package an invalid archive",
+            include_version.display()
+        )
+        .into());
+    }
+
+    let lib_dir = from_dir.join("lib");
+    let lib64_dir = from_dir.join("lib64");
+    let bin_dir = from_dir.join("bin");
+
+    let lib_roots = [lib_dir.as_path(), lib64_dir.as_path()];
+
+    let mut has_static = false;
+    let mut has_shared = false;
+    let mut has_windows_lib = false;
+
+    for root in lib_roots {
+        if !root.exists() {
+            continue;
+        }
+        for entry in fs::read_dir(root)?.flatten() {
+            let p = entry.path();
+            let Some(name) = p.file_name().and_then(|s| s.to_str()) else {
+                continue;
+            };
+            let lower = name.to_ascii_lowercase();
+
+            if target_os == "windows" {
+                if lower.starts_with("assimp") && lower.ends_with(".lib") {
+                    has_windows_lib = true;
+                }
+                continue;
+            }
+
+            if lower.starts_with("libassimp") && lower.ends_with(".a") {
+                has_static = true;
+            }
+            if lower.starts_with("libassimp")
+                && (lower.ends_with(".dylib") || lower.contains(".so"))
+            {
+                has_shared = true;
+            }
+        }
+    }
+
+    let has_windows_dll = if target_os == "windows" && bin_dir.exists() {
+        fs::read_dir(&bin_dir)?.flatten().any(|e| {
+            e.path()
+                .extension()
+                .and_then(|s| s.to_str())
+                .is_some_and(|ext| ext.eq_ignore_ascii_case("dll"))
+        })
+    } else {
+        false
+    };
+
+    match (target_os, link_type) {
+        ("windows", "static") => {
+            if !has_windows_lib {
+                return Err(format!(
+                    "Windows static package is missing assimp *.lib under {} (or {}).",
+                    lib_dir.display(),
+                    lib64_dir.display()
+                )
+                .into());
+            }
+        }
+        ("windows", "dylib") => {
+            if !has_windows_lib || !has_windows_dll {
+                return Err(format!(
+                    "Windows dylib package is missing assimp import lib (*.lib) and/or runtime DLLs (bin/*.dll). lib={}, bin={}",
+                    lib_dir.display(),
+                    bin_dir.display()
+                )
+                .into());
+            }
+        }
+        (_, "static") => {
+            if !has_static || has_shared {
+                return Err(format!(
+                    "Static package content mismatch: expected static assimp library only, found static={}, shared={}. from_dir={}",
+                    has_static,
+                    has_shared,
+                    from_dir.display()
+                )
+                .into());
+            }
+        }
+        (_, "dylib") => {
+            if !has_shared || has_static {
+                return Err(format!(
+                    "Dylib package content mismatch: expected shared assimp library only, found shared={}, static={}. from_dir={}",
+                    has_shared,
+                    has_static,
+                    from_dir.display()
+                )
+                .into());
+            }
+        }
+        _ => {}
+    }
+
+    Ok(())
+}
+
 fn locate_build_out_dir(
     workspace_root: &std::path::Path,
     target: &str,
+    link_type: &str,
+    target_os: &str,
 ) -> Result<PathBuf, Box<dyn std::error::Error>> {
     // Determine profile used for this run
     let profile = env::var("PROFILE").unwrap_or_else(|_| "release".into());
@@ -193,9 +313,117 @@ fn locate_build_out_dir(
         )
         .into());
     }
-    // Choose the most recently modified
-    candidates.sort_by_key(|p| std::fs::metadata(p).and_then(|m| m.modified()).ok());
-    let from_dir = candidates.pop().unwrap();
+
+    let desired = match link_type {
+        "static" => PackageKind::Static,
+        "dylib" => PackageKind::Dylib,
+        _ => PackageKind::Unknown,
+    };
+
+    let mut matching: Vec<PathBuf> = candidates
+        .into_iter()
+        .filter(|p| detect_package_kind(p, target_os) == desired)
+        .collect();
+
+    if matching.is_empty() {
+        return Err(format!(
+            "No asset-importer-sys build out directories match requested link type {link_type} for {target}.\n\
+             Hint: build the sys crate with matching features before packaging (static: enable `static-link`, dylib: disable it)."
+        )
+        .into());
+    }
+
+    // Choose the most recently modified among the matching candidates.
+    matching.sort_by_key(|p| std::fs::metadata(p).and_then(|m| m.modified()).ok());
+    let from_dir = matching.pop().unwrap();
     println!("Using build out dir: {}", from_dir.display());
     Ok(from_dir)
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum PackageKind {
+    Static,
+    Dylib,
+    Unknown,
+}
+
+fn detect_package_kind(from_dir: &Path, target_os: &str) -> PackageKind {
+    let include_version = from_dir.join("include").join("assimp").join("version.h");
+    if !include_version.exists() {
+        return PackageKind::Unknown;
+    }
+
+    let lib_dir = from_dir.join("lib");
+    let lib64_dir = from_dir.join("lib64");
+    let bin_dir = from_dir.join("bin");
+
+    if target_os == "windows" {
+        let has_lib = [lib_dir.as_path(), lib64_dir.as_path()]
+            .into_iter()
+            .filter(|p| p.exists())
+            .flat_map(|p| fs::read_dir(p).ok().into_iter().flatten().flatten())
+            .any(|e| {
+                e.path()
+                    .file_name()
+                    .and_then(|s| s.to_str())
+                    .is_some_and(|n| {
+                        n.to_ascii_lowercase().starts_with("assimp")
+                            && n.to_ascii_lowercase().ends_with(".lib")
+                    })
+            });
+
+        let has_dll = bin_dir.exists()
+            && fs::read_dir(&bin_dir)
+                .ok()
+                .into_iter()
+                .flatten()
+                .flatten()
+                .any(|e| {
+                    e.path()
+                        .extension()
+                        .and_then(|s| s.to_str())
+                        .is_some_and(|ext| ext.eq_ignore_ascii_case("dll"))
+                });
+
+        if has_lib && has_dll {
+            return PackageKind::Dylib;
+        }
+        if has_lib {
+            return PackageKind::Static;
+        }
+        return PackageKind::Unknown;
+    }
+
+    let mut has_static = false;
+    let mut has_shared = false;
+    for root in [lib_dir.as_path(), lib64_dir.as_path()] {
+        if !root.exists() {
+            continue;
+        }
+        if let Ok(rd) = fs::read_dir(root) {
+            for entry in rd.flatten() {
+                let p = entry.path();
+                let Some(name) = p.file_name().and_then(|s| s.to_str()) else {
+                    continue;
+                };
+                let lower = name.to_ascii_lowercase();
+                if lower.starts_with("libassimp") && lower.ends_with(".a") {
+                    has_static = true;
+                }
+                if lower.starts_with("libassimp")
+                    && (lower.ends_with(".dylib") || lower.contains(".so"))
+                {
+                    has_shared = true;
+                }
+            }
+        }
+    }
+
+    if has_shared {
+        PackageKind::Dylib
+    } else if has_static {
+        PackageKind::Static
+    } else {
+        PackageKind::Unknown
+    }
 }
