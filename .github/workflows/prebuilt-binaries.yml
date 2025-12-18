@@ -226,6 +226,12 @@ jobs:
           fi
           ls -la "${{ github.workspace }}/packages"
           test -f "${{ github.workspace }}/packages/${expected}"
+          tar -tzf "${{ github.workspace }}/packages/${expected}" | grep -q '^manifest.txt$'
+          tar -tzf "${{ github.workspace }}/packages/${expected}" | grep -q '^include/assimp/version.h$'
+          tar -tzf "${{ github.workspace }}/packages/${expected}" | grep -q '^lib/'
+          if [ "${{ runner.os }}" = "Windows" ] && [ "$link" = "dylib" ]; then
+            tar -tzf "${{ github.workspace }}/packages/${expected}" | grep -Eq '^bin/.*\\.dll$'
+          fi
           echo "✅ Found ${expected}"
 
       # Upload artifacts for release

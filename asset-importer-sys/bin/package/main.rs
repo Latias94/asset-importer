@@ -1,9 +1,12 @@
 use std::{
     env, fs,
+    io::Cursor,
     path::{Path, PathBuf},
 };
 
 use flate2::{Compression, write::GzEncoder};
+
+const VENDORED_ASSIMP_VERSION: &str = "6.0.2";
 
 const fn static_lib() -> &'static str {
     if cfg!(feature = "static-link") {
@@ -95,32 +98,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let tar_file = fs::File::create(ar_dst_dir.join(&ar_filename))?;
     let mut archive = tar::Builder::new(GzEncoder::new(tar_file, Compression::best()));
 
-    // Add include directory
     let include_dir = from_dir.join("include");
-    if include_dir.exists() {
-        archive.append_dir_all("include", &include_dir)?;
-        println!("Added include directory: {}", include_dir.display());
-    } else {
-        return Err(format!("Include directory not found at {}", include_dir.display()).into());
+    append_assimp_headers(&mut archive, &include_dir)?;
+
+    let lib_root = pick_lib_root(&from_dir)?;
+    append_assimp_libs(&mut archive, &lib_root, link_type, &target_os)?;
+
+    if target_os == "windows" && link_type == "dylib" {
+        append_windows_runtime_dlls(&mut archive, &from_dir.join("bin"))?;
     }
 
-    // Add lib directory
-    let lib_dir = from_dir.join("lib");
-    if lib_dir.exists() {
-        archive.append_dir_all("lib", &lib_dir)?;
-        println!("Added lib directory: {}", lib_dir.display());
-    }
-
-    // Also include lib64 (Linux) and bin (Windows/macOS install sometimes uses bin for dylibs)
-    for (name, dir) in [
-        ("lib64", from_dir.join("lib64")),
-        ("bin", from_dir.join("bin")),
-    ] {
-        if dir.exists() {
-            archive.append_dir_all(name, &dir)?;
-            println!("Added {} directory: {}", name, dir.display());
-        }
-    }
+    append_manifest(
+        &mut archive,
+        &target,
+        &crate_version,
+        link_type,
+        crt,
+        VENDORED_ASSIMP_VERSION,
+    )?;
 
     // Add license files
     let license_files = [
@@ -149,6 +144,180 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         link_type,
     );
 
+    Ok(())
+}
+
+fn append_manifest(
+    archive: &mut tar::Builder<GzEncoder<fs::File>>,
+    target: &str,
+    crate_version: &str,
+    link_type: &str,
+    crt: &str,
+    assimp_version: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let mut body = String::new();
+    body.push_str("crate=asset-importer-sys\n");
+    body.push_str(&format!("crate_version={}\n", crate_version));
+    body.push_str(&format!("assimp_version={}\n", assimp_version));
+    body.push_str(&format!("target={}\n", target));
+    body.push_str(&format!("link_type={}\n", link_type));
+    if !crt.is_empty() {
+        body.push_str(&format!("crt={}\n", crt));
+    }
+
+    let bytes = body.into_bytes();
+    let mut header = tar::Header::new_gnu();
+    header.set_mode(0o644);
+    header.set_size(bytes.len() as u64);
+    header.set_cksum();
+    archive.append_data(&mut header, "manifest.txt", Cursor::new(bytes))?;
+    Ok(())
+}
+
+fn append_assimp_headers(
+    archive: &mut tar::Builder<GzEncoder<fs::File>>,
+    include_dir: &Path,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let assimp_dir = include_dir.join("assimp");
+    if !assimp_dir.exists() {
+        return Err(format!(
+            "Assimp include directory not found at {}",
+            assimp_dir.display()
+        )
+        .into());
+    }
+
+    append_dir_all_files(archive, &assimp_dir, Path::new("include").join("assimp"))?;
+    println!(
+        "Added include/assimp headers from: {}",
+        assimp_dir.display()
+    );
+    Ok(())
+}
+
+fn append_windows_runtime_dlls(
+    archive: &mut tar::Builder<GzEncoder<fs::File>>,
+    bin_dir: &Path,
+) -> Result<(), Box<dyn std::error::Error>> {
+    if !bin_dir.exists() {
+        return Err(format!(
+            "bin directory not found at {}; expected runtime DLLs for Windows dylib packaging",
+            bin_dir.display()
+        )
+        .into());
+    }
+
+    let mut added = 0usize;
+    for entry in fs::read_dir(bin_dir)?.flatten() {
+        let p = entry.path();
+        let Some(name) = p.file_name().and_then(|s| s.to_str()) else {
+            continue;
+        };
+        if !name.to_ascii_lowercase().ends_with(".dll") {
+            continue;
+        }
+        archive.append_path_with_name(&p, Path::new("bin").join(name))?;
+        added += 1;
+    }
+
+    if added == 0 {
+        return Err(format!(
+            "no DLLs found under {}; refusing to package an unusable Windows dylib archive",
+            bin_dir.display()
+        )
+        .into());
+    }
+
+    println!("Added bin/*.dll from: {}", bin_dir.display());
+    Ok(())
+}
+
+fn pick_lib_root(from_dir: &Path) -> Result<PathBuf, Box<dyn std::error::Error>> {
+    let lib = from_dir.join("lib");
+    if lib.exists() {
+        return Ok(lib);
+    }
+    let lib64 = from_dir.join("lib64");
+    if lib64.exists() {
+        return Ok(lib64);
+    }
+    Err(format!(
+        "No lib directory found under {} (expected lib/ or lib64/)",
+        from_dir.display()
+    )
+    .into())
+}
+
+fn append_assimp_libs(
+    archive: &mut tar::Builder<GzEncoder<fs::File>>,
+    lib_root: &Path,
+    link_type: &str,
+    target_os: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    if !lib_root.exists() {
+        return Err(format!("lib root not found at {}", lib_root.display()).into());
+    }
+
+    let mut added = 0usize;
+
+    for entry in fs::read_dir(lib_root)?.flatten() {
+        let p = entry.path();
+        let Some(name) = p.file_name().and_then(|s| s.to_str()) else {
+            continue;
+        };
+        let lower = name.to_ascii_lowercase();
+
+        let keep = if target_os == "windows" {
+            lower.ends_with(".lib") && (lower.starts_with("assimp") || lower.contains("zlib"))
+        } else if link_type == "static" {
+            lower.starts_with("libassimp") && lower.ends_with(".a")
+        } else {
+            lower.starts_with("libassimp") && (lower.ends_with(".dylib") || lower.contains(".so"))
+        };
+
+        if !keep {
+            continue;
+        }
+
+        archive.append_path_with_name(&p, Path::new("lib").join(name))?;
+        added += 1;
+    }
+
+    if added == 0 {
+        return Err(format!(
+            "No Assimp libraries selected from {} for link_type={} target_os={}",
+            lib_root.display(),
+            link_type,
+            target_os
+        )
+        .into());
+    }
+
+    println!(
+        "Added {} library file(s) from: {}",
+        added,
+        lib_root.display()
+    );
+    Ok(())
+}
+
+fn append_dir_all_files(
+    archive: &mut tar::Builder<GzEncoder<fs::File>>,
+    src: &Path,
+    dst: PathBuf,
+) -> Result<(), Box<dyn std::error::Error>> {
+    for entry in fs::read_dir(src)?.flatten() {
+        let p = entry.path();
+        let Some(name) = p.file_name().and_then(|s| s.to_str()) else {
+            continue;
+        };
+        let dst_path = dst.join(name);
+        if p.is_dir() {
+            append_dir_all_files(archive, &p, dst_path)?;
+        } else {
+            archive.append_path_with_name(&p, &dst_path)?;
+        }
+    }
     Ok(())
 }
 
