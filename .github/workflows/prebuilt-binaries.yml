@@ -240,12 +240,16 @@ jobs:
           grep -qE '^include/assimp/version.h$' "$listing"
           grep -qE '^lib/' "$listing"
           if [ "${{ runner.os }}" = "Windows" ] && [ "$link" = "dylib" ]; then
-            # Be tolerant to case and path separator differences in tar listings on Windows runners.
-            # `tar` on Windows runners can emit CRLF, so allow trailing whitespace.
-            if ! grep -qiE '^(\\./)?bin[\\\\/].*\\.dll[[:space:]]*$' "$listing"; then
+            # `tar -t` output on Windows runners can contain CRLF. Normalize to LF first.
+            listing_norm="$(mktemp)"
+            trap 'rm -f "$listing" "$listing_norm"' EXIT
+            tr -d '\r' < "$listing" > "$listing_norm"
+
+            # Ensure the archive contains at least one runtime DLL under bin/.
+            if ! grep -qiE '^(\./)?bin/.*\.dll$' "$listing_norm"; then
               echo "Expected at least one runtime DLL under bin/ in archive, but none matched."
               echo "Archive listing (tail):"
-              tail -n 200 "$listing" || true
+              tail -n 200 "$listing_norm" || true
               exit 1
             fi
           fi
