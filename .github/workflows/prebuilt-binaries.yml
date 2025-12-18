@@ -240,7 +240,8 @@ jobs:
           grep -qE '^include/assimp/version.h$' "$listing"
           grep -qE '^lib/' "$listing"
           if [ "${{ runner.os }}" = "Windows" ] && [ "$link" = "dylib" ]; then
-            grep -qE '^bin/.*\\.dll$' "$listing"
+            # Be tolerant to case and path separator differences in tar listings on Windows runners.
+            grep -qiE '^bin[\\\\/].*\\.dll$' "$listing"
           fi
           echo "✅ Found ${expected}"
 
