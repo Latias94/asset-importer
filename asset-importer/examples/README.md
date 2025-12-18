@@ -47,6 +47,8 @@ Examples (recommended order):
   - `09_custom_io_memory_fs.rs` – in-memory file system for embedded assets
 - Multithreading:
   - `10_multithreading.rs` – share `Scene` behind `Arc` and process meshes in parallel
+- Multithreading (practical):
+  - `12_parallel_mesh_stats.rs` – parallel per-mesh stats + AABB via zero-copy vertex slices
 - Math integration:
   - `07_mint_integration.rs` – mint interoperability (requires `mint`)
   - `11_glam_integration.rs` – glam interoperability (requires `glam`)
