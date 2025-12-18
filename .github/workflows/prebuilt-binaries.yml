@@ -84,7 +84,7 @@ jobs:
         run: |
           set -euo pipefail
           tag_version="${{ steps.parse_version.outputs.version }}"
-          cargo_version="$(rg -n '^version\\s*=\\s*\"' asset-importer-sys/Cargo.toml | head -n 1 | sed -E 's/.*\"(.*)\".*/\\1/')"
+          cargo_version="$(grep -E '^version\\s*=\\s*\"' asset-importer-sys/Cargo.toml | head -n 1 | sed -E 's/.*\"(.*)\".*/\\1/')"
           if [ "$tag_version" != "$cargo_version" ]; then
             echo "Tag version ($tag_version) does not match asset-importer-sys/Cargo.toml version ($cargo_version)"
             exit 1
