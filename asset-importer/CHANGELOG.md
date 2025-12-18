@@ -62,6 +62,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Send/Sync on scene-backed views**: `Texture` and other scene-backed view types now implement `Send + Sync`, matching the multithreading guarantees promised by the crate.
 - **`export` feature build**: Fixed `ExportBlob::data()` lifetime issue and ensured `ExportBlob` is `Send + Sync` when `export` is enabled.
 - **FFI property memory leak**: Matrix properties passed through the C++ bridge no longer leak memory.
+- **FFI slice length hardening**: Borrowed slices from Assimp pointers now defensively clamp absurd lengths to avoid potential UB in corrupted/malicious scenes.
 - **Custom IO leaks**: Assimp `aiFileIO` user-data is now released via RAII, fixing leaks when using a custom `FileSystem`.
 - **Custom IO Windows path handling**: The C++ IOSystem bridge now reports the correct OS path separator on Windows.
 - **Export blob ownership**: Export blob iteration no longer risks double-free by mixing owned and borrowed nodes.

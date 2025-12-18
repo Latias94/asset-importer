@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **System Assimp version mismatch**: `system` builds now fail fast when discovered headers are older than Assimp 6 (including when pkg-config omits include paths), and validate the generated bindings for required symbols to avoid confusing missing-item errors during compilation.
 - **macOS prebuilt runtime loading**: Prebuilt builds now copy Assimp shared libraries into `OUT_DIR` to avoid `dyld: Library not loaded @rpath/libassimp*.dylib` at runtime.
 - **docs.rs/offline bindings skew**: Updated pregenerated bindings to match the vendored Assimp headers, avoiding missing symbol/type errors when bindgen cannot run.
+- **Prebuilt release CI robustness**: Fixed archive verification and caching so Windows MD/MT variants and Linux tar listing checks don't fail spuriously.
 
 ## [0.3.0] - 2025-09-19
 
