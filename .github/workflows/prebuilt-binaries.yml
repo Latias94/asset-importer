@@ -227,11 +227,11 @@ jobs:
           fi
           ls -la "${{ github.workspace }}/packages"
           test -f "${{ github.workspace }}/packages/${expected}"
-          tar -tzf "${{ github.workspace }}/packages/${expected}" | grep -q '^manifest.txt$'
-          tar -tzf "${{ github.workspace }}/packages/${expected}" | grep -q '^include/assimp/version.h$'
-          tar -tzf "${{ github.workspace }}/packages/${expected}" | grep -q '^lib/'
+          tar -tzf "${{ github.workspace }}/packages/${expected}" | grep -E '^manifest.txt$' >/dev/null
+          tar -tzf "${{ github.workspace }}/packages/${expected}" | grep -E '^include/assimp/version.h$' >/dev/null
+          tar -tzf "${{ github.workspace }}/packages/${expected}" | grep -E '^lib/' >/dev/null
           if [ "${{ runner.os }}" = "Windows" ] && [ "$link" = "dylib" ]; then
-            tar -tzf "${{ github.workspace }}/packages/${expected}" | grep -Eq '^bin/.*\\.dll$'
+            tar -tzf "${{ github.workspace }}/packages/${expected}" | grep -E '^bin/.*\\.dll$' >/dev/null
           fi
           echo "✅ Found ${expected}"
 
