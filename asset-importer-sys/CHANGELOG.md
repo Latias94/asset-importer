@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2025-12-18
+
 ### Added
 - **Deterministic bindings by default**: Non-`system` builds now use the shipped pregenerated bindings by default (no libclang required), avoiding header/version skew and speeding up builds.
 - **Opt-in bindgen**: Added feature `generate-bindings` to regenerate bindings at build time when needed.
