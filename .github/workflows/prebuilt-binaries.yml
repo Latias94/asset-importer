@@ -226,13 +226,17 @@ jobs:
             expected="asset-importer-${version}-${target}-${link}.tar.gz"
           fi
           ls -la "${{ github.workspace }}/packages"
-          test -f "${{ github.workspace }}/packages/${expected}"
-          tar -tzf "${{ github.workspace }}/packages/${expected}" | grep -E '^manifest.txt$' >/dev/null
-          tar -tzf "${{ github.workspace }}/packages/${expected}" | grep -E '^include/assimp/version.h$' >/dev/null
-          tar -tzf "${{ github.workspace }}/packages/${expected}" | grep -E '^lib/' >/dev/null
+          archive="${{ github.workspace }}/packages/${expected}"
+          test -f "$archive"
+          listing="$(mktemp)"
+          tar -tzf "$archive" > "$listing"
+          grep -qE '^manifest.txt$' "$listing"
+          grep -qE '^include/assimp/version.h$' "$listing"
+          grep -qE '^lib/' "$listing"
           if [ "${{ runner.os }}" = "Windows" ] && [ "$link" = "dylib" ]; then
-            tar -tzf "${{ github.workspace }}/packages/${expected}" | grep -E '^bin/.*\\.dll$' >/dev/null
+            grep -qE '^bin/.*\\.dll$' "$listing"
           fi
+          rm -f "$listing"
           echo "✅ Found ${expected}"
 
       # Upload artifacts for release

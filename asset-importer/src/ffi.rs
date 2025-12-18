@@ -21,7 +21,15 @@ pub(crate) unsafe fn slice_from_ptr_len<O: ?Sized, T>(
     if ptr.is_null() || len == 0 {
         &[]
     } else {
-        unsafe { std::slice::from_raw_parts(ptr, len) }
+        // `from_raw_parts` requires `len * size_of::<T>() <= isize::MAX`.
+        // Assimp scenes should satisfy this, but we defensively clamp to avoid UB
+        // if a corrupted/malicious scene ever reports an insane length.
+        let elem_size = std::mem::size_of::<T>();
+        if elem_size != 0 && len > (isize::MAX as usize) / elem_size {
+            &[]
+        } else {
+            unsafe { std::slice::from_raw_parts(ptr, len) }
+        }
     }
 }
 
