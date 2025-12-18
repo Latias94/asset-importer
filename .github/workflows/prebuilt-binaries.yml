@@ -241,7 +241,8 @@ jobs:
           grep -qE '^lib/' "$listing"
           if [ "${{ runner.os }}" = "Windows" ] && [ "$link" = "dylib" ]; then
             # Be tolerant to case and path separator differences in tar listings on Windows runners.
-            if ! grep -qiE '^(\\./)?bin[\\\\/].*\\.dll$' "$listing"; then
+            # `tar` on Windows runners can emit CRLF, so allow trailing whitespace.
+            if ! grep -qiE '^(\\./)?bin[\\\\/].*\\.dll[[:space:]]*$' "$listing"; then
               echo "Expected at least one runtime DLL under bin/ in archive, but none matched."
               echo "Archive listing (tail):"
               tail -n 200 "$listing" || true
