@@ -109,7 +109,7 @@ jobs:
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
         with:
-          key: ${{ matrix.target }}-${{ matrix.link_type }}
+          key: ${{ matrix.target }}-${{ matrix.link_type }}-${{ matrix.crt || 'default' }}
 
       # Install platform-specific dependencies
       - name: Install Linux dependencies
@@ -229,6 +229,7 @@ jobs:
           archive="${{ github.workspace }}/packages/${expected}"
           test -f "$archive"
           listing="$(mktemp)"
+          trap 'rm -f "$listing"' EXIT
           tar -tzf "$archive" > "$listing"
           grep -qE '^manifest.txt$' "$listing"
           grep -qE '^include/assimp/version.h$' "$listing"
@@ -236,7 +237,6 @@ jobs:
           if [ "${{ runner.os }}" = "Windows" ] && [ "$link" = "dylib" ]; then
             grep -qE '^bin/.*\\.dll$' "$listing"
           fi
-          rm -f "$listing"
           echo "✅ Found ${expected}"
 
       # Upload artifacts for release
