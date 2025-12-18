@@ -227,6 +227,11 @@ jobs:
           fi
           ls -la "${{ github.workspace }}/packages"
           archive="${{ github.workspace }}/packages/${expected}"
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            # Git-for-Windows tar treats `D:\...` as `host:path` because of the colon.
+            # Convert to a POSIX path so `tar` can read the local file.
+            archive="$(cygpath -u "$archive")"
+          fi
           test -f "$archive"
           listing="$(mktemp)"
           trap 'rm -f "$listing"' EXIT
