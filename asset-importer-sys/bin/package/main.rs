@@ -8,6 +8,18 @@ use flate2::{Compression, write::GzEncoder};
 
 const VENDORED_ASSIMP_VERSION: &str = "6.0.2";
 
+fn target_os_from_triple(target: &str) -> &'static str {
+    if target.contains("-windows-") {
+        "windows"
+    } else if target.contains("-apple-darwin") {
+        "macos"
+    } else if target.contains("-linux-") {
+        "linux"
+    } else {
+        "unknown"
+    }
+}
+
 const fn static_lib() -> &'static str {
     if cfg!(feature = "static-link") {
         "static"
@@ -41,14 +53,28 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
     let crate_version = env::var("CARGO_PKG_VERSION").unwrap();
     let link_type = static_lib();
-    let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
+    // Note: Cargo does not guarantee that `CARGO_CFG_TARGET_*` env vars are present when running
+    // `cargo run` binaries. Prefer deriving the OS from the target triple.
+    let target_os = env::var("CARGO_CFG_TARGET_OS")
+        .unwrap_or_else(|_| target_os_from_triple(&target).to_string());
     let target_env = env::var("CARGO_CFG_TARGET_ENV").unwrap_or_default();
     let target_features = env::var("CARGO_CFG_TARGET_FEATURE").unwrap_or_default();
-    let crt = if target_os == "windows" && target_env == "msvc" {
-        if target_features.split(',').any(|f| f == "crt-static") {
+
+    // Packaging for Windows needs to distinguish CRT variants (md/mt). Allow explicit override
+    // from CI, because `CARGO_CFG_TARGET_FEATURE` may be missing at runtime.
+    let crt = if target_os == "windows" {
+        if let Ok(v) = env::var("ASSET_IMPORTER_PKG_CRT") {
+            if !v.trim().is_empty() {
+                Box::leak(v.trim().to_string().into_boxed_str())
+            } else {
+                ""
+            }
+        } else if target_env == "msvc" && target_features.split(',').any(|f| f == "crt-static") {
             "mt"
-        } else {
+        } else if target_env == "msvc" {
             "md"
+        } else {
+            ""
         }
     } else {
         ""

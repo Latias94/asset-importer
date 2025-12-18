@@ -208,6 +208,7 @@ jobs:
         shell: bash
         env:
           ASSET_IMPORTER_PACKAGE_DIR: ${{ github.workspace }}/packages
+          ASSET_IMPORTER_PKG_CRT: ${{ matrix.crt }}
           ASSET_IMPORTER_FORCE_BUILD: "1"
           TARGET: ${{ matrix.target }}
 
