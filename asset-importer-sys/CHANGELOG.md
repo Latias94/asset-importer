@@ -24,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **macOS prebuilt runtime loading**: Prebuilt builds now copy Assimp shared libraries into `OUT_DIR` to avoid `dyld: Library not loaded @rpath/libassimp*.dylib` at runtime.
 - **docs.rs/offline bindings skew**: Updated pregenerated bindings to match the vendored Assimp headers, avoiding missing symbol/type errors when bindgen cannot run.
 - **Prebuilt release CI robustness**: Fixed archive verification and caching so Windows MD/MT variants and Linux tar listing checks don't fail spuriously.
+- **Windows system (vcpkg) robustness**: Treat `VCPKG_INSTALLATION_ROOT` as a fallback for `VCPKG_ROOT`, and create missing `installed/vcpkg/updates` metadata dir to avoid vcpkg-rs probe failures in CI.
 
 ## [0.3.0] - 2025-09-19
 

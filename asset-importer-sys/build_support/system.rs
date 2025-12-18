@@ -4,8 +4,12 @@ use crate::build_support::{
     util,
 };
 
+use std::{fs, path::PathBuf};
+
 pub fn probe(cfg: &BuildConfig, link_kind: LinkKind) -> BuildPlan {
     if cfg.is_windows() && cfg.is_msvc() {
+        ensure_vcpkg_layout();
+
         let mut vcpkg_cfg = vcpkg::Config::new();
         vcpkg_cfg.emit_includes(true);
 
@@ -104,6 +108,41 @@ pub fn probe(cfg: &BuildConfig, link_kind: LinkKind) -> BuildPlan {
         link_lib: None, // pkg-config emits all rustc link flags
         link_search: Vec::new(),
         method: BuildMethod::System,
+    }
+}
+
+fn ensure_vcpkg_layout() {
+    // vcpkg-rs expects a vcpkg "root" with an `installed/vcpkg` metadata directory.
+    // Some CI setups expose only `VCPKG_INSTALLATION_ROOT` and (depending on vcpkg version)
+    // may not create the `installed/vcpkg/updates` directory by default, which makes vcpkg-rs fail.
+    //
+    // Create it opportunistically to keep system builds robust.
+    let root = std::env::var("VCPKG_ROOT")
+        .ok()
+        .or_else(|| std::env::var("VCPKG_INSTALLATION_ROOT").ok());
+
+    let Some(root) = root else {
+        return;
+    };
+
+    if std::env::var("VCPKG_ROOT").is_err() {
+        std::env::set_var("VCPKG_ROOT", &root);
+    }
+
+    let updates_dir: PathBuf = [root.as_str(), "installed", "vcpkg", "updates"]
+        .iter()
+        .collect();
+
+    if updates_dir.exists() {
+        return;
+    }
+
+    if let Err(e) = fs::create_dir_all(&updates_dir) {
+        util::warn(format!(
+            "failed to create vcpkg metadata directory {}: {}",
+            updates_dir.display(),
+            e
+        ));
     }
 }
 
