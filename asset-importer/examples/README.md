@@ -57,6 +57,12 @@ Examples (recommended order):
   - `15_embedded_textures.rs` – iterate embedded textures and dump compressed ones to disk
 - Skinning:
   - `16_skinning_weights.rs` – per-vertex influence stats from bones (zero-copy)
+- Scene graph:
+  - `17_node_world_transforms.rs` – traverse node hierarchy and compute global transforms + world AABBs
+- Materials (texture chain):
+  - `18_material_texture_chain.rs` – material slot -> path -> embedded texture bytes/texels
+- Import properties:
+  - `19_property_store_profiles.rs` – property store recipes (preview/quality/skinning)
 - Math integration:
   - `07_mint_integration.rs` – mint interoperability (requires `mint`)
   - `11_glam_integration.rs` – glam interoperability (requires `glam`)
