@@ -45,10 +45,18 @@ Examples (recommended order):
   - `08_zero_copy_mesh.rs` – raw mesh buffers + allocation-free iterators
 - Custom IO:
   - `09_custom_io_memory_fs.rs` – in-memory file system for embedded assets
+- Progress reporting:
+  - `13_progress_cancel.rs` – progress callback + cancellation (via C++ bridge)
 - Multithreading:
   - `10_multithreading.rs` – share `Scene` behind `Arc` and process meshes in parallel
 - Multithreading (practical):
   - `12_parallel_mesh_stats.rs` – parallel per-mesh stats + AABB via zero-copy vertex slices
+- Import from memory:
+  - `14_memory_import.rs` – import from owned/shared buffers + format hint
+- Embedded textures:
+  - `15_embedded_textures.rs` – iterate embedded textures and dump compressed ones to disk
+- Skinning:
+  - `16_skinning_weights.rs` – per-vertex influence stats from bones (zero-copy)
 - Math integration:
   - `07_mint_integration.rs` – mint interoperability (requires `mint`)
   - `11_glam_integration.rs` – glam interoperability (requires `glam`)
