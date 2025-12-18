@@ -126,7 +126,12 @@ fn ensure_vcpkg_layout() {
     };
 
     if std::env::var("VCPKG_ROOT").is_err() {
-        std::env::set_var("VCPKG_ROOT", &root);
+        // `set_var` is `unsafe` because mutating the process environment is not thread-safe on
+        // some platforms (it can race with `getenv`). Build scripts are single-threaded and run
+        // before compilation, so this is an acceptable, bounded use.
+        unsafe {
+            std::env::set_var("VCPKG_ROOT", &root);
+        }
     }
 
     let updates_dir: PathBuf = [root.as_str(), "installed", "vcpkg", "updates"]
