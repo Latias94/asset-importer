@@ -133,7 +133,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
 fn import_scene_for_stats(path: &std::path::Path) -> Result<Scene, Box<dyn Error>> {
     let steps = PostProcessSteps::TRIANGULATE | PostProcessSteps::SORT_BY_PTYPE;
-    Ok(common::import_scene(path, steps)?)
+    common::import_scene(path, steps)
 }
 
 fn aabb_from_positions(positions: &[raw::AiVector3D]) -> Option<([f32; 3], [f32; 3])> {
