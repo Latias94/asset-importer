@@ -7,11 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-01-20
+
 ### Changed
 - **Bundled Assimp updated**: Updated the `assimp` submodule to `v6.0.3` (`cf7b652190827878a4726709f0998ce170e55ce8`).
+- **Prebuilt downloads**: Switched the prebuilt downloader from `reqwest` to `ureq` to reduce dependency footprint.
+- **Crates.io package contents**: Examples are now included in the published crate package.
 
 ### Added
 - **Exporter property bridge**: Added `aiExportSceneExWithPropertiesRust` and `aiExportSceneToBlobWithPropertiesRust` to support exporter properties with custom IO.
+
+### Fixed
+- **Windows system (vcpkg) robustness**: Normalize vcpkg root discovery (including `VCPKG_INSTALLED_DIR`) and opt-in dynamic linking for dynamic triplets.
 
 ## [0.5.0] - 2025-12-18
 

@@ -27,14 +27,16 @@ The bindings include:
 
 ## Build Features
 
-**Default**: Uses prebuilt binaries for fastest builds.
+**Default**: Builds Assimp from the bundled source (vendored) for maximum compatibility.
 
-### Prebuilt Binaries (Default)
+If you want the fastest builds without compiling native code, prefer the high-level
+[`asset-importer`](../asset-importer/) crate (it enables prebuilt binaries by default), or enable
+`prebuilt` here.
+
+### Prebuilt Binaries
 ```toml
 [dependencies]
-asset-importer-sys = "0.3"
-# or explicitly:
-asset-importer-sys = { features = ["prebuilt"] }
+asset-importer-sys = { version = "0.6", features = ["prebuilt"] }
 ```
 - Downloads prebuilt libraries from GitHub releases
 - No build dependencies required
@@ -42,7 +44,7 @@ asset-importer-sys = { features = ["prebuilt"] }
 
 ### Build from Source
 ```toml
-asset-importer-sys = { version = "0.3", features = ["build-assimp"] }
+asset-importer-sys = { version = "0.6", features = ["build-assimp"] }
 ```
 - Builds assimp from bundled source
 - Requires: CMake, C++ compiler, Git
@@ -51,7 +53,7 @@ asset-importer-sys = { version = "0.3", features = ["build-assimp"] }
 
 ### System Library
 ```toml
-asset-importer-sys = { version = "0.3", features = ["system"] }
+asset-importer-sys = { version = "0.6", features = ["system"] }
 ```
 Uses system-installed assimp. Install via package manager:
 - **macOS**: `brew install assimp`
@@ -61,6 +63,10 @@ Uses system-installed assimp. Install via package manager:
 On Windows with vcpkg, pick a triplet that matches your desired CRT:
 - `x64-windows` → dynamic CRT (/MD)
 - `x64-windows-static` → static CRT (/MT)
+
+Note: vcpkg-rs requires `VCPKGRS_DYNAMIC=1` for dynamic triplets like `x64-windows`. The build
+script sets this automatically for `system` builds, but you may still want to set it explicitly in
+custom environments.
 
 If you use the static triplet, also enable Rust `crt-static` so all crates agree:
 
@@ -72,7 +78,7 @@ rustflags = ["-C", "target-feature=+crt-static"]
 
 ### Static Linking
 ```toml
-asset-importer-sys = { version = "0.3", features = ["static-link", "build-assimp"] }
+asset-importer-sys = { version = "0.6", features = ["static-link", "build-assimp"] }
 ```
 - Creates single executable with fewer external runtime dependencies
 - Larger binary size
@@ -80,7 +86,7 @@ asset-importer-sys = { version = "0.3", features = ["static-link", "build-assimp
 ### Additional Options
 ```toml
 asset-importer-sys = {
-    version = "0.3",
+    version = "0.6",
     features = [
         "build-assimp",
         "export",        # Enable export functionality

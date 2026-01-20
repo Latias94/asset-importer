@@ -39,13 +39,13 @@ Add to your `Cargo.toml`:
 ```toml
 [dependencies]
 # Default – Use prebuilt binaries (fastest)
-asset-importer = "0.5"
+asset-importer = "0.6"
 
 # Or build from source (best compatibility; mutually exclusive build mode)
-asset-importer = { version = "0.5", default-features = false, features = ["build-assimp"] }
+asset-importer = { version = "0.6", default-features = false, features = ["build-assimp"] }
 
 # Or link a system-installed Assimp (requires libclang/bindgen; mutually exclusive build mode)
-asset-importer = { version = "0.5", default-features = false, features = ["system"] }
+asset-importer = { version = "0.6", default-features = false, features = ["system"] }
 ```
 
 Basic usage:
@@ -105,7 +105,7 @@ Practical guidance:
 ### Default: Prebuilt Binaries (Recommended)
 
 ```toml
-asset-importer = "0.5"
+asset-importer = "0.6"
 ```
 
 - **Fastest**: No compilation time
@@ -116,7 +116,7 @@ asset-importer = "0.5"
 ### Build from Source
 
 ```toml
-asset-importer = { version = "0.5", default-features = false, features = ["build-assimp"] }
+asset-importer = { version = "0.6", default-features = false, features = ["build-assimp"] }
 ```
 
 - **Best compatibility**: Works on all platforms
@@ -126,7 +126,7 @@ asset-importer = { version = "0.5", default-features = false, features = ["build
 ### System Library
 
 ```toml
-asset-importer = { version = "0.5", default-features = false, features = ["system"] }
+asset-importer = { version = "0.6", default-features = false, features = ["system"] }
 ```
 
 - **Lightweight**: Uses existing system installation
@@ -137,7 +137,7 @@ asset-importer = { version = "0.5", default-features = false, features = ["syste
 
 ```toml
 asset-importer = {
-    version = "0.5",
+    version = "0.6",
     default-features = false,
     features = [
         "build-assimp",    # Choose exactly one build mode (or use default prebuilt)
@@ -222,7 +222,7 @@ For development work or when prebuilt binaries are not available:
 
 ```toml
 # Use this for development
-asset-importer = { version = "0.5", default-features = false, features = ["build-assimp"] }
+asset-importer = { version = "0.6", default-features = false, features = ["build-assimp"] }
 ```
 
 This ensures you can always build from source regardless of release availability.
