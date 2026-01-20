@@ -19,8 +19,7 @@ categories = [
 keywords = ["assimp", "3d", "mesh", "animation", "graphics"]
 readme = "../README.md"
 exclude = [
-    # Development and example files
-    "examples/",
+    # Development files
     "tests/models/",
 
     # IDE configuration files
