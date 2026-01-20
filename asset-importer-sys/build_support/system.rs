@@ -8,13 +8,12 @@ use std::{fs, path::PathBuf};
 
 pub fn probe(cfg: &BuildConfig, link_kind: LinkKind) -> BuildPlan {
     if cfg.is_windows() && cfg.is_msvc() {
-        ensure_vcpkg_layout();
-
         let mut vcpkg_cfg = vcpkg::Config::new();
         vcpkg_cfg.emit_includes(true);
 
         // Pick an explicit triplet when possible to keep behavior predictable.
         // Users can always override via VCPKGRS_TRIPLET / vcpkg env vars.
+        let mut selected_triplet: Option<String> = None;
         if std::env::var("VCPKGRS_TRIPLET").is_err() {
             if cfg.use_static_crt() && matches!(link_kind, LinkKind::Dynamic) {
                 util::warn(
@@ -25,9 +24,16 @@ pub fn probe(cfg: &BuildConfig, link_kind: LinkKind) -> BuildPlan {
             if let Some(triplet) =
                 default_vcpkg_triplet(&cfg.target, link_kind, cfg.use_static_crt())
             {
+                selected_triplet = Some(triplet.to_string());
                 vcpkg_cfg.target_triplet(triplet);
             }
+        } else if let Ok(t) = std::env::var("VCPKGRS_TRIPLET") {
+            if !t.trim().is_empty() {
+                selected_triplet = Some(t);
+            }
         }
+
+        ensure_vcpkg_layout(selected_triplet.as_deref());
 
         let lib = vcpkg_cfg
             .find_package("assimp")
@@ -117,28 +123,40 @@ pub fn probe(cfg: &BuildConfig, link_kind: LinkKind) -> BuildPlan {
     }
 }
 
-fn ensure_vcpkg_layout() {
+fn ensure_vcpkg_layout(triplet: Option<&str>) {
+    let current_root = std::env::var("VCPKG_ROOT").ok().map(PathBuf::from);
+    let best_root = pick_vcpkg_root(triplet);
+
+    let current_score = current_root
+        .as_ref()
+        .map(|p| score_vcpkg_root(p, triplet))
+        .unwrap_or(0);
+    let best_score = best_root
+        .as_ref()
+        .map(|p| score_vcpkg_root(p, triplet))
+        .unwrap_or(0);
+
+    if best_score > current_score {
+        if let Some(root) = best_root {
+            // `set_var` is `unsafe` because mutating the process environment is not thread-safe on
+            // some platforms (it can race with `getenv`). Build scripts are single-threaded and run
+            // before compilation, so this is an acceptable, bounded use.
+            unsafe {
+                std::env::set_var("VCPKG_ROOT", root);
+            }
+        }
+    }
+
     // vcpkg-rs expects a vcpkg "root" with an `installed/vcpkg` metadata directory.
     // Some CI setups expose only `VCPKG_INSTALLATION_ROOT` and (depending on vcpkg version)
     // may not create the `installed/vcpkg/updates` directory by default, which makes vcpkg-rs fail.
     //
     // Create it opportunistically to keep system builds robust.
-    let root = std::env::var("VCPKG_ROOT")
-        .ok()
-        .or_else(|| std::env::var("VCPKG_INSTALLATION_ROOT").ok());
+    let root = std::env::var("VCPKG_ROOT").ok();
 
     let Some(root) = root else {
         return;
     };
-
-    if std::env::var("VCPKG_ROOT").is_err() {
-        // `set_var` is `unsafe` because mutating the process environment is not thread-safe on
-        // some platforms (it can race with `getenv`). Build scripts are single-threaded and run
-        // before compilation, so this is an acceptable, bounded use.
-        unsafe {
-            std::env::set_var("VCPKG_ROOT", &root);
-        }
-    }
 
     let updates_dir: PathBuf = [root.as_str(), "installed", "vcpkg", "updates"]
         .iter()
@@ -155,6 +173,57 @@ fn ensure_vcpkg_layout() {
             e
         ));
     }
+}
+
+fn pick_vcpkg_root(triplet: Option<&str>) -> Option<PathBuf> {
+    let candidates = [
+        std::env::var("VCPKG_ROOT").ok(),
+        std::env::var("VCPKG_INSTALLATION_ROOT").ok(),
+        std::env::var("VCPKG_INSTALLED_DIR").ok(),
+    ];
+
+    let mut best: Option<(u8, PathBuf)> = None;
+    for c in candidates.into_iter().flatten() {
+        let pb = PathBuf::from(c);
+        for root in normalize_root_candidates(&pb) {
+            let score = score_vcpkg_root(&root, triplet);
+            if score == 0 {
+                continue;
+            }
+            if best.as_ref().is_none_or(|(s, _)| score > *s) {
+                best = Some((score, root));
+            }
+        }
+    }
+
+    best.map(|(_, p)| p)
+}
+
+fn normalize_root_candidates(root: &PathBuf) -> Vec<PathBuf> {
+    let mut out = Vec::new();
+    out.push(root.clone());
+    if root
+        .file_name()
+        .is_some_and(|n| n == std::ffi::OsStr::new("installed"))
+    {
+        if let Some(parent) = root.parent() {
+            out.push(parent.to_path_buf());
+        }
+    }
+    out
+}
+
+fn score_vcpkg_root(root: &PathBuf, triplet: Option<&str>) -> u8 {
+    let installed_dir = root.join("installed");
+    if !installed_dir.exists() {
+        return 0;
+    }
+    if let Some(t) = triplet {
+        if installed_dir.join(t).exists() {
+            return 2;
+        }
+    }
+    1
 }
 
 fn default_vcpkg_triplet(
