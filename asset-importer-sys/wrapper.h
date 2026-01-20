@@ -78,6 +78,30 @@ const struct aiScene* aiImportFileFromMemoryWithProgressRust(
     void* progress_user // nullable
 );
 
+// === Export bridging ===
+
+// Export a scene to a file with optional custom IO and exporter properties.
+// Returns aiReturn_SUCCESS on success.
+enum aiReturn aiExportSceneExWithPropertiesRust(
+    const struct aiScene* scene,
+    const char* format_id,
+    const char* path,
+    const struct aiFileIO* file_io, // nullable
+    unsigned int preprocessing,
+    const struct aiRustProperty* props,
+    size_t props_count
+);
+
+// Export a scene to a blob with exporter properties.
+// Returns an owned blob chain; free with aiReleaseExportBlob.
+const struct aiExportDataBlob* aiExportSceneToBlobWithPropertiesRust(
+    const struct aiScene* scene,
+    const char* format_id,
+    unsigned int preprocessing,
+    const struct aiRustProperty* props,
+    size_t props_count
+);
+
 // Get the last error message produced by the Rust C++ bridge (thread-local).
 const char* aiGetLastErrorStringRust(void);
 

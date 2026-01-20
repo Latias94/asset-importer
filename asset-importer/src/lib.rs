@@ -77,7 +77,7 @@ pub use crate::{
 pub mod raw;
 
 #[cfg(feature = "export")]
-pub use crate::exporter::{ExportBlob, ExportBuilder, ExportFormatDesc};
+pub use crate::exporter::{ExportBlob, ExportBuilder, ExportFormatDesc, export_properties};
 
 // Re-export logging functionality
 #[allow(deprecated)]
@@ -111,6 +111,7 @@ pub use crate::importer_desc::{
 };
 
 // Core modules
+mod bridge_properties;
 pub mod error;
 pub(crate) mod ffi;
 pub mod importer;

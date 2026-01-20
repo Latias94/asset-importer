@@ -212,7 +212,7 @@ fn detect_unix_assimp_lib(dst: &std::path::Path, cfg: &BuildConfig) -> Option<St
                 continue;
             }
 
-            // Turn "libassimpd.6.0.2.dylib" into "assimpd".
+            // Turn "libassimpd.6.0.3.dylib" into "assimpd".
             let Some(stem) = p.file_stem().and_then(|s| s.to_str()) else {
                 continue;
             };

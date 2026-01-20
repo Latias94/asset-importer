@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Bundled Assimp updated**: Updated the `assimp` submodule to `v6.0.3` (`cf7b652190827878a4726709f0998ce170e55ce8`).
+
+### Added
+- **Exporter property bridge**: Added `aiExportSceneExWithPropertiesRust` and `aiExportSceneToBlobWithPropertiesRust` to support exporter properties with custom IO.
+
 ## [0.5.0] - 2025-12-18
 
 ### Added

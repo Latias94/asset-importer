@@ -6,11 +6,11 @@ use crate::build_support::{
     util,
 };
 
-use flate2_build::read::GzDecoder;
-use tar_build::Archive;
+use flate2::read::GzDecoder;
+use tar::Archive;
 
 const PACKAGE_PREFIX: &str = "asset-importer";
-const VENDORED_ASSIMP_VERSION: &str = "6.0.2";
+const VENDORED_ASSIMP_VERSION: &str = "6.0.3";
 
 pub fn prepare(cfg: &BuildConfig, link_kind: LinkKind) -> BuildPlan {
     let crate_version = env::var("CARGO_PKG_VERSION").unwrap();
@@ -101,7 +101,16 @@ pub fn prepare(cfg: &BuildConfig, link_kind: LinkKind) -> BuildPlan {
 }
 
 fn validate_prebuilt_headers(include_dir: &std::path::Path) {
-    let header = include_dir.join("assimp").join("version.h");
+    // Prefer revision.h because it contains numeric version defines (VER_MAJOR/MINOR/PATCH)
+    // in installed/package headers. Fall back to version.h for older/custom layouts.
+    let header = {
+        let revision = include_dir.join("assimp").join("revision.h");
+        if revision.exists() {
+            revision
+        } else {
+            include_dir.join("assimp").join("version.h")
+        }
+    };
     let contents = std::fs::read_to_string(&header).unwrap_or_else(|e| {
         panic!(
             "prebuilt package is missing {}: {}\n\
@@ -147,9 +156,12 @@ fn parse_assimp_version_from_header(contents: &str) -> Option<String> {
         None
     }
 
-    let major = find_num(contents, "ASSIMP_VERSION_MAJOR")?;
-    let minor = find_num(contents, "ASSIMP_VERSION_MINOR")?;
-    let patch = find_num(contents, "ASSIMP_VERSION_PATCH")?;
+    let major =
+        find_num(contents, "VER_MAJOR").or_else(|| find_num(contents, "ASSIMP_VERSION_MAJOR"))?;
+    let minor =
+        find_num(contents, "VER_MINOR").or_else(|| find_num(contents, "ASSIMP_VERSION_MINOR"))?;
+    let patch =
+        find_num(contents, "VER_PATCH").or_else(|| find_num(contents, "ASSIMP_VERSION_PATCH"))?;
     Some(format!("{major}.{minor}.{patch}"))
 }
 

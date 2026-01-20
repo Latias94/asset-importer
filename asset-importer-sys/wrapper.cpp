@@ -4,20 +4,23 @@
  * This file adds bridging for:
  * - Progress callbacks via Assimp::ProgressHandler
  * - Custom IO via Assimp::IOSystem wrapping C aiFileIO
- * - Property passing to Assimp::Importer
+ * - Property passing to Assimp::Importer / Assimp::ExportProperties
  */
 
 #include "wrapper.h"
 
 #include <assimp/Importer.hpp>
+#ifndef ASSIMP_BUILD_NO_EXPORT
+#include <assimp/Exporter.hpp>
+#endif
 #include <assimp/IOSystem.hpp>
 #include <assimp/IOStream.hpp>
 #include <assimp/ProgressHandler.hpp>
 #include <assimp/cexport.h> // aiCopyScene
 #include <cstring>
-#include <string>
 #include <memory>
 #include <mutex>
+#include <string>
 
 // Store a thread-local last-error message for the bridge
 static thread_local std::string g_last_error_msg;
@@ -171,6 +174,37 @@ static void apply_properties(Assimp::Importer& importer, const aiRustProperty* p
     }
 }
 
+#ifndef ASSIMP_BUILD_NO_EXPORT
+static void apply_export_properties(Assimp::ExportProperties& target, const aiRustProperty* props, size_t count) {
+    if (!props) return;
+    for (size_t i = 0; i < count; ++i) {
+        const aiRustProperty& p = props[i];
+        if (!p.name) continue;
+        switch (p.kind) {
+            case aiRustPropertyKind_Integer:
+                target.SetPropertyInteger(p.name, p.int_value);
+                break;
+            case aiRustPropertyKind_Boolean:
+                target.SetPropertyBool(p.name, p.int_value != 0);
+                break;
+            case aiRustPropertyKind_Float:
+                target.SetPropertyFloat(p.name, p.float_value);
+                break;
+            case aiRustPropertyKind_String:
+                target.SetPropertyString(p.name, p.string_value ? std::string(p.string_value) : std::string());
+                break;
+            case aiRustPropertyKind_Matrix4x4:
+                if (p.matrix_value) {
+                    target.SetPropertyMatrix(p.name, *static_cast<const aiMatrix4x4*>(p.matrix_value));
+                }
+                break;
+            default:
+                break;
+        }
+    }
+}
+#endif
+
 static const aiScene* import_with_bridge(
     const char* path,
     const char* mem,
@@ -262,6 +296,98 @@ const struct aiScene* aiImportFileFromMemoryWithProgressRust(
         return nullptr;
     }
     return import_with_bridge(nullptr, data, length, flags, nullptr, props, props_count, progress_cb, progress_user, hint);
+}
+
+enum aiReturn aiExportSceneExWithPropertiesRust(
+    const struct aiScene* scene,
+    const char* format_id,
+    const char* path,
+    const struct aiFileIO* file_io,
+    unsigned int preprocessing,
+    const struct aiRustProperty* props,
+    size_t props_count)
+{
+    g_last_error_msg.clear();
+
+#ifdef ASSIMP_BUILD_NO_EXPORT
+    (void)scene;
+    (void)format_id;
+    (void)path;
+    (void)file_io;
+    (void)preprocessing;
+    (void)props;
+    (void)props_count;
+    g_last_error_msg = "Assimp was built without export support (ASSIMP_BUILD_NO_EXPORT)";
+    return aiReturn_FAILURE;
+#else
+    if (!scene) {
+        g_last_error_msg = "Scene is null";
+        return aiReturn_FAILURE;
+    }
+    if (!format_id || !path) {
+        g_last_error_msg = "Format ID or path is null";
+        return aiReturn_FAILURE;
+    }
+
+    Assimp::Exporter exporter;
+    Assimp::ExportProperties export_props;
+
+    std::unique_ptr<RustIOSystem> io_guard;
+    if (file_io) {
+        io_guard = std::make_unique<RustIOSystem>(file_io);
+        exporter.SetIOHandler(io_guard.get());
+    }
+
+    apply_export_properties(export_props, props, props_count);
+
+    const aiReturn r = exporter.Export(scene, format_id, path, preprocessing, &export_props);
+    if (r != aiReturn_SUCCESS) {
+        g_last_error_msg = exporter.GetErrorString();
+    }
+    return r;
+#endif
+}
+
+const struct aiExportDataBlob* aiExportSceneToBlobWithPropertiesRust(
+    const struct aiScene* scene,
+    const char* format_id,
+    unsigned int preprocessing,
+    const struct aiRustProperty* props,
+    size_t props_count)
+{
+    g_last_error_msg.clear();
+
+#ifdef ASSIMP_BUILD_NO_EXPORT
+    (void)scene;
+    (void)format_id;
+    (void)preprocessing;
+    (void)props;
+    (void)props_count;
+    g_last_error_msg = "Assimp was built without export support (ASSIMP_BUILD_NO_EXPORT)";
+    return nullptr;
+#else
+    if (!scene) {
+        g_last_error_msg = "Scene is null";
+        return nullptr;
+    }
+    if (!format_id) {
+        g_last_error_msg = "Format ID is null";
+        return nullptr;
+    }
+
+    Assimp::Exporter exporter;
+    Assimp::ExportProperties export_props;
+
+    apply_export_properties(export_props, props, props_count);
+
+    const aiExportDataBlob* blob = exporter.ExportToBlob(scene, format_id, preprocessing, &export_props);
+    if (!blob) {
+        g_last_error_msg = exporter.GetErrorString();
+        return nullptr;
+    }
+
+    return exporter.GetOrphanedBlob();
+#endif
 }
 
 const char* aiGetLastErrorStringRust(void) {

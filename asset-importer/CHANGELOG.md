@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Bundled Assimp updated**: Vendored Assimp (via `asset-importer-sys`) is now pinned to `v6.0.3`.
+
+### Added
+- **Exporter properties (safe API)**: `ExportBuilder` now supports setting Assimp exporter properties via the C++ bridge.
+- **More FBX property keys**: Added additional FBX import/export config key constants for use with `PropertyStore` / builders.
+
 ## [0.5.0] - 2025-12-17
 
 ### Added

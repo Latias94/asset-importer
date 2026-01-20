@@ -154,6 +154,19 @@ impl Error {
     /// Get the last error from Assimp
     pub fn from_assimp() -> Self {
         unsafe {
+            // Prefer our C++ bridge error string when present. This captures errors produced by
+            // the Rust bridge entrypoints (e.g. progress/IO/property glue) as well as exporter errors.
+            let bridge_ptr = crate::sys::aiGetLastErrorStringRust();
+            if !bridge_ptr.is_null() {
+                if let Ok(s) = CStr::from_ptr(bridge_ptr).to_str() {
+                    if !s.is_empty() {
+                        return Self::Other {
+                            message: s.to_string(),
+                        };
+                    }
+                }
+            }
+
             let error_ptr = crate::sys::aiGetErrorString();
             if error_ptr.is_null() {
                 Self::Other {

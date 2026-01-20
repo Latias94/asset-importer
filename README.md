@@ -12,7 +12,7 @@
 
 A comprehensive Rust binding for the latest [Assimp](https://github.com/assimp/assimp) 3D asset import library.
 
-This crate provides safe, high-level Rust bindings for **Assimp v6.0.2**, implementing the vast majority of the C API with idiomatic Rust interfaces.
+This crate provides safe, high-level Rust bindings for **Assimp v6.0.3**, implementing the vast majority of the C API with idiomatic Rust interfaces.
 
 ## Example Application
 
@@ -24,7 +24,7 @@ See **[Model Viewer](https://github.com/Latias94/model-viewer)** (asset-importer
 
 ## Features
 
-- **Comprehensive API Coverage**: Implements the vast majority of [Assimp v6.0.2](https://github.com/assimp/assimp/releases/tag/v6.0.2) C API
+- **Comprehensive API Coverage**: Implements the vast majority of [Assimp v6.0.3](https://github.com/assimp/assimp/releases/tag/v6.0.3) C API
 - **Import Support**: 71+ 3D file formats (OBJ, FBX, glTF, DAE, etc.)
 - **Export Support**: 22+ output formats (optional)
 - **Memory Safe**: Safe Rust API over unsafe FFI bindings

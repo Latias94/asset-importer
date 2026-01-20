@@ -14,7 +14,7 @@ use crate::{
     sys,
 };
 
-use crate::types::to_ai_matrix4x4;
+use crate::bridge_properties::build_rust_properties;
 
 /// A property store for configuring import behavior
 ///
@@ -124,8 +124,45 @@ pub mod import_properties {
     /// FBX: Read all geometry layers (AI_CONFIG_IMPORT_FBX_READ_ALL_GEOMETRY_LAYERS)
     pub const FBX_READ_ALL_GEOMETRY_LAYERS: &str = "AI_CONFIG_IMPORT_FBX_READ_ALL_GEOMETRY_LAYERS";
 
+    /// FBX: Read all materials (AI_CONFIG_IMPORT_FBX_READ_ALL_MATERIALS)
+    pub const FBX_READ_ALL_MATERIALS: &str = "AI_CONFIG_IMPORT_FBX_READ_ALL_MATERIALS";
+
+    /// FBX: Read materials (AI_CONFIG_IMPORT_FBX_READ_MATERIALS)
+    pub const FBX_READ_MATERIALS: &str = "AI_CONFIG_IMPORT_FBX_READ_MATERIALS";
+
+    /// FBX: Read textures (AI_CONFIG_IMPORT_FBX_READ_TEXTURES)
+    pub const FBX_READ_TEXTURES: &str = "AI_CONFIG_IMPORT_FBX_READ_TEXTURES";
+
+    /// FBX: Read cameras (AI_CONFIG_IMPORT_FBX_READ_CAMERAS)
+    pub const FBX_READ_CAMERAS: &str = "AI_CONFIG_IMPORT_FBX_READ_CAMERAS";
+
+    /// FBX: Read lights (AI_CONFIG_IMPORT_FBX_READ_LIGHTS)
+    pub const FBX_READ_LIGHTS: &str = "AI_CONFIG_IMPORT_FBX_READ_LIGHTS";
+
+    /// FBX: Read animations (AI_CONFIG_IMPORT_FBX_READ_ANIMATIONS)
+    pub const FBX_READ_ANIMATIONS: &str = "AI_CONFIG_IMPORT_FBX_READ_ANIMATIONS";
+
+    /// FBX: Read weights (AI_CONFIG_IMPORT_FBX_READ_WEIGHTS)
+    pub const FBX_READ_WEIGHTS: &str = "AI_CONFIG_IMPORT_FBX_READ_WEIGHTS";
+
+    /// FBX: Strict mode (AI_CONFIG_IMPORT_FBX_STRICT_MODE)
+    pub const FBX_STRICT_MODE: &str = "AI_CONFIG_IMPORT_FBX_STRICT_MODE";
+
     /// FBX: Preserve pivots (AI_CONFIG_IMPORT_FBX_PRESERVE_PIVOTS)
     pub const FBX_PRESERVE_PIVOTS: &str = "AI_CONFIG_IMPORT_FBX_PRESERVE_PIVOTS";
+
+    /// FBX: Optimize empty animation curves (AI_CONFIG_IMPORT_FBX_OPTIMIZE_EMPTY_ANIMATION_CURVES)
+    pub const FBX_OPTIMIZE_EMPTY_ANIMATION_CURVES: &str =
+        "AI_CONFIG_IMPORT_FBX_OPTIMIZE_EMPTY_ANIMATION_CURVES";
+
+    /// FBX: Use legacy naming for embedded textures (AI_CONFIG_IMPORT_FBX_EMBEDDED_TEXTURES_LEGACY_NAMING)
+    pub const FBX_EMBEDDED_TEXTURES_LEGACY_NAMING: &str =
+        "AI_CONFIG_IMPORT_FBX_EMBEDDED_TEXTURES_LEGACY_NAMING";
+
+    /// FBX: Ignore up direction (AI_CONFIG_IMPORT_FBX_IGNORE_UP_DIRECTION)
+    ///
+    /// This can be useful when importing files that define custom axes.
+    pub const FBX_IGNORE_UP_DIRECTION: &str = "AI_CONFIG_IMPORT_FBX_IGNORE_UP_DIRECTION";
 
     /// Remove degenerate faces (AI_CONFIG_PP_FD_REMOVE)
     pub const REMOVE_DEGENERATE_FACES: &str = "AI_CONFIG_PP_FD_REMOVE";
@@ -714,78 +751,6 @@ impl ImportBuilder {
 
         store
     }
-}
-
-// Build property array for the C++ bridge. Returns (ffi_props, name_bufs, value_str_bufs)
-struct BridgePropertyBuffers {
-    ffi_props: Vec<sys::aiRustProperty>,
-    _name_bufs: Vec<CString>,
-    _value_str_bufs: Vec<CString>,
-    _matrices: Vec<sys::aiMatrix4x4>,
-}
-
-fn build_rust_properties(props: &[(String, PropertyValue)]) -> Result<BridgePropertyBuffers> {
-    let matrix_count = props
-        .iter()
-        .filter(|(_, v)| matches!(v, PropertyValue::Matrix(_)))
-        .count();
-
-    let mut ffi_props = Vec::with_capacity(props.len());
-    let mut name_bufs: Vec<CString> = Vec::with_capacity(props.len());
-    let mut value_str_bufs: Vec<CString> = Vec::new();
-    let mut matrices: Vec<sys::aiMatrix4x4> = Vec::with_capacity(matrix_count);
-
-    for (name, value) in props {
-        let c_name = CString::new(name.as_str())
-            .map_err(|_| Error::invalid_parameter("Invalid property name"))?;
-        let mut p = sys::aiRustProperty {
-            name: c_name.as_ptr(),
-            kind: sys::aiRustPropertyKind::aiRustPropertyKind_Integer, // default, will set below
-            int_value: 0,
-            float_value: 0.0,
-            string_value: std::ptr::null(),
-            matrix_value: std::ptr::null_mut(),
-        };
-
-        match value {
-            PropertyValue::Integer(v) => {
-                p.kind = sys::aiRustPropertyKind::aiRustPropertyKind_Integer;
-                p.int_value = *v;
-            }
-            PropertyValue::Boolean(v) => {
-                p.kind = sys::aiRustPropertyKind::aiRustPropertyKind_Boolean;
-                p.int_value = if *v { 1 } else { 0 };
-            }
-            PropertyValue::Float(v) => {
-                p.kind = sys::aiRustPropertyKind::aiRustPropertyKind_Float;
-                p.float_value = *v;
-            }
-            PropertyValue::String(s) => {
-                p.kind = sys::aiRustPropertyKind::aiRustPropertyKind_String;
-                let c_val = CString::new(s.as_str())
-                    .map_err(|_| Error::invalid_parameter("Invalid property string value"))?;
-                p.string_value = c_val.as_ptr();
-                value_str_bufs.push(c_val);
-            }
-            PropertyValue::Matrix(m) => {
-                p.kind = sys::aiRustPropertyKind::aiRustPropertyKind_Matrix4x4;
-                matrices.push(to_ai_matrix4x4(*m));
-                let idx = matrices.len() - 1;
-                let matrix_ptr = unsafe { matrices.as_ptr().add(idx) };
-                p.matrix_value = matrix_ptr.cast::<std::ffi::c_void>().cast_mut();
-            }
-        }
-
-        name_bufs.push(c_name);
-        ffi_props.push(p);
-    }
-
-    Ok(BridgePropertyBuffers {
-        ffi_props,
-        _name_bufs: name_bufs,
-        _value_str_bufs: value_str_bufs,
-        _matrices: matrices,
-    })
 }
 
 impl Default for ImportBuilder {

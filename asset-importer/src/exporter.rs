@@ -5,8 +5,10 @@ use std::path::Path;
 use std::sync::Arc;
 
 use crate::{
+    bridge_properties::build_rust_properties,
     error::{Error, Result},
     ffi,
+    importer::{PropertyStore, PropertyValue},
     io::{AssimpFileIO, FileSystem},
     ptr::SharedPtr,
     scene::Scene,
@@ -14,11 +16,23 @@ use crate::{
     types::ai_string_to_string,
 };
 
+/// Common export property keys
+///
+/// These constants provide convenient access to commonly used Assimp export properties.
+pub mod export_properties {
+    /// FBX: Whether the exporter should interpret transparency factor as opacity.
+    ///
+    /// (AI_CONFIG_EXPORT_FBX_TRANSPARENCY_FACTOR_REFER_TO_OPACITY)
+    pub const FBX_TRANSPARENCY_FACTOR_REFER_TO_OPACITY: &str =
+        "AI_CONFIG_EXPORT_FBX_TRANSPARENCY_FACTOR_REFER_TO_OPACITY";
+}
+
 /// Builder for configuring and executing scene exports
 pub struct ExportBuilder {
     format_id: String,
     preprocessing: u32,
     file_system: Option<std::sync::Arc<std::sync::Mutex<dyn FileSystem>>>,
+    properties: Vec<(String, PropertyValue)>,
 }
 
 impl std::fmt::Debug for ExportBuilder {
@@ -27,6 +41,7 @@ impl std::fmt::Debug for ExportBuilder {
             .field("format_id", &self.format_id)
             .field("preprocessing", &self.preprocessing)
             .field("file_system", &self.file_system.is_some())
+            .field("properties", &self.properties.len())
             .finish()
     }
 }
@@ -38,6 +53,7 @@ impl ExportBuilder {
             format_id: format_id.into(),
             preprocessing: 0,
             file_system: None,
+            properties: Vec::new(),
         }
     }
 
@@ -45,6 +61,54 @@ impl ExportBuilder {
     pub fn with_preprocessing(mut self, steps: u32) -> Self {
         self.preprocessing = steps;
         self
+    }
+
+    /// Set an exporter property.
+    pub fn with_property<S: Into<String>>(mut self, name: S, value: PropertyValue) -> Self {
+        self.properties.push((name.into(), value));
+        self
+    }
+
+    /// Add properties from a PropertyStore.
+    pub fn with_property_store(mut self, store: PropertyStore) -> Self {
+        self.properties
+            .extend(Vec::<(String, PropertyValue)>::from(store));
+        self
+    }
+
+    /// Add properties from a PropertyStore by reference.
+    pub fn with_property_store_ref(mut self, store: &PropertyStore) -> Self {
+        self.properties.extend(store.properties().iter().cloned());
+        self
+    }
+
+    /// Set an integer property.
+    pub fn with_property_int<S: Into<String>>(self, name: S, value: i32) -> Self {
+        self.with_property(name, PropertyValue::Integer(value))
+    }
+
+    /// Set a float property.
+    pub fn with_property_float<S: Into<String>>(self, name: S, value: f32) -> Self {
+        self.with_property(name, PropertyValue::Float(value))
+    }
+
+    /// Set a string property.
+    pub fn with_property_string<S: Into<String>, V: Into<String>>(self, name: S, value: V) -> Self {
+        self.with_property(name, PropertyValue::String(value.into()))
+    }
+
+    /// Set a boolean property.
+    pub fn with_property_bool<S: Into<String>>(self, name: S, value: bool) -> Self {
+        self.with_property(name, PropertyValue::Boolean(value))
+    }
+
+    /// Set a matrix property.
+    pub fn with_property_matrix<S: Into<String>>(
+        self,
+        name: S,
+        value: crate::types::Matrix4x4,
+    ) -> Self {
+        self.with_property(name, PropertyValue::Matrix(value))
     }
 
     /// Use a custom file system for exporting (uses aiExportSceneEx).
@@ -72,25 +136,55 @@ impl ExportBuilder {
         let c_format = CString::new(self.format_id.as_str())
             .map_err(|_| Error::invalid_parameter("Invalid format ID"))?;
 
-        let result = if let Some(fs) = &self.file_system {
-            let mut file_io = AssimpFileIO::new(fs.clone()).create_ai_file_io();
-            unsafe {
-                sys::aiExportSceneEx(
-                    scene.as_raw_sys(),
-                    c_format.as_ptr(),
-                    c_path.as_ptr(),
-                    file_io.as_mut_ptr_sys(),
-                    self.preprocessing,
-                )
+        let result = if self.properties.is_empty() {
+            if let Some(fs) = &self.file_system {
+                let mut file_io = AssimpFileIO::new(fs.clone()).create_ai_file_io();
+                unsafe {
+                    sys::aiExportSceneEx(
+                        scene.as_raw_sys(),
+                        c_format.as_ptr(),
+                        c_path.as_ptr(),
+                        file_io.as_mut_ptr_sys(),
+                        self.preprocessing,
+                    )
+                }
+            } else {
+                unsafe {
+                    sys::aiExportScene(
+                        scene.as_raw_sys(),
+                        c_format.as_ptr(),
+                        c_path.as_ptr(),
+                        self.preprocessing,
+                    )
+                }
             }
         } else {
-            unsafe {
-                sys::aiExportScene(
-                    scene.as_raw_sys(),
-                    c_format.as_ptr(),
-                    c_path.as_ptr(),
-                    self.preprocessing,
-                )
+            let buffers = build_rust_properties(&self.properties)?;
+            if let Some(fs) = &self.file_system {
+                let file_io = AssimpFileIO::new(fs.clone()).create_ai_file_io();
+                unsafe {
+                    sys::aiExportSceneExWithPropertiesRust(
+                        scene.as_raw_sys(),
+                        c_format.as_ptr(),
+                        c_path.as_ptr(),
+                        file_io.as_ptr_sys(),
+                        self.preprocessing,
+                        buffers.ffi_props.as_ptr(),
+                        buffers.ffi_props.len(),
+                    )
+                }
+            } else {
+                unsafe {
+                    sys::aiExportSceneExWithPropertiesRust(
+                        scene.as_raw_sys(),
+                        c_format.as_ptr(),
+                        c_path.as_ptr(),
+                        std::ptr::null(),
+                        self.preprocessing,
+                        buffers.ffi_props.as_ptr(),
+                        buffers.ffi_props.len(),
+                    )
+                }
             }
         };
 
@@ -106,8 +200,21 @@ impl ExportBuilder {
         let c_format = CString::new(self.format_id.as_str())
             .map_err(|_| Error::invalid_parameter("Invalid format ID"))?;
 
-        let blob_ptr = unsafe {
-            sys::aiExportSceneToBlob(scene.as_raw_sys(), c_format.as_ptr(), self.preprocessing)
+        let blob_ptr = if self.properties.is_empty() {
+            unsafe {
+                sys::aiExportSceneToBlob(scene.as_raw_sys(), c_format.as_ptr(), self.preprocessing)
+            }
+        } else {
+            let buffers = build_rust_properties(&self.properties)?;
+            unsafe {
+                sys::aiExportSceneToBlobWithPropertiesRust(
+                    scene.as_raw_sys(),
+                    c_format.as_ptr(),
+                    self.preprocessing,
+                    buffers.ffi_props.as_ptr(),
+                    buffers.ffi_props.len(),
+                )
+            }
         };
 
         if blob_ptr.is_null() {
@@ -368,6 +475,7 @@ pub mod formats {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::Importer;
 
     #[test]
     fn test_exporter_creation() {
@@ -388,5 +496,25 @@ mod tests {
         assert_eq!(formats::OBJ, "obj");
         assert_eq!(formats::COLLADA, "dae");
         assert_eq!(formats::GLTF2, "gltf2");
+    }
+
+    #[cfg(feature = "export")]
+    #[test]
+    fn test_export_to_blob_with_properties() {
+        // Minimal OBJ scene.
+        let obj = b"o tri\nv 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\n";
+        let scene = Importer::new()
+            .import_from_memory(obj, Some("obj"))
+            .expect("import OBJ scene");
+
+        let blob = ExportBuilder::new(formats::OBJ)
+            .with_property_bool(
+                export_properties::FBX_TRANSPARENCY_FACTOR_REFER_TO_OPACITY,
+                true,
+            )
+            .export_to_blob(&scene)
+            .expect("export to blob with properties");
+
+        assert!(blob.size() > 0);
     }
 }
