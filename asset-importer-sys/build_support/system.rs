@@ -13,12 +13,18 @@ pub fn probe(cfg: &BuildConfig, link_kind: LinkKind) -> BuildPlan {
         let mut vcpkg_cfg = vcpkg::Config::new();
         vcpkg_cfg.emit_includes(true);
 
-        // Match Rust's CRT choice when possible.
+        // Pick an explicit triplet when possible to keep behavior predictable.
         // Users can always override via VCPKGRS_TRIPLET / vcpkg env vars.
-        if (cfg.use_static_crt() || matches!(link_kind, LinkKind::Static))
-            && std::env::var("VCPKGRS_TRIPLET").is_err()
-        {
-            if let Some(triplet) = default_vcpkg_static_triplet(&cfg.target) {
+        if std::env::var("VCPKGRS_TRIPLET").is_err() {
+            if cfg.use_static_crt() && matches!(link_kind, LinkKind::Dynamic) {
+                util::warn(
+                    "target uses crt-static but dynamic assimp linking was requested; vcpkg triplets do not cleanly support this combination (falling back to dynamic CRT triplet)",
+                );
+            }
+
+            if let Some(triplet) =
+                default_vcpkg_triplet(&cfg.target, link_kind, cfg.use_static_crt())
+            {
                 vcpkg_cfg.target_triplet(triplet);
             }
         }
@@ -29,7 +35,7 @@ pub fn probe(cfg: &BuildConfig, link_kind: LinkKind) -> BuildPlan {
                 panic!(
                     "system linking (vcpkg) failed: {e}\n\
                      Hint: install assimp via vcpkg and set VCPKG_ROOT.\n\
-                     If you're using `crt-static`, prefer a `*-windows-static` triplet (e.g. `x64-windows-static`)."
+                     If needed, set VCPKGRS_TRIPLET explicitly (e.g. `x64-windows`, `x64-windows-static-md`, `x64-windows-static`)."
                 )
             });
 
@@ -151,17 +157,54 @@ fn ensure_vcpkg_layout() {
     }
 }
 
-fn default_vcpkg_static_triplet(target: &str) -> Option<&'static str> {
-    // These are the canonical triplet names used by vcpkg for MSVC static CRT.
-    // We only pick a default when targeting MSVC; MinGW uses a different toolchain.
-    if target.starts_with("x86_64-") {
-        Some("x64-windows-static")
-    } else if target.starts_with("i686-") {
-        Some("x86-windows-static")
-    } else if target.starts_with("aarch64-") {
-        Some("arm64-windows-static")
-    } else {
-        None
+fn default_vcpkg_triplet(
+    target: &str,
+    link_kind: LinkKind,
+    use_static_crt: bool,
+) -> Option<&'static str> {
+    let is_x64 = target.starts_with("x86_64-");
+    let is_x86 = target.starts_with("i686-");
+    let is_arm64 = target.starts_with("aarch64-");
+
+    match link_kind {
+        LinkKind::Dynamic => {
+            // Prefer the canonical dynamic triplets when linking dynamically.
+            // Note: vcpkg does not provide a standard "dynamic + static CRT" triplet; users must
+            // override manually if they have a custom setup.
+            if is_x64 {
+                Some("x64-windows")
+            } else if is_x86 {
+                Some("x86-windows")
+            } else if is_arm64 {
+                Some("arm64-windows")
+            } else {
+                None
+            }
+        }
+        LinkKind::Static => {
+            // For static library linking, match the CRT when possible:
+            // - `*-windows-static` for static CRT
+            // - `*-windows-static-md` for dynamic CRT
+            if use_static_crt {
+                if is_x64 {
+                    Some("x64-windows-static")
+                } else if is_x86 {
+                    Some("x86-windows-static")
+                } else if is_arm64 {
+                    Some("arm64-windows-static")
+                } else {
+                    None
+                }
+            } else if is_x64 {
+                Some("x64-windows-static-md")
+            } else if is_x86 {
+                Some("x86-windows-static-md")
+            } else if is_arm64 {
+                Some("arm64-windows-static-md")
+            } else {
+                None
+            }
+        }
     }
 }
 
