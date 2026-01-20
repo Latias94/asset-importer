@@ -122,6 +122,8 @@ impl BuildConfig {
         println!("cargo:rerun-if-env-changed=VCPKG_ROOT");
         println!("cargo:rerun-if-env-changed=VCPKG_INSTALLATION_ROOT");
         println!("cargo:rerun-if-env-changed=VCPKG_INSTALLED_DIR");
+        println!("cargo:rerun-if-env-changed=VCPKGRS_TRIPLET");
+        println!("cargo:rerun-if-env-changed=VCPKGRS_DYNAMIC");
 
         // Toolchain knobs
         println!("cargo:rerun-if-env-changed=MACOSX_DEPLOYMENT_TARGET");

@@ -205,6 +205,7 @@ jobs:
 
           echo "VCPKG_ROOT=$root" >> $env:GITHUB_ENV
           echo "VCPKGRS_TRIPLET=$triplet" >> $env:GITHUB_ENV
+          echo "VCPKGRS_DYNAMIC=1" >> $env:GITHUB_ENV
           echo (Join-Path $root "installed\\$triplet\\bin") >> $env:GITHUB_PATH
           echo (Join-Path $root "installed\\$triplet\\debug\\bin") >> $env:GITHUB_PATH
 

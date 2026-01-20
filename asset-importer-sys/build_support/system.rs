@@ -11,6 +11,16 @@ pub fn probe(cfg: &BuildConfig, link_kind: LinkKind) -> BuildPlan {
         let mut vcpkg_cfg = vcpkg::Config::new();
         vcpkg_cfg.emit_includes(true);
 
+        // vcpkg-rs requires explicit opt-in for dynamic linking.
+        if matches!(link_kind, LinkKind::Dynamic) && std::env::var_os("VCPKGRS_DYNAMIC").is_none() {
+            // `set_var` is `unsafe` because mutating the process environment is not thread-safe on
+            // some platforms (it can race with `getenv`). Build scripts are single-threaded and run
+            // before compilation, so this is an acceptable, bounded use.
+            unsafe {
+                std::env::set_var("VCPKGRS_DYNAMIC", "1");
+            }
+        }
+
         // Pick an explicit triplet when possible to keep behavior predictable.
         // Users can always override via VCPKGRS_TRIPLET / vcpkg env vars.
         let mut selected_triplet: Option<String> = None;
@@ -334,10 +344,14 @@ fn parse_define_u32(contents: &str, name: &str) -> Option<u32> {
 }
 
 fn common_include_roots() -> Vec<std::path::PathBuf> {
-    let mut roots = Vec::new();
+    #[cfg(windows)]
+    {
+        Vec::new()
+    }
 
     #[cfg(not(windows))]
     {
+        let mut roots = Vec::new();
         for p in [
             "/usr/include",
             "/usr/local/include",
@@ -349,7 +363,6 @@ fn common_include_roots() -> Vec<std::path::PathBuf> {
                 roots.push(pb);
             }
         }
+        roots
     }
-
-    roots
 }
