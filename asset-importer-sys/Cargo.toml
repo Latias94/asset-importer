@@ -51,7 +51,6 @@ exclude = [
     "assimp/BUILDBINARIES_EXAMPLE.bat",
 
     # Our own development files
-    "examples/",
     "*.md",
     "target/",
 
