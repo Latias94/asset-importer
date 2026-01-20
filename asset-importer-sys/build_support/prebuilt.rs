@@ -360,7 +360,10 @@ fn download_if_needed(cfg: &BuildConfig, cache_root: &std::path::Path, archive_n
         format!("v{}", crate_version),
     ];
 
-    let client = reqwest::blocking::Client::new();
+    let config = ureq::Agent::config_builder()
+        .timeout_global(Some(std::time::Duration::from_secs(300)))
+        .build();
+    let client = ureq::Agent::new_with_config(config);
     let mut last_error = None;
 
     for tag in &tag_formats {
@@ -374,16 +377,38 @@ fn download_if_needed(cfg: &BuildConfig, cache_root: &std::path::Path, archive_n
                 util::warn(format!("Downloading prebuilt package: {}", url));
             }
 
-            match client.get(&url).send() {
-                Ok(resp) if resp.status().is_success() => {
-                    let bytes = resp.bytes().expect("Failed to read response body");
-                    let dst = cache_root.join(archive);
-                    fs::write(&dst, &bytes).expect("Failed to write downloaded prebuilt package");
-                    return;
+            let resp = match client.get(&url).call() {
+                Ok(resp) => resp,
+                Err(e) => {
+                    last_error = Some(format!("{} for {}", e, url));
+                    continue;
                 }
-                Ok(resp) => last_error = Some(format!("HTTP {} for {}", resp.status(), url)),
-                Err(e) => last_error = Some(format!("{} for {}", e, url)),
+            };
+
+            let status = resp.status();
+            if !status.is_success() {
+                last_error = Some(format!("HTTP {} for {}", status, url));
+                continue;
             }
+
+            let dst = cache_root.join(archive);
+            let tmp = dst.with_extension("tmp");
+            let mut reader = resp.into_body().into_reader();
+            let mut file = fs::File::create(&tmp)
+                .unwrap_or_else(|e| panic!("Failed to create {}: {}", tmp.display(), e));
+            std::io::copy(&mut reader, &mut file).unwrap_or_else(|e| {
+                panic!("Failed to download {} into {}: {}", url, tmp.display(), e)
+            });
+            let _ = file.sync_all();
+            fs::rename(&tmp, &dst).unwrap_or_else(|e| {
+                panic!(
+                    "Failed to move downloaded prebuilt package {} -> {}: {}",
+                    tmp.display(),
+                    dst.display(),
+                    e
+                )
+            });
+            return;
         }
     }
 

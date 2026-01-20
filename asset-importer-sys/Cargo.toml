@@ -86,7 +86,7 @@ cmake = "0.1"
 pkg-config = { version = "0.3", optional = true }
 vcpkg = { version = "0.2", optional = true }
 # Prebuilt binary support (download + extract) is only needed when `prebuilt` is enabled.
-reqwest = { version = "0.12", features = ["blocking", "rustls-tls"], optional = true }
+ureq = { version = "3.1", default-features = false, features = ["rustls"], optional = true }
 tar = { version = "0.4", optional = true }
 flate2 = { version = "1.0", optional = true }
 
@@ -113,7 +113,7 @@ build-assimp = []
 # Enable the `package` binary
 package = ["dep:tar", "dep:flate2"]
 # Use prebuilt binaries (requires release artifacts)
-prebuilt = ["dep:reqwest", "dep:tar", "dep:flate2"]
+prebuilt = ["dep:ureq", "dep:tar", "dep:flate2"]
 # Control zlib linking
 nozlib = []
 static-link = []
