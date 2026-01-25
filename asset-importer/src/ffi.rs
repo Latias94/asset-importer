@@ -59,7 +59,7 @@ pub(crate) unsafe fn slice_from_ptr_len_opt<O: ?Sized, T>(
 /// for at least as long as `owner` is alive, and that no other references alias
 /// this region while the returned slice is in use.
 pub(crate) unsafe fn slice_from_mut_ptr_len<O: ?Sized, T>(
-    owner: &O,
+    owner: &mut O,
     ptr: *mut T,
     len: usize,
 ) -> &mut [T] {
@@ -76,5 +76,28 @@ pub(crate) unsafe fn slice_from_mut_ptr_len<O: ?Sized, T>(
         } else {
             unsafe { std::slice::from_raw_parts_mut(ptr, len) }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn slice_helpers_return_empty_on_insane_lengths() {
+        let too_large = (isize::MAX as usize) + 1;
+
+        // These pointers are intentionally invalid, but the helpers must not dereference them when
+        // the length is clearly impossible for `from_raw_parts{,_mut}`.
+        let p = 1usize as *const u8;
+        let mut_p = 1usize as *mut u8;
+
+        let owner = &();
+        let s = unsafe { slice_from_ptr_len(owner, p, too_large) };
+        assert!(s.is_empty());
+
+        let mut owner = ();
+        let s = unsafe { slice_from_mut_ptr_len(&mut owner, mut_p, too_large) };
+        assert!(s.is_empty());
     }
 }

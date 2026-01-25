@@ -517,8 +517,8 @@ extern "C" fn file_read_proc(
         let Some(total_bytes) = size.checked_mul(count) else {
             return 0;
         };
-        let owner = &buffer;
-        let rust_buffer = ffi::slice_from_mut_ptr_len(owner, buffer as *mut u8, total_bytes);
+        let mut owner = buffer;
+        let rust_buffer = ffi::slice_from_mut_ptr_len(&mut owner, buffer as *mut u8, total_bytes);
 
         match stream.read(rust_buffer) {
             Ok(bytes_read) => bytes_read.min(total_bytes) / size,
