@@ -191,6 +191,11 @@ impl Scene {
         self.as_raw_sys()
     }
 
+    #[inline]
+    fn raw(&self) -> &sys::aiScene {
+        unsafe { &*self.inner.scene_ptr.as_ptr() }
+    }
+
     /// Apply Assimp post-processing to this scene.
     ///
     /// This consumes the scene and returns the updated scene on success:
@@ -330,7 +335,7 @@ impl Scene {
 
     /// Get the scene flags
     pub fn flags(&self) -> u32 {
-        unsafe { (*self.inner.scene_ptr.as_ptr()).mFlags }
+        self.raw().mFlags
     }
 
     /// Check if the scene is incomplete
@@ -365,7 +370,7 @@ impl Scene {
         };
 
         unsafe {
-            sys::aiGetMemoryRequirements(self.inner.scene_ptr.as_ptr(), &mut info);
+            sys::aiGetMemoryRequirements(self.as_raw_sys(), &mut info);
         }
 
         Ok(MemoryInfo {
@@ -392,25 +397,21 @@ impl Scene {
 
     /// Get the root node of the scene
     pub fn root_node(&self) -> Option<Node> {
-        unsafe {
-            let scene = &*self.inner.scene_ptr.as_ptr();
-            if scene.mRootNode.is_null() {
-                None
-            } else {
-                Some(Node::from_raw(self.clone(), scene.mRootNode))
-            }
+        let scene = self.raw();
+        if scene.mRootNode.is_null() {
+            None
+        } else {
+            Some(unsafe { Node::from_raw(self.clone(), scene.mRootNode) })
         }
     }
 
     /// Get the number of meshes in the scene
     pub fn num_meshes(&self) -> usize {
-        unsafe {
-            let scene = &*self.inner.scene_ptr.as_ptr();
-            if scene.mMeshes.is_null() {
-                0
-            } else {
-                scene.mNumMeshes as usize
-            }
+        let scene = self.raw();
+        if scene.mMeshes.is_null() {
+            0
+        } else {
+            scene.mNumMeshes as usize
         }
     }
 
@@ -420,12 +421,10 @@ impl Scene {
             return None;
         }
 
-        unsafe {
-            let scene = &*self.inner.scene_ptr.as_ptr();
-            let mesh_ptr =
-                ffi::ptr_array_get(self, scene.mMeshes, scene.mNumMeshes as usize, index)?;
-            Some(Mesh::from_raw(self.clone(), mesh_ptr as *const sys::aiMesh))
-        }
+        let scene = self.raw();
+        let mesh_ptr =
+            unsafe { ffi::ptr_array_get(self, scene.mMeshes, scene.mNumMeshes as usize, index) }?;
+        Some(unsafe { Mesh::from_raw(self.clone(), mesh_ptr as *const sys::aiMesh) })
     }
 
     /// Get an iterator over all meshes
@@ -438,13 +437,11 @@ impl Scene {
 
     /// Get the number of materials in the scene
     pub fn num_materials(&self) -> usize {
-        unsafe {
-            let scene = &*self.inner.scene_ptr.as_ptr();
-            if scene.mMaterials.is_null() {
-                0
-            } else {
-                scene.mNumMaterials as usize
-            }
+        let scene = self.raw();
+        if scene.mMaterials.is_null() {
+            0
+        } else {
+            scene.mNumMaterials as usize
         }
     }
 
@@ -454,15 +451,11 @@ impl Scene {
             return None;
         }
 
-        unsafe {
-            let scene = &*self.inner.scene_ptr.as_ptr();
-            let material_ptr =
-                ffi::ptr_array_get(self, scene.mMaterials, scene.mNumMaterials as usize, index)?;
-            Some(Material::from_raw(
-                self.clone(),
-                material_ptr as *const sys::aiMaterial,
-            ))
-        }
+        let scene = self.raw();
+        let material_ptr = unsafe {
+            ffi::ptr_array_get(self, scene.mMaterials, scene.mNumMaterials as usize, index)
+        }?;
+        Some(unsafe { Material::from_raw(self.clone(), material_ptr as *const sys::aiMaterial) })
     }
 
     /// Get an iterator over all materials
@@ -475,13 +468,11 @@ impl Scene {
 
     /// Get the number of animations in the scene
     pub fn num_animations(&self) -> usize {
-        unsafe {
-            let scene = &*self.inner.scene_ptr.as_ptr();
-            if scene.mAnimations.is_null() {
-                0
-            } else {
-                scene.mNumAnimations as usize
-            }
+        let scene = self.raw();
+        if scene.mAnimations.is_null() {
+            0
+        } else {
+            scene.mNumAnimations as usize
         }
     }
 
@@ -491,19 +482,16 @@ impl Scene {
             return None;
         }
 
-        unsafe {
-            let scene = &*self.inner.scene_ptr.as_ptr();
-            let animation_ptr = ffi::ptr_array_get(
+        let scene = self.raw();
+        let animation_ptr = unsafe {
+            ffi::ptr_array_get(
                 self,
                 scene.mAnimations,
                 scene.mNumAnimations as usize,
                 index,
-            )?;
-            Some(Animation::from_raw(
-                self.clone(),
-                animation_ptr as *const sys::aiAnimation,
-            ))
-        }
+            )
+        }?;
+        Some(unsafe { Animation::from_raw(self.clone(), animation_ptr as *const sys::aiAnimation) })
     }
 
     /// Get an iterator over all animations
@@ -516,13 +504,11 @@ impl Scene {
 
     /// Get the number of cameras in the scene
     pub fn num_cameras(&self) -> usize {
-        unsafe {
-            let scene = &*self.inner.scene_ptr.as_ptr();
-            if scene.mCameras.is_null() {
-                0
-            } else {
-                scene.mNumCameras as usize
-            }
+        let scene = self.raw();
+        if scene.mCameras.is_null() {
+            0
+        } else {
+            scene.mNumCameras as usize
         }
     }
 
@@ -532,15 +518,10 @@ impl Scene {
             return None;
         }
 
-        unsafe {
-            let scene = &*self.inner.scene_ptr.as_ptr();
-            let camera_ptr =
-                ffi::ptr_array_get(self, scene.mCameras, scene.mNumCameras as usize, index)?;
-            Some(Camera::from_raw(
-                self.clone(),
-                camera_ptr as *const sys::aiCamera,
-            ))
-        }
+        let scene = self.raw();
+        let camera_ptr =
+            unsafe { ffi::ptr_array_get(self, scene.mCameras, scene.mNumCameras as usize, index) }?;
+        Some(unsafe { Camera::from_raw(self.clone(), camera_ptr as *const sys::aiCamera) })
     }
 
     /// Get an iterator over all cameras
@@ -553,13 +534,11 @@ impl Scene {
 
     /// Get the number of lights in the scene
     pub fn num_lights(&self) -> usize {
-        unsafe {
-            let scene = &*self.inner.scene_ptr.as_ptr();
-            if scene.mLights.is_null() {
-                0
-            } else {
-                scene.mNumLights as usize
-            }
+        let scene = self.raw();
+        if scene.mLights.is_null() {
+            0
+        } else {
+            scene.mNumLights as usize
         }
     }
 
@@ -569,15 +548,10 @@ impl Scene {
             return None;
         }
 
-        unsafe {
-            let scene = &*self.inner.scene_ptr.as_ptr();
-            let light_ptr =
-                ffi::ptr_array_get(self, scene.mLights, scene.mNumLights as usize, index)?;
-            Some(Light::from_raw(
-                self.clone(),
-                light_ptr as *const sys::aiLight,
-            ))
-        }
+        let scene = self.raw();
+        let light_ptr =
+            unsafe { ffi::ptr_array_get(self, scene.mLights, scene.mNumLights as usize, index) }?;
+        Some(unsafe { Light::from_raw(self.clone(), light_ptr as *const sys::aiLight) })
     }
 
     /// Get an iterator over all lights
@@ -743,19 +717,16 @@ impl Iterator for LightIterator {
 impl Scene {
     /// Get scene metadata
     pub fn metadata(&self) -> Result<Metadata> {
-        let scene = unsafe { &*self.inner.scene_ptr.as_ptr() };
-        unsafe { Metadata::from_raw_sys(scene.mMetaData) }
+        unsafe { Metadata::from_raw_sys(self.raw().mMetaData) }
     }
 
     /// Get the number of textures in the scene
     pub fn num_textures(&self) -> usize {
-        unsafe {
-            let scene = &*self.inner.scene_ptr.as_ptr();
-            if scene.mTextures.is_null() {
-                0
-            } else {
-                scene.mNumTextures as usize
-            }
+        let scene = self.raw();
+        if scene.mTextures.is_null() {
+            0
+        } else {
+            scene.mNumTextures as usize
         }
     }
 
@@ -765,20 +736,17 @@ impl Scene {
             return None;
         }
 
-        unsafe {
-            let scene = &*self.inner.scene_ptr.as_ptr();
-            let texture_ptr =
-                ffi::ptr_array_get(self, scene.mTextures, scene.mNumTextures as usize, index)?;
-            Texture::from_raw(self.clone(), texture_ptr as *const sys::aiTexture).ok()
-        }
+        let scene = self.raw();
+        let texture_ptr = unsafe {
+            ffi::ptr_array_get(self, scene.mTextures, scene.mNumTextures as usize, index)
+        }?;
+        unsafe { Texture::from_raw(self.clone(), texture_ptr as *const sys::aiTexture) }.ok()
     }
 
     /// Get an iterator over all textures in the scene
     pub fn textures(&self) -> TextureIterator {
-        unsafe {
-            let scene = &*self.inner.scene_ptr.as_ptr();
-            TextureIterator::new(self.clone(), scene.mTextures, self.num_textures())
-        }
+        let scene = self.raw();
+        unsafe { TextureIterator::new(self.clone(), scene.mTextures, self.num_textures()) }
     }
 
     /// Check if the scene has embedded textures
@@ -823,7 +791,7 @@ impl Scene {
     /// Get embedded texture by filename hint (e.g. "*0", "*1") without allocating.
     pub fn embedded_texture_by_cstr(&self, name: &std::ffi::CStr) -> Option<Texture> {
         unsafe {
-            let tex = sys::aiGetEmbeddedTexture(self.inner.scene_ptr.as_ptr(), name.as_ptr());
+            let tex = sys::aiGetEmbeddedTexture(self.as_raw_sys(), name.as_ptr());
             if tex.is_null() {
                 None
             } else {
