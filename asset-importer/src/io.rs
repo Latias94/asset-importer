@@ -11,6 +11,22 @@ use std::sync::{Arc, Mutex};
 
 use crate::{error::Result, ffi, sys};
 
+type FileSystemHandle = Arc<Mutex<dyn FileSystem>>;
+
+#[inline]
+unsafe fn file_system_ptr(file_io: *mut sys::aiFileIO) -> Option<*const FileSystemHandle> {
+    if file_io.is_null() {
+        return None;
+    }
+    let ptr = unsafe { (*file_io).UserData as *mut FileSystemHandle };
+    if ptr.is_null() { None } else { Some(ptr) }
+}
+
+#[inline]
+fn catch_unwind_or<R: Copy>(default: R, f: impl FnOnce() -> R) -> R {
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)).unwrap_or(default)
+}
+
 /// Trait for custom file I/O implementations
 pub trait FileSystem: std::fmt::Debug + Send + Sync {
     /// Check if a file exists
@@ -410,6 +426,34 @@ struct FileWrapper {
     stream: Mutex<Box<dyn FileStream>>,
 }
 
+#[inline]
+unsafe fn file_wrapper_ptr(file: *mut sys::aiFile) -> Option<*const FileWrapper> {
+    if file.is_null() {
+        return None;
+    }
+    let ptr = unsafe { (*file).UserData as *mut FileWrapper };
+    if ptr.is_null() { None } else { Some(ptr) }
+}
+
+#[inline]
+fn with_stream<R: Copy>(
+    file: *mut sys::aiFile,
+    default: R,
+    f: impl FnOnce(&mut dyn FileStream) -> R,
+) -> R {
+    catch_unwind_or(default, || unsafe {
+        let wrapper_ptr = file_wrapper_ptr(file).unwrap_or(std::ptr::null());
+        if wrapper_ptr.is_null() {
+            return default;
+        }
+        let wrapper = &*wrapper_ptr;
+        let Ok(mut stream) = wrapper.stream.lock() else {
+            return default;
+        };
+        f(&mut **stream)
+    })
+}
+
 /// C callback for opening files
 extern "C" fn file_open_proc(
     file_io: *mut sys::aiFileIO,
@@ -420,29 +464,22 @@ extern "C" fn file_open_proc(
         return ptr::null_mut();
     }
 
-    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| unsafe {
-        // Get the file system from user data
-        let file_system_ptr = (*file_io).UserData as *mut Arc<Mutex<dyn FileSystem>>;
+    catch_unwind_or(ptr::null_mut(), || unsafe {
+        let file_system_ptr = file_system_ptr(file_io).unwrap_or(std::ptr::null());
         if file_system_ptr.is_null() {
             return ptr::null_mut();
         }
         let file_system = &*file_system_ptr;
 
-        // Convert filename to Rust string
-        let filename_cstr = CStr::from_ptr(filename);
-        let filename_str = match filename_cstr.to_str() {
+        let filename_str = match CStr::from_ptr(filename).to_str() {
+            Ok(s) => s,
+            Err(_) => return ptr::null_mut(),
+        };
+        let mode_str = match CStr::from_ptr(mode).to_str() {
             Ok(s) => s,
             Err(_) => return ptr::null_mut(),
         };
 
-        // Convert mode to Rust string
-        let mode_cstr = CStr::from_ptr(mode);
-        let mode_str = match mode_cstr.to_str() {
-            Ok(s) => s,
-            Err(_) => return ptr::null_mut(),
-        };
-
-        // Open the file
         let stream = match file_system.lock() {
             Ok(fs) => match fs.open_with_mode(filename_str, mode_str) {
                 Ok(stream) => stream,
@@ -451,12 +488,10 @@ extern "C" fn file_open_proc(
             Err(_) => return ptr::null_mut(),
         };
 
-        // Create file wrapper
         let wrapper = Box::new(FileWrapper {
             stream: Mutex::new(stream),
         });
 
-        // Create aiFile structure
         let ai_file = Box::new(sys::aiFile {
             ReadProc: Some(file_read_proc),
             WriteProc: Some(file_write_proc),
@@ -468,13 +503,7 @@ extern "C" fn file_open_proc(
         });
 
         Box::into_raw(ai_file)
-    }));
-
-    match result {
-        Ok(v) => v,
-        // Never unwind across FFI.
-        Err(_) => ptr::null_mut(),
-    }
+    })
 }
 
 /// C callback for closing files
@@ -504,29 +533,19 @@ extern "C" fn file_read_proc(
         return 0;
     }
 
-    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| unsafe {
-        let wrapper_ptr = (*file).UserData as *mut FileWrapper;
-        if wrapper_ptr.is_null() {
-            return 0;
-        }
-
-        let wrapper = &*wrapper_ptr;
-        let Ok(mut stream) = wrapper.stream.lock() else {
-            return 0;
-        };
+    with_stream(file, 0, |stream| {
         let Some(total_bytes) = size.checked_mul(count) else {
             return 0;
         };
         let mut owner = buffer;
-        let rust_buffer = ffi::slice_from_mut_ptr_len(&mut owner, buffer as *mut u8, total_bytes);
+        let rust_buffer =
+            unsafe { ffi::slice_from_mut_ptr_len(&mut owner, buffer as *mut u8, total_bytes) };
 
         match stream.read(rust_buffer) {
             Ok(bytes_read) => bytes_read.min(total_bytes) / size,
             Err(_) => 0,
         }
-    }));
-
-    result.unwrap_or_default()
+    })
 }
 
 /// C callback for writing to files
@@ -540,15 +559,7 @@ extern "C" fn file_write_proc(
         return 0;
     }
 
-    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| unsafe {
-        let wrapper_ptr = (*file).UserData as *mut FileWrapper;
-        if wrapper_ptr.is_null() {
-            return 0;
-        }
-        let wrapper = &*wrapper_ptr;
-        let Ok(mut stream) = wrapper.stream.lock() else {
-            return 0;
-        };
+    with_stream(file, 0, |stream| {
         let Some(total_bytes) = size.checked_mul(count) else {
             return 0;
         };
@@ -558,15 +569,14 @@ extern "C" fn file_write_proc(
         }
 
         let owner = &buffer;
-        let data_slice = ffi::slice_from_ptr_len(owner, buffer as *const u8, total_bytes);
+        let data_slice =
+            unsafe { ffi::slice_from_ptr_len(owner, buffer as *const u8, total_bytes) };
 
         match stream.write(data_slice) {
             Ok(bytes_written) => bytes_written.min(total_bytes) / size,
             Err(_) => 0,
         }
-    }));
-
-    result.unwrap_or_default()
+    })
 }
 
 /// C callback for getting current file position
@@ -575,23 +585,10 @@ extern "C" fn file_tell_proc(file: *mut sys::aiFile) -> usize {
         return 0;
     }
 
-    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| unsafe {
-        let wrapper_ptr = (*file).UserData as *mut FileWrapper;
-        if wrapper_ptr.is_null() {
-            return 0;
-        }
-
-        let wrapper = &*wrapper_ptr;
-        let Ok(stream) = wrapper.stream.lock() else {
-            return 0;
-        };
-        match stream.tell() {
-            Ok(pos) => pos as usize,
-            Err(_) => 0,
-        }
-    }));
-
-    result.unwrap_or_default()
+    with_stream(file, 0, |stream| match stream.tell() {
+        Ok(pos) => pos as usize,
+        Err(_) => 0,
+    })
 }
 
 /// C callback for getting file size
@@ -600,23 +597,10 @@ extern "C" fn file_size_proc(file: *mut sys::aiFile) -> usize {
         return 0;
     }
 
-    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| unsafe {
-        let wrapper_ptr = (*file).UserData as *mut FileWrapper;
-        if wrapper_ptr.is_null() {
-            return 0;
-        }
-
-        let wrapper = &*wrapper_ptr;
-        let Ok(stream) = wrapper.stream.lock() else {
-            return 0;
-        };
-        match stream.size() {
-            Ok(size) => size as usize,
-            Err(_) => 0,
-        }
-    }));
-
-    result.unwrap_or_default()
+    with_stream(file, 0, |stream| match stream.size() {
+        Ok(size) => size as usize,
+        Err(_) => 0,
+    })
 }
 
 /// C callback for seeking in files
@@ -629,17 +613,7 @@ extern "C" fn file_seek_proc(
         return sys::aiReturn::aiReturn_FAILURE;
     }
 
-    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| unsafe {
-        let wrapper_ptr = (*file).UserData as *mut FileWrapper;
-        if wrapper_ptr.is_null() {
-            return sys::aiReturn::aiReturn_FAILURE;
-        }
-
-        let wrapper = &*wrapper_ptr;
-        let Ok(mut stream) = wrapper.stream.lock() else {
-            return sys::aiReturn::aiReturn_FAILURE;
-        };
-
+    with_stream(file, sys::aiReturn::aiReturn_FAILURE, |stream| {
         let new_position = match origin {
             sys::aiOrigin::aiOrigin_SET => offset as u64,
             sys::aiOrigin::aiOrigin_CUR => match stream.tell() {
@@ -668,12 +642,7 @@ extern "C" fn file_seek_proc(
             Ok(_) => sys::aiReturn::aiReturn_SUCCESS,
             Err(_) => sys::aiReturn::aiReturn_FAILURE,
         }
-    }));
-
-    match result {
-        Ok(v) => v,
-        Err(_) => sys::aiReturn::aiReturn_FAILURE,
-    }
+    })
 }
 
 /// C callback for flushing files (no-op for read-only streams)
@@ -682,16 +651,9 @@ extern "C" fn file_flush_proc(_file: *mut sys::aiFile) {
         return;
     }
 
-    let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| unsafe {
-        let wrapper_ptr = (*_file).UserData as *mut FileWrapper;
-        if wrapper_ptr.is_null() {
-            return;
-        }
-        let wrapper = &*wrapper_ptr;
-        if let Ok(mut stream) = wrapper.stream.lock() {
-            let _ = stream.flush();
-        }
-    }));
+    with_stream(_file, (), |stream| {
+        let _ = stream.flush();
+    })
 }
 
 #[cfg(test)]
