@@ -2,7 +2,6 @@
 
 #![allow(clippy::unnecessary_cast)]
 
-use crate::raw;
 use crate::{
     error::{Error, Result},
     ffi,
@@ -864,15 +863,9 @@ impl Material {
                 ) == sys::aiReturn::aiReturn_SUCCESS;
                 if ok && !prop_ptr.is_null() {
                     let prop = &*prop_ptr;
-                    if prop.mData.is_null()
-                        || prop.mDataLength < std::mem::size_of::<raw::AiVector3D>() as u32
-                    {
-                        None
-                    } else {
-                        // `aiMaterialProperty::mData` is a byte blob; do not assume alignment.
-                        let v = std::ptr::read_unaligned(prop.mData as *const raw::AiVector3D);
-                        Some(Vector3D::new(v.x, v.y, v.z))
-                    }
+                    MaterialPropertyData::from_sys(prop)
+                        .and_then(|d| d.read_ne_f32_array::<3>(0))
+                        .map(|[x, y, z]| Vector3D::new(x, y, z))
                 } else {
                     None
                 }
@@ -1093,6 +1086,102 @@ pub struct MaterialPropertyRef {
     prop_ptr: SharedPtr<sys::aiMaterialProperty>,
 }
 
+/// Decoder for `aiMaterialProperty::mData`.
+///
+/// Assimp treats `mData` as a byte blob; callers must not assume alignment.
+struct MaterialPropertyData<'a> {
+    bytes: &'a [u8],
+}
+
+impl<'a> MaterialPropertyData<'a> {
+    /// # Safety
+    /// The returned slice borrows Assimp-owned memory and must not outlive the scene.
+    unsafe fn from_sys(prop: &'a sys::aiMaterialProperty) -> Option<Self> {
+        let bytes = unsafe {
+            ffi::slice_from_ptr_len_opt(prop, prop.mData as *const u8, prop.mDataLength as usize)?
+        };
+        Some(Self { bytes })
+    }
+
+    fn read_ne_u32(&self, offset: usize) -> Option<u32> {
+        let raw: [u8; 4] = self
+            .bytes
+            .get(offset..offset.checked_add(4)?)?
+            .try_into()
+            .ok()?;
+        Some(u32::from_ne_bytes(raw))
+    }
+
+    fn read_ne_i32(&self, offset: usize) -> Option<i32> {
+        let raw: [u8; 4] = self
+            .bytes
+            .get(offset..offset.checked_add(4)?)?
+            .try_into()
+            .ok()?;
+        Some(i32::from_ne_bytes(raw))
+    }
+
+    fn read_ne_f32(&self, offset: usize) -> Option<f32> {
+        let raw: [u8; 4] = self
+            .bytes
+            .get(offset..offset.checked_add(4)?)?
+            .try_into()
+            .ok()?;
+        Some(f32::from_ne_bytes(raw))
+    }
+
+    fn read_ne_f64(&self, offset: usize) -> Option<f64> {
+        let raw: [u8; 8] = self
+            .bytes
+            .get(offset..offset.checked_add(8)?)?
+            .try_into()
+            .ok()?;
+        Some(f64::from_ne_bytes(raw))
+    }
+
+    fn read_ne_f32_array<const N: usize>(&self, offset: usize) -> Option<[f32; N]> {
+        let need = 4usize.checked_mul(N)?;
+        let slice = self.bytes.get(offset..offset.checked_add(need)?)?;
+        let mut out = [0.0f32; N];
+        for (i, slot) in out.iter_mut().enumerate() {
+            let start = i * 4;
+            let raw: [u8; 4] = slice[start..start + 4].try_into().ok()?;
+            *slot = f32::from_ne_bytes(raw);
+        }
+        Some(out)
+    }
+
+    fn read_ne_f64_array<const N: usize>(&self, offset: usize) -> Option<[f64; N]> {
+        let need = 8usize.checked_mul(N)?;
+        let slice = self.bytes.get(offset..offset.checked_add(need)?)?;
+        let mut out = [0.0f64; N];
+        for (i, slot) in out.iter_mut().enumerate() {
+            let start = i * 8;
+            let raw: [u8; 8] = slice[start..start + 8].try_into().ok()?;
+            *slot = f64::from_ne_bytes(raw);
+        }
+        Some(out)
+    }
+
+    fn decode_ai_string(&self) -> Option<sys::aiString> {
+        let declared_len = self.read_ne_u32(0)? as usize;
+        let payload = self.bytes.get(4..)?;
+        let max = (sys::AI_MAXLEN as usize).saturating_sub(1);
+        let copy_len = declared_len.min(payload.len()).min(max);
+
+        let mut value = sys::aiString {
+            length: copy_len as u32,
+            data: [0; sys::AI_MAXLEN as usize],
+        };
+
+        for (dst, src) in value.data[..copy_len].iter_mut().zip(&payload[..copy_len]) {
+            *dst = *src as std::os::raw::c_char;
+        }
+        value.data[copy_len] = 0;
+        Some(value)
+    }
+}
+
 impl MaterialPropertyRef {
     fn from_ptr(scene: Scene, prop_ptr: *const sys::aiMaterialProperty) -> Self {
         debug_assert!(!prop_ptr.is_null());
@@ -1184,30 +1273,8 @@ impl MaterialPropertyRef {
         }
         unsafe {
             let p = &*self.prop_ptr.as_ptr();
-            if p.mData.is_null() {
-                return None;
-            }
-            let total = p.mDataLength as usize;
-            if total < std::mem::size_of::<u32>() {
-                return None;
-            }
-
-            // Read the explicit byte length (unaligned-safe) and clamp to the available payload.
-            let declared_len = std::ptr::read_unaligned(p.mData as *const u32) as usize;
-            let payload = total - std::mem::size_of::<u32>();
-            let max = (sys::AI_MAXLEN as usize).saturating_sub(1);
-            let copy_len = declared_len.min(payload).min(max);
-
-            let mut value = sys::aiString {
-                length: copy_len as u32,
-                data: [0; sys::AI_MAXLEN as usize],
-            };
-
-            let src = (p.mData as *const u8).add(std::mem::size_of::<u32>());
-            let dst = value.data.as_mut_ptr();
-            std::ptr::copy_nonoverlapping(src as *const i8, dst, copy_len);
-            value.data[copy_len] = 0;
-
+            let d = MaterialPropertyData::from_sys(p)?;
+            let value = d.decode_ai_string()?;
             Some(MaterialStringRef { value })
         }
     }
@@ -1217,7 +1284,11 @@ impl MaterialPropertyRef {
         if self.type_info() != PropertyTypeInfo::Integer {
             return None;
         }
-        self.read_unaligned::<i32>()
+        unsafe {
+            let p = &*self.prop_ptr.as_ptr();
+            let d = MaterialPropertyData::from_sys(p)?;
+            d.read_ne_i32(0)
+        }
     }
 
     /// Read the first element as `u32` when stored as `Integer` and non-negative.
@@ -1235,7 +1306,11 @@ impl MaterialPropertyRef {
         if self.type_info() != PropertyTypeInfo::Float {
             return None;
         }
-        self.read_unaligned::<f32>()
+        unsafe {
+            let p = &*self.prop_ptr.as_ptr();
+            let d = MaterialPropertyData::from_sys(p)?;
+            d.read_ne_f32(0)
+        }
     }
 
     /// Read the first element as `f64` when stored as `Double`.
@@ -1243,7 +1318,11 @@ impl MaterialPropertyRef {
         if self.type_info() != PropertyTypeInfo::Double {
             return None;
         }
-        self.read_unaligned::<f64>()
+        unsafe {
+            let p = &*self.prop_ptr.as_ptr();
+            let d = MaterialPropertyData::from_sys(p)?;
+            d.read_ne_f64(0)
+        }
     }
 
     /// Read `N` elements as `f32` when stored as `Float`.
@@ -1251,7 +1330,11 @@ impl MaterialPropertyRef {
         if self.type_info() != PropertyTypeInfo::Float {
             return None;
         }
-        self.read_array_unaligned::<f32, N>()
+        unsafe {
+            let p = &*self.prop_ptr.as_ptr();
+            let d = MaterialPropertyData::from_sys(p)?;
+            d.read_ne_f32_array::<N>(0)
+        }
     }
 
     /// Read `N` elements as `f64` when stored as `Double`.
@@ -1259,7 +1342,11 @@ impl MaterialPropertyRef {
         if self.type_info() != PropertyTypeInfo::Double {
             return None;
         }
-        self.read_array_unaligned::<f64, N>()
+        unsafe {
+            let p = &*self.prop_ptr.as_ptr();
+            let d = MaterialPropertyData::from_sys(p)?;
+            d.read_ne_f64_array::<N>(0)
+        }
     }
 
     /// Read a `Vec2` when stored as `Float` and the payload has at least 2 floats.
@@ -1312,38 +1399,6 @@ impl MaterialPropertyRef {
                 return None;
             }
             Some(ffi::slice_from_ptr_len(self, ptr as *const T, len / size))
-        }
-    }
-
-    fn read_unaligned<T: Copy>(&self) -> Option<T> {
-        unsafe {
-            let p = &*self.prop_ptr.as_ptr();
-            if p.mData.is_null() {
-                return None;
-            }
-            let total = p.mDataLength as usize;
-            if total < std::mem::size_of::<T>() {
-                return None;
-            }
-            Some(std::ptr::read_unaligned(p.mData as *const T))
-        }
-    }
-
-    fn read_array_unaligned<T: Copy, const N: usize>(&self) -> Option<[T; N]> {
-        unsafe {
-            let p = &*self.prop_ptr.as_ptr();
-            if p.mData.is_null() {
-                return None;
-            }
-            let total = p.mDataLength as usize;
-            let need = std::mem::size_of::<T>().checked_mul(N)?;
-            if total < need {
-                return None;
-            }
-            let base = p.mData as *const T;
-            Some(std::array::from_fn(|i| {
-                std::ptr::read_unaligned(base.add(i))
-            }))
         }
     }
 
@@ -1460,6 +1515,53 @@ impl TextureType {
             }
             _ => return None,
         })
+    }
+}
+
+#[cfg(test)]
+mod material_property_data_tests {
+    use super::*;
+
+    fn make_prop_with_data(mut data: Vec<u8>) -> (sys::aiMaterialProperty, Vec<u8>) {
+        let mut prop: sys::aiMaterialProperty = unsafe { std::mem::zeroed() };
+        prop.mDataLength = data.len() as u32;
+        prop.mData = data.as_mut_ptr().cast::<std::os::raw::c_char>();
+        (prop, data)
+    }
+
+    #[test]
+    fn decode_ai_string_clamps_to_payload_and_adds_terminator() {
+        let mut data = Vec::new();
+        data.extend_from_slice(&999u32.to_ne_bytes()); // declared length > payload
+        data.extend_from_slice(b"abc"); // payload shorter than declared length
+
+        let (prop, _data_owner) = make_prop_with_data(data);
+        let decoded = unsafe { MaterialPropertyData::from_sys(&prop) }
+            .and_then(|d| d.decode_ai_string())
+            .unwrap();
+
+        assert_eq!(decoded.length, 3);
+        let bytes: Vec<u8> = decoded.data[..3].iter().map(|c| *c as u8).collect();
+        assert_eq!(bytes, b"abc");
+        assert_eq!(decoded.data[3] as u8, 0);
+    }
+
+    #[test]
+    fn read_ne_primitives_and_arrays_from_bytes() {
+        let mut data = Vec::new();
+        data.extend_from_slice(&42i32.to_ne_bytes());
+        data.extend_from_slice(&1.0f32.to_ne_bytes());
+        data.extend_from_slice(&2.0f32.to_ne_bytes());
+        data.extend_from_slice(&3.5f32.to_ne_bytes());
+        data.extend_from_slice(&9.0f64.to_ne_bytes());
+
+        let (prop, _data_owner) = make_prop_with_data(data);
+        let d = unsafe { MaterialPropertyData::from_sys(&prop) }.unwrap();
+
+        assert_eq!(d.read_ne_i32(0), Some(42));
+        assert_eq!(d.read_ne_f32_array::<3>(4), Some([1.0, 2.0, 3.5]));
+        assert_eq!(d.read_ne_f64(4 + 12), Some(9.0));
+        assert_eq!(d.read_ne_u32(9999), None);
     }
 }
 
