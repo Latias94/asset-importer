@@ -42,51 +42,48 @@ impl Mesh {
         self.as_raw_sys()
     }
 
+    #[inline]
+    fn raw(&self) -> &sys::aiMesh {
+        unsafe { &*self.mesh_ptr.as_ptr() }
+    }
+
     /// Get the name of the mesh
     pub fn name(&self) -> String {
-        unsafe { ai_string_to_string(&(*self.mesh_ptr.as_ptr()).mName) }
+        ai_string_to_string(&self.raw().mName)
     }
 
     /// Get the name of the mesh (zero-copy, lossy UTF-8).
     pub fn name_str(&self) -> std::borrow::Cow<'_, str> {
-        unsafe { ai_string_to_str(&(*self.mesh_ptr.as_ptr()).mName) }
+        ai_string_to_str(&self.raw().mName)
     }
 
     /// Get the number of vertices in the mesh
     pub fn num_vertices(&self) -> usize {
-        unsafe { (*self.mesh_ptr.as_ptr()).mNumVertices as usize }
+        self.raw().mNumVertices as usize
     }
 
     /// Returns `true` if this mesh has a position buffer.
     pub fn has_vertices(&self) -> bool {
-        unsafe {
-            let mesh = &*self.mesh_ptr.as_ptr();
-            mesh.mNumVertices > 0 && !mesh.mVertices.is_null()
-        }
+        let mesh = self.raw();
+        mesh.mNumVertices > 0 && !mesh.mVertices.is_null()
     }
 
     /// Returns `true` if this mesh has normals.
     pub fn has_normals(&self) -> bool {
-        unsafe {
-            let mesh = &*self.mesh_ptr.as_ptr();
-            mesh.mNumVertices > 0 && !mesh.mNormals.is_null()
-        }
+        let mesh = self.raw();
+        mesh.mNumVertices > 0 && !mesh.mNormals.is_null()
     }
 
     /// Returns `true` if this mesh has tangents.
     pub fn has_tangents(&self) -> bool {
-        unsafe {
-            let mesh = &*self.mesh_ptr.as_ptr();
-            mesh.mNumVertices > 0 && !mesh.mTangents.is_null()
-        }
+        let mesh = self.raw();
+        mesh.mNumVertices > 0 && !mesh.mTangents.is_null()
     }
 
     /// Returns `true` if this mesh has bitangents.
     pub fn has_bitangents(&self) -> bool {
-        unsafe {
-            let mesh = &*self.mesh_ptr.as_ptr();
-            mesh.mNumVertices > 0 && !mesh.mBitangents.is_null()
-        }
+        let mesh = self.raw();
+        mesh.mNumVertices > 0 && !mesh.mBitangents.is_null()
     }
 
     /// Returns `true` if this mesh has texture coordinates for `channel`.
@@ -94,10 +91,8 @@ impl Mesh {
         if channel >= sys::AI_MAX_NUMBER_OF_TEXTURECOORDS as usize {
             return false;
         }
-        unsafe {
-            let mesh = &*self.mesh_ptr.as_ptr();
-            mesh.mNumVertices > 0 && !mesh.mTextureCoords[channel].is_null()
-        }
+        let mesh = self.raw();
+        mesh.mNumVertices > 0 && !mesh.mTextureCoords[channel].is_null()
     }
 
     /// Returns `true` if this mesh has vertex colors for `channel`.
@@ -105,10 +100,8 @@ impl Mesh {
         if channel >= sys::AI_MAX_NUMBER_OF_COLOR_SETS as usize {
             return false;
         }
-        unsafe {
-            let mesh = &*self.mesh_ptr.as_ptr();
-            mesh.mNumVertices > 0 && !mesh.mColors[channel].is_null()
-        }
+        let mesh = self.raw();
+        mesh.mNumVertices > 0 && !mesh.mColors[channel].is_null()
     }
 
     /// Get the vertices of the mesh
@@ -118,12 +111,10 @@ impl Mesh {
 
     /// Get the raw vertex buffer (zero-copy).
     pub fn vertices_raw(&self) -> &[raw::AiVector3D] {
-        unsafe {
-            let mesh = &*self.mesh_ptr.as_ptr();
-            let n = mesh.mNumVertices as usize;
-            debug_assert!(n == 0 || !mesh.mVertices.is_null());
-            ffi::slice_from_ptr_len(self, mesh.mVertices as *const raw::AiVector3D, n)
-        }
+        let mesh = self.raw();
+        let n = mesh.mNumVertices as usize;
+        debug_assert!(n == 0 || !mesh.mVertices.is_null());
+        unsafe { ffi::slice_from_ptr_len(self, mesh.mVertices as *const raw::AiVector3D, n) }
     }
 
     /// Get the raw vertex buffer as bytes (zero-copy).
@@ -140,15 +131,13 @@ impl Mesh {
 
     /// Get the raw vertex buffer (zero-copy), returning `None` when absent.
     pub fn vertices_raw_opt(&self) -> Option<&[raw::AiVector3D]> {
-        unsafe {
-            let mesh = &*self.mesh_ptr.as_ptr();
-            let n = mesh.mNumVertices as usize;
-            let ptr = mesh.mVertices as *const raw::AiVector3D;
-            if ptr.is_null() {
-                None
-            } else {
-                Some(ffi::slice_from_ptr_len(self, ptr, n))
-            }
+        let mesh = self.raw();
+        let n = mesh.mNumVertices as usize;
+        let ptr = mesh.mVertices as *const raw::AiVector3D;
+        if ptr.is_null() {
+            None
+        } else {
+            Some(unsafe { ffi::slice_from_ptr_len(self, ptr, n) })
         }
     }
 
@@ -167,8 +156,8 @@ impl Mesh {
 
     /// Get the raw normal buffer (zero-copy).
     pub fn normals_raw(&self) -> &[raw::AiVector3D] {
+        let mesh = self.raw();
         unsafe {
-            let mesh = &*self.mesh_ptr.as_ptr();
             ffi::slice_from_ptr_len(
                 self,
                 mesh.mNormals as *const raw::AiVector3D,
@@ -191,18 +180,12 @@ impl Mesh {
 
     /// Get the raw normal buffer (zero-copy), returning `None` when absent.
     pub fn normals_raw_opt(&self) -> Option<&[raw::AiVector3D]> {
-        unsafe {
-            let mesh = &*self.mesh_ptr.as_ptr();
-            let ptr = mesh.mNormals as *const raw::AiVector3D;
-            if ptr.is_null() {
-                None
-            } else {
-                Some(ffi::slice_from_ptr_len(
-                    self,
-                    ptr,
-                    mesh.mNumVertices as usize,
-                ))
-            }
+        let mesh = self.raw();
+        let ptr = mesh.mNormals as *const raw::AiVector3D;
+        if ptr.is_null() {
+            None
+        } else {
+            Some(unsafe { ffi::slice_from_ptr_len(self, ptr, mesh.mNumVertices as usize) })
         }
     }
 
@@ -221,8 +204,8 @@ impl Mesh {
 
     /// Get the raw tangent buffer (zero-copy).
     pub fn tangents_raw(&self) -> &[raw::AiVector3D] {
+        let mesh = self.raw();
         unsafe {
-            let mesh = &*self.mesh_ptr.as_ptr();
             ffi::slice_from_ptr_len(
                 self,
                 mesh.mTangents as *const raw::AiVector3D,
@@ -245,18 +228,12 @@ impl Mesh {
 
     /// Get the raw tangent buffer (zero-copy), returning `None` when absent.
     pub fn tangents_raw_opt(&self) -> Option<&[raw::AiVector3D]> {
-        unsafe {
-            let mesh = &*self.mesh_ptr.as_ptr();
-            let ptr = mesh.mTangents as *const raw::AiVector3D;
-            if ptr.is_null() {
-                None
-            } else {
-                Some(ffi::slice_from_ptr_len(
-                    self,
-                    ptr,
-                    mesh.mNumVertices as usize,
-                ))
-            }
+        let mesh = self.raw();
+        let ptr = mesh.mTangents as *const raw::AiVector3D;
+        if ptr.is_null() {
+            None
+        } else {
+            Some(unsafe { ffi::slice_from_ptr_len(self, ptr, mesh.mNumVertices as usize) })
         }
     }
 
@@ -275,8 +252,8 @@ impl Mesh {
 
     /// Get the raw bitangent buffer (zero-copy).
     pub fn bitangents_raw(&self) -> &[raw::AiVector3D] {
+        let mesh = self.raw();
         unsafe {
-            let mesh = &*self.mesh_ptr.as_ptr();
             ffi::slice_from_ptr_len(
                 self,
                 mesh.mBitangents as *const raw::AiVector3D,
@@ -299,18 +276,12 @@ impl Mesh {
 
     /// Get the raw bitangent buffer (zero-copy), returning `None` when absent.
     pub fn bitangents_raw_opt(&self) -> Option<&[raw::AiVector3D]> {
-        unsafe {
-            let mesh = &*self.mesh_ptr.as_ptr();
-            let ptr = mesh.mBitangents as *const raw::AiVector3D;
-            if ptr.is_null() {
-                None
-            } else {
-                Some(ffi::slice_from_ptr_len(
-                    self,
-                    ptr,
-                    mesh.mNumVertices as usize,
-                ))
-            }
+        let mesh = self.raw();
+        let ptr = mesh.mBitangents as *const raw::AiVector3D;
+        if ptr.is_null() {
+            None
+        } else {
+            Some(unsafe { ffi::slice_from_ptr_len(self, ptr, mesh.mNumVertices as usize) })
         }
     }
 
@@ -341,9 +312,9 @@ impl Mesh {
             return &[];
         }
 
+        let mesh = self.raw();
+        let tex_coords_ptr = mesh.mTextureCoords[channel];
         unsafe {
-            let mesh = &*self.mesh_ptr.as_ptr();
-            let tex_coords_ptr = mesh.mTextureCoords[channel];
             ffi::slice_from_ptr_len(
                 self,
                 tex_coords_ptr as *const raw::AiVector3D,
@@ -369,18 +340,12 @@ impl Mesh {
         if channel >= sys::AI_MAX_NUMBER_OF_TEXTURECOORDS as usize {
             return None;
         }
-        unsafe {
-            let mesh = &*self.mesh_ptr.as_ptr();
-            let ptr = mesh.mTextureCoords[channel] as *const raw::AiVector3D;
-            if ptr.is_null() {
-                None
-            } else {
-                Some(ffi::slice_from_ptr_len(
-                    self,
-                    ptr,
-                    mesh.mNumVertices as usize,
-                ))
-            }
+        let mesh = self.raw();
+        let ptr = mesh.mTextureCoords[channel] as *const raw::AiVector3D;
+        if ptr.is_null() {
+            None
+        } else {
+            Some(unsafe { ffi::slice_from_ptr_len(self, ptr, mesh.mNumVertices as usize) })
         }
     }
 
@@ -415,9 +380,9 @@ impl Mesh {
             return &[];
         }
 
+        let mesh = self.raw();
+        let colors_ptr = mesh.mColors[channel];
         unsafe {
-            let mesh = &*self.mesh_ptr.as_ptr();
-            let colors_ptr = mesh.mColors[channel];
             ffi::slice_from_ptr_len(
                 self,
                 colors_ptr as *const raw::AiColor4D,
@@ -443,18 +408,12 @@ impl Mesh {
         if channel >= sys::AI_MAX_NUMBER_OF_COLOR_SETS as usize {
             return None;
         }
-        unsafe {
-            let mesh = &*self.mesh_ptr.as_ptr();
-            let ptr = mesh.mColors[channel] as *const raw::AiColor4D;
-            if ptr.is_null() {
-                None
-            } else {
-                Some(ffi::slice_from_ptr_len(
-                    self,
-                    ptr,
-                    mesh.mNumVertices as usize,
-                ))
-            }
+        let mesh = self.raw();
+        let ptr = mesh.mColors[channel] as *const raw::AiColor4D;
+        if ptr.is_null() {
+            None
+        } else {
+            Some(unsafe { ffi::slice_from_ptr_len(self, ptr, mesh.mNumVertices as usize) })
         }
     }
 
@@ -467,7 +426,7 @@ impl Mesh {
 
     /// Get the number of faces in the mesh
     pub fn num_faces(&self) -> usize {
-        unsafe { (*self.mesh_ptr.as_ptr()).mNumFaces as usize }
+        self.raw().mNumFaces as usize
     }
 
     /// Iterate triangle index triplets (`[u32; 3]`) without allocation.
@@ -506,25 +465,21 @@ impl Mesh {
 
     /// Get the raw face array (zero-copy).
     pub fn faces_raw(&self) -> &[raw::AiFace] {
-        unsafe {
-            let mesh = &*self.mesh_ptr.as_ptr();
-            let n = mesh.mNumFaces as usize;
-            debug_assert!(n == 0 || !mesh.mFaces.is_null());
-            ffi::slice_from_ptr_len(self, mesh.mFaces as *const raw::AiFace, n)
-        }
+        let mesh = self.raw();
+        let n = mesh.mNumFaces as usize;
+        debug_assert!(n == 0 || !mesh.mFaces.is_null());
+        unsafe { ffi::slice_from_ptr_len(self, mesh.mFaces as *const raw::AiFace, n) }
     }
 
     /// Get the raw face array (zero-copy), returning `None` when absent.
     pub fn faces_raw_opt(&self) -> Option<&[raw::AiFace]> {
-        unsafe {
-            let mesh = &*self.mesh_ptr.as_ptr();
-            let n = mesh.mNumFaces as usize;
-            let ptr = mesh.mFaces as *const raw::AiFace;
-            if ptr.is_null() {
-                None
-            } else {
-                Some(ffi::slice_from_ptr_len(self, ptr, n))
-            }
+        let mesh = self.raw();
+        let n = mesh.mNumFaces as usize;
+        let ptr = mesh.mFaces as *const raw::AiFace;
+        if ptr.is_null() {
+            None
+        } else {
+            Some(unsafe { ffi::slice_from_ptr_len(self, ptr, n) })
         }
     }
 
@@ -535,12 +490,12 @@ impl Mesh {
 
     /// Get the material index for this mesh
     pub fn material_index(&self) -> usize {
-        unsafe { (*self.mesh_ptr.as_ptr()).mMaterialIndex as usize }
+        self.raw().mMaterialIndex as usize
     }
 
     /// Get the primitive types present in this mesh
     pub fn primitive_types(&self) -> u32 {
-        unsafe { (*self.mesh_ptr.as_ptr()).mPrimitiveTypes }
+        self.raw().mPrimitiveTypes
     }
 
     /// Check if the mesh contains points
@@ -565,21 +520,16 @@ impl Mesh {
 
     /// Get the axis-aligned bounding box of the mesh
     pub fn aabb(&self) -> AABB {
-        unsafe {
-            let mesh = &*self.mesh_ptr.as_ptr();
-            crate::aabb::from_sys_aabb(&mesh.mAABB)
-        }
+        crate::aabb::from_sys_aabb(&self.raw().mAABB)
     }
 
     /// Get the number of animation meshes (morph targets)
     pub fn num_anim_meshes(&self) -> usize {
-        unsafe {
-            let mesh = &*self.mesh_ptr.as_ptr();
-            if mesh.mAnimMeshes.is_null() {
-                0
-            } else {
-                mesh.mNumAnimMeshes as usize
-            }
+        let mesh = self.raw();
+        if mesh.mAnimMeshes.is_null() {
+            0
+        } else {
+            mesh.mNumAnimMeshes as usize
         }
     }
 
@@ -588,16 +538,15 @@ impl Mesh {
         if index >= self.num_anim_meshes() {
             return None;
         }
-        unsafe {
-            let mesh = &*self.mesh_ptr.as_ptr();
-            let ptr =
-                ffi::ptr_array_get(self, mesh.mAnimMeshes, mesh.mNumAnimMeshes as usize, index)?;
-            let anim_ptr = SharedPtr::new(ptr as *const sys::aiAnimMesh)?;
-            Some(AnimMesh {
-                scene: self.scene.clone(),
-                anim_ptr,
-            })
-        }
+        let mesh = self.raw();
+        let ptr = unsafe {
+            ffi::ptr_array_get(self, mesh.mAnimMeshes, mesh.mNumAnimMeshes as usize, index)
+        }?;
+        let anim_ptr = SharedPtr::new(ptr as *const sys::aiAnimMesh)?;
+        Some(AnimMesh {
+            scene: self.scene.clone(),
+            anim_ptr,
+        })
     }
 
     /// Iterate over animation meshes
@@ -611,13 +560,11 @@ impl Mesh {
 
     /// Get the number of bones in the mesh
     pub fn num_bones(&self) -> usize {
-        unsafe {
-            let mesh = &*self.mesh_ptr.as_ptr();
-            if mesh.mBones.is_null() {
-                0
-            } else {
-                mesh.mNumBones as usize
-            }
+        let mesh = self.raw();
+        if mesh.mBones.is_null() {
+            0
+        } else {
+            mesh.mNumBones as usize
         }
     }
 
@@ -627,22 +574,16 @@ impl Mesh {
             return None;
         }
 
-        unsafe {
-            let mesh = &*self.mesh_ptr.as_ptr();
-            let bone_ptr = ffi::ptr_array_get(self, mesh.mBones, mesh.mNumBones as usize, index)?;
-            Bone::from_raw(self.scene.clone(), bone_ptr as *const sys::aiBone).ok()
-        }
+        let mesh = self.raw();
+        let bone_ptr =
+            unsafe { ffi::ptr_array_get(self, mesh.mBones, mesh.mNumBones as usize, index) }?;
+        unsafe { Bone::from_raw(self.scene.clone(), bone_ptr as *const sys::aiBone) }.ok()
     }
 
     /// Get an iterator over all bones in the mesh
     pub fn bones(&self) -> BoneIterator {
-        unsafe {
-            BoneIterator::new(
-                self.scene.clone(),
-                (*self.mesh_ptr.as_ptr()).mBones,
-                self.num_bones(),
-            )
-        }
+        let mesh = self.raw();
+        unsafe { BoneIterator::new(self.scene.clone(), mesh.mBones, self.num_bones()) }
     }
 
     /// Check if the mesh has bones (is rigged for skeletal animation)
@@ -667,10 +608,7 @@ impl Mesh {
 
     /// Get the mesh morphing method (if any)
     pub fn morphing_method(&self) -> MorphingMethod {
-        unsafe {
-            let mesh = &*self.mesh_ptr.as_ptr();
-            MorphingMethod::from_sys(mesh.mMethod)
-        }
+        MorphingMethod::from_sys(self.raw().mMethod)
     }
 }
 
@@ -683,16 +621,21 @@ pub struct Face {
 }
 
 impl Face {
+    #[inline]
+    fn raw(&self) -> &raw::AiFace {
+        unsafe { &*self.face_ptr.as_ptr() }
+    }
+
     /// Get the number of indices in this face
     pub fn num_indices(&self) -> usize {
-        unsafe { (*self.face_ptr.as_ptr()).mNumIndices as usize }
+        self.raw().mNumIndices as usize
     }
 
     /// Get the raw index slice (zero-copy).
     pub fn indices_raw(&self) -> &[u32] {
+        let face = self.raw();
+        debug_assert!(face.mNumIndices == 0 || !face.mIndices.is_null());
         unsafe {
-            let face = &*self.face_ptr.as_ptr();
-            debug_assert!(face.mNumIndices == 0 || !face.mIndices.is_null());
             ffi::slice_from_ptr_len(self, face.mIndices as *const u32, face.mNumIndices as usize)
         }
     }
@@ -705,8 +648,8 @@ impl Face {
 
     /// Get the raw index slice (zero-copy), returning `None` when absent.
     pub fn indices_raw_opt(&self) -> Option<&[u32]> {
+        let face = self.raw();
         unsafe {
-            let face = &*self.face_ptr.as_ptr();
             ffi::slice_from_ptr_len_opt(
                 self,
                 face.mIndices as *const u32,
@@ -769,45 +712,42 @@ pub struct AnimMesh {
 }
 
 impl AnimMesh {
+    #[inline]
+    fn raw(&self) -> &sys::aiAnimMesh {
+        unsafe { &*self.anim_ptr.as_ptr() }
+    }
+
     /// Name of this anim mesh (if present)
     pub fn name(&self) -> String {
-        unsafe { crate::types::ai_string_to_string(&(*self.anim_ptr.as_ptr()).mName) }
+        crate::types::ai_string_to_string(&self.raw().mName)
     }
     /// Number of vertices in this anim mesh
     pub fn num_vertices(&self) -> usize {
-        unsafe { (*self.anim_ptr.as_ptr()).mNumVertices as usize }
+        self.raw().mNumVertices as usize
     }
 
     /// Returns `true` if this anim mesh has replacement positions.
     pub fn has_vertices(&self) -> bool {
-        unsafe {
-            let m = &*self.anim_ptr.as_ptr();
-            m.mNumVertices > 0 && !m.mVertices.is_null()
-        }
+        let m = self.raw();
+        m.mNumVertices > 0 && !m.mVertices.is_null()
     }
 
     /// Returns `true` if this anim mesh has replacement normals.
     pub fn has_normals(&self) -> bool {
-        unsafe {
-            let m = &*self.anim_ptr.as_ptr();
-            m.mNumVertices > 0 && !m.mNormals.is_null()
-        }
+        let m = self.raw();
+        m.mNumVertices > 0 && !m.mNormals.is_null()
     }
 
     /// Returns `true` if this anim mesh has replacement tangents.
     pub fn has_tangents(&self) -> bool {
-        unsafe {
-            let m = &*self.anim_ptr.as_ptr();
-            m.mNumVertices > 0 && !m.mTangents.is_null()
-        }
+        let m = self.raw();
+        m.mNumVertices > 0 && !m.mTangents.is_null()
     }
 
     /// Returns `true` if this anim mesh has replacement bitangents.
     pub fn has_bitangents(&self) -> bool {
-        unsafe {
-            let m = &*self.anim_ptr.as_ptr();
-            m.mNumVertices > 0 && !m.mBitangents.is_null()
-        }
+        let m = self.raw();
+        m.mNumVertices > 0 && !m.mBitangents.is_null()
     }
 
     /// Returns `true` if this anim mesh has replacement texture coordinates for `channel`.
@@ -815,10 +755,8 @@ impl AnimMesh {
         if channel >= sys::AI_MAX_NUMBER_OF_TEXTURECOORDS as usize {
             return false;
         }
-        unsafe {
-            let m = &*self.anim_ptr.as_ptr();
-            m.mNumVertices > 0 && !m.mTextureCoords[channel].is_null()
-        }
+        let m = self.raw();
+        m.mNumVertices > 0 && !m.mTextureCoords[channel].is_null()
     }
 
     /// Returns `true` if this anim mesh has replacement vertex colors for `channel`.
@@ -826,10 +764,8 @@ impl AnimMesh {
         if channel >= sys::AI_MAX_NUMBER_OF_COLOR_SETS as usize {
             return false;
         }
-        unsafe {
-            let m = &*self.anim_ptr.as_ptr();
-            m.mNumVertices > 0 && !m.mColors[channel].is_null()
-        }
+        let m = self.raw();
+        m.mNumVertices > 0 && !m.mColors[channel].is_null()
     }
 
     /// Replacement positions (if present)
@@ -840,8 +776,8 @@ impl AnimMesh {
 
     /// Raw replacement positions (zero-copy).
     pub fn vertices_raw(&self) -> &[raw::AiVector3D] {
+        let m = self.raw();
         unsafe {
-            let m = &*self.anim_ptr.as_ptr();
             ffi::slice_from_ptr_len(
                 self,
                 m.mVertices as *const raw::AiVector3D,
@@ -864,14 +800,12 @@ impl AnimMesh {
 
     /// Raw replacement positions (zero-copy), returning `None` when absent.
     pub fn vertices_raw_opt(&self) -> Option<&[raw::AiVector3D]> {
-        unsafe {
-            let m = &*self.anim_ptr.as_ptr();
-            let ptr = m.mVertices as *const raw::AiVector3D;
-            if ptr.is_null() {
-                None
-            } else {
-                Some(ffi::slice_from_ptr_len(self, ptr, m.mNumVertices as usize))
-            }
+        let m = self.raw();
+        let ptr = m.mVertices as *const raw::AiVector3D;
+        if ptr.is_null() {
+            None
+        } else {
+            Some(unsafe { ffi::slice_from_ptr_len(self, ptr, m.mNumVertices as usize) })
         }
     }
 
@@ -883,8 +817,8 @@ impl AnimMesh {
 
     /// Raw replacement normals (zero-copy).
     pub fn normals_raw(&self) -> &[raw::AiVector3D] {
+        let m = self.raw();
         unsafe {
-            let m = &*self.anim_ptr.as_ptr();
             ffi::slice_from_ptr_len(
                 self,
                 m.mNormals as *const raw::AiVector3D,
@@ -907,14 +841,12 @@ impl AnimMesh {
 
     /// Raw replacement normals (zero-copy), returning `None` when absent.
     pub fn normals_raw_opt(&self) -> Option<&[raw::AiVector3D]> {
-        unsafe {
-            let m = &*self.anim_ptr.as_ptr();
-            let ptr = m.mNormals as *const raw::AiVector3D;
-            if ptr.is_null() {
-                None
-            } else {
-                Some(ffi::slice_from_ptr_len(self, ptr, m.mNumVertices as usize))
-            }
+        let m = self.raw();
+        let ptr = m.mNormals as *const raw::AiVector3D;
+        if ptr.is_null() {
+            None
+        } else {
+            Some(unsafe { ffi::slice_from_ptr_len(self, ptr, m.mNumVertices as usize) })
         }
     }
 
@@ -926,8 +858,8 @@ impl AnimMesh {
 
     /// Raw replacement tangents (zero-copy).
     pub fn tangents_raw(&self) -> &[raw::AiVector3D] {
+        let m = self.raw();
         unsafe {
-            let m = &*self.anim_ptr.as_ptr();
             ffi::slice_from_ptr_len(
                 self,
                 m.mTangents as *const raw::AiVector3D,
@@ -950,14 +882,12 @@ impl AnimMesh {
 
     /// Raw replacement tangents (zero-copy), returning `None` when absent.
     pub fn tangents_raw_opt(&self) -> Option<&[raw::AiVector3D]> {
-        unsafe {
-            let m = &*self.anim_ptr.as_ptr();
-            let ptr = m.mTangents as *const raw::AiVector3D;
-            if ptr.is_null() {
-                None
-            } else {
-                Some(ffi::slice_from_ptr_len(self, ptr, m.mNumVertices as usize))
-            }
+        let m = self.raw();
+        let ptr = m.mTangents as *const raw::AiVector3D;
+        if ptr.is_null() {
+            None
+        } else {
+            Some(unsafe { ffi::slice_from_ptr_len(self, ptr, m.mNumVertices as usize) })
         }
     }
 
@@ -969,8 +899,8 @@ impl AnimMesh {
 
     /// Raw replacement bitangents (zero-copy).
     pub fn bitangents_raw(&self) -> &[raw::AiVector3D] {
+        let m = self.raw();
         unsafe {
-            let m = &*self.anim_ptr.as_ptr();
             ffi::slice_from_ptr_len(
                 self,
                 m.mBitangents as *const raw::AiVector3D,
@@ -993,14 +923,12 @@ impl AnimMesh {
 
     /// Raw replacement bitangents (zero-copy), returning `None` when absent.
     pub fn bitangents_raw_opt(&self) -> Option<&[raw::AiVector3D]> {
-        unsafe {
-            let m = &*self.anim_ptr.as_ptr();
-            let ptr = m.mBitangents as *const raw::AiVector3D;
-            if ptr.is_null() {
-                None
-            } else {
-                Some(ffi::slice_from_ptr_len(self, ptr, m.mNumVertices as usize))
-            }
+        let m = self.raw();
+        let ptr = m.mBitangents as *const raw::AiVector3D;
+        if ptr.is_null() {
+            None
+        } else {
+            Some(unsafe { ffi::slice_from_ptr_len(self, ptr, m.mNumVertices as usize) })
         }
     }
 
@@ -1018,9 +946,9 @@ impl AnimMesh {
         if channel >= sys::AI_MAX_NUMBER_OF_COLOR_SETS as usize {
             return &[];
         }
+        let m = self.raw();
+        let ptr = m.mColors[channel];
         unsafe {
-            let m = &*self.anim_ptr.as_ptr();
-            let ptr = m.mColors[channel];
             ffi::slice_from_ptr_len(self, ptr as *const raw::AiColor4D, m.mNumVertices as usize)
         }
     }
@@ -1030,14 +958,12 @@ impl AnimMesh {
         if channel >= sys::AI_MAX_NUMBER_OF_COLOR_SETS as usize {
             return None;
         }
-        unsafe {
-            let m = &*self.anim_ptr.as_ptr();
-            let ptr = m.mColors[channel] as *const raw::AiColor4D;
-            if ptr.is_null() {
-                None
-            } else {
-                Some(ffi::slice_from_ptr_len(self, ptr, m.mNumVertices as usize))
-            }
+        let m = self.raw();
+        let ptr = m.mColors[channel] as *const raw::AiColor4D;
+        if ptr.is_null() {
+            None
+        } else {
+            Some(unsafe { ffi::slice_from_ptr_len(self, ptr, m.mNumVertices as usize) })
         }
     }
 
@@ -1060,9 +986,9 @@ impl AnimMesh {
         if channel >= sys::AI_MAX_NUMBER_OF_TEXTURECOORDS as usize {
             return &[];
         }
+        let m = self.raw();
+        let ptr = m.mTextureCoords[channel];
         unsafe {
-            let m = &*self.anim_ptr.as_ptr();
-            let ptr = m.mTextureCoords[channel];
             ffi::slice_from_ptr_len(self, ptr as *const raw::AiVector3D, m.mNumVertices as usize)
         }
     }
@@ -1084,14 +1010,12 @@ impl AnimMesh {
         if channel >= sys::AI_MAX_NUMBER_OF_TEXTURECOORDS as usize {
             return None;
         }
-        unsafe {
-            let m = &*self.anim_ptr.as_ptr();
-            let ptr = m.mTextureCoords[channel] as *const raw::AiVector3D;
-            if ptr.is_null() {
-                None
-            } else {
-                Some(ffi::slice_from_ptr_len(self, ptr, m.mNumVertices as usize))
-            }
+        let m = self.raw();
+        let ptr = m.mTextureCoords[channel] as *const raw::AiVector3D;
+        if ptr.is_null() {
+            None
+        } else {
+            Some(unsafe { ffi::slice_from_ptr_len(self, ptr, m.mNumVertices as usize) })
         }
     }
 
@@ -1106,7 +1030,7 @@ impl AnimMesh {
 
     /// Weight of this anim mesh
     pub fn weight(&self) -> f32 {
-        unsafe { (*self.anim_ptr.as_ptr()).mWeight }
+        self.raw().mWeight
     }
 }
 
