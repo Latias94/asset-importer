@@ -517,10 +517,11 @@ extern "C" fn file_read_proc(
         let Some(total_bytes) = size.checked_mul(count) else {
             return 0;
         };
-        let rust_buffer = std::slice::from_raw_parts_mut(buffer as *mut u8, total_bytes);
+        let owner = &buffer;
+        let rust_buffer = ffi::slice_from_mut_ptr_len(owner, buffer as *mut u8, total_bytes);
 
         match stream.read(rust_buffer) {
-            Ok(bytes_read) => bytes_read / size,
+            Ok(bytes_read) => bytes_read.min(total_bytes) / size,
             Err(_) => 0,
         }
     }));
@@ -560,7 +561,7 @@ extern "C" fn file_write_proc(
         let data_slice = ffi::slice_from_ptr_len(owner, buffer as *const u8, total_bytes);
 
         match stream.write(data_slice) {
-            Ok(bytes_written) => bytes_written / size,
+            Ok(bytes_written) => bytes_written.min(total_bytes) / size,
             Err(_) => 0,
         }
     }));
