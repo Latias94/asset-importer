@@ -40,98 +40,79 @@ impl Light {
         self.as_raw_sys()
     }
 
+    #[inline]
+    fn raw(&self) -> &sys::aiLight {
+        unsafe { &*self.light_ptr.as_ptr() }
+    }
+
     /// Get the name of the light
     pub fn name(&self) -> String {
-        unsafe { ai_string_to_string(&(*self.light_ptr.as_ptr()).mName) }
+        ai_string_to_string(&self.raw().mName)
     }
 
     /// Get the type of the light
     pub fn light_type(&self) -> LightType {
-        unsafe {
-            let light = &*self.light_ptr.as_ptr();
-            LightType::from_raw(light.mType)
-        }
+        LightType::from_raw(self.raw().mType)
     }
 
     /// Get the position of the light
     pub fn position(&self) -> Vector3D {
-        unsafe {
-            let light = &*self.light_ptr.as_ptr();
-            from_ai_vector3d(light.mPosition)
-        }
+        from_ai_vector3d(self.raw().mPosition)
     }
 
     /// Get the direction of the light
     pub fn direction(&self) -> Vector3D {
-        unsafe {
-            let light = &*self.light_ptr.as_ptr();
-            from_ai_vector3d(light.mDirection)
-        }
+        from_ai_vector3d(self.raw().mDirection)
     }
 
     /// Get the up vector of the light
     pub fn up(&self) -> Vector3D {
-        unsafe {
-            let light = &*self.light_ptr.as_ptr();
-            from_ai_vector3d(light.mUp)
-        }
+        from_ai_vector3d(self.raw().mUp)
     }
 
     /// Get the diffuse color of the light
     pub fn color_diffuse(&self) -> Color3D {
-        unsafe {
-            let light = &*self.light_ptr.as_ptr();
-            from_ai_color3d(light.mColorDiffuse)
-        }
+        from_ai_color3d(self.raw().mColorDiffuse)
     }
 
     /// Get the specular color of the light
     pub fn color_specular(&self) -> Color3D {
-        unsafe {
-            let light = &*self.light_ptr.as_ptr();
-            from_ai_color3d(light.mColorSpecular)
-        }
+        from_ai_color3d(self.raw().mColorSpecular)
     }
 
     /// Get the ambient color of the light
     pub fn color_ambient(&self) -> Color3D {
-        unsafe {
-            let light = &*self.light_ptr.as_ptr();
-            from_ai_color3d(light.mColorAmbient)
-        }
+        from_ai_color3d(self.raw().mColorAmbient)
     }
 
     /// Get the constant attenuation factor
     pub fn attenuation_constant(&self) -> f32 {
-        unsafe { (*self.light_ptr.as_ptr()).mAttenuationConstant }
+        self.raw().mAttenuationConstant
     }
 
     /// Get the linear attenuation factor
     pub fn attenuation_linear(&self) -> f32 {
-        unsafe { (*self.light_ptr.as_ptr()).mAttenuationLinear }
+        self.raw().mAttenuationLinear
     }
 
     /// Get the quadratic attenuation factor
     pub fn attenuation_quadratic(&self) -> f32 {
-        unsafe { (*self.light_ptr.as_ptr()).mAttenuationQuadratic }
+        self.raw().mAttenuationQuadratic
     }
 
     /// Get the inner cone angle for spot lights (in radians)
     pub fn angle_inner_cone(&self) -> f32 {
-        unsafe { (*self.light_ptr.as_ptr()).mAngleInnerCone }
+        self.raw().mAngleInnerCone
     }
 
     /// Get the outer cone angle for spot lights (in radians)
     pub fn angle_outer_cone(&self) -> f32 {
-        unsafe { (*self.light_ptr.as_ptr()).mAngleOuterCone }
+        self.raw().mAngleOuterCone
     }
 
     /// Get the size of the area light
     pub fn size(&self) -> Vector2D {
-        unsafe {
-            let light = &*self.light_ptr.as_ptr();
-            from_ai_vector2d(light.mSize)
-        }
+        from_ai_vector2d(self.raw().mSize)
     }
 }
 
