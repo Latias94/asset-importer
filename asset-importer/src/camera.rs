@@ -37,57 +37,53 @@ impl Camera {
         self.as_raw_sys()
     }
 
+    #[inline]
+    fn raw(&self) -> &sys::aiCamera {
+        unsafe { &*self.camera_ptr.as_ptr() }
+    }
+
     /// Get the name of the camera
     pub fn name(&self) -> String {
-        unsafe { ai_string_to_string(&(*self.camera_ptr.as_ptr()).mName) }
+        ai_string_to_string(&self.raw().mName)
     }
 
     /// Get the position of the camera
     pub fn position(&self) -> Vector3D {
-        unsafe {
-            let camera = &*self.camera_ptr.as_ptr();
-            from_ai_vector3d(camera.mPosition)
-        }
+        from_ai_vector3d(self.raw().mPosition)
     }
 
     /// Get the up vector of the camera
     pub fn up(&self) -> Vector3D {
-        unsafe {
-            let camera = &*self.camera_ptr.as_ptr();
-            from_ai_vector3d(camera.mUp)
-        }
+        from_ai_vector3d(self.raw().mUp)
     }
 
     /// Get the look-at vector of the camera
     pub fn look_at(&self) -> Vector3D {
-        unsafe {
-            let camera = &*self.camera_ptr.as_ptr();
-            from_ai_vector3d(camera.mLookAt)
-        }
+        from_ai_vector3d(self.raw().mLookAt)
     }
 
     /// Get the horizontal field of view in radians
     pub fn horizontal_fov(&self) -> f32 {
-        unsafe { (*self.camera_ptr.as_ptr()).mHorizontalFOV }
+        self.raw().mHorizontalFOV
     }
 
     /// Get the near clipping plane distance
     pub fn clip_plane_near(&self) -> f32 {
-        unsafe { (*self.camera_ptr.as_ptr()).mClipPlaneNear }
+        self.raw().mClipPlaneNear
     }
 
     /// Get the far clipping plane distance
     pub fn clip_plane_far(&self) -> f32 {
-        unsafe { (*self.camera_ptr.as_ptr()).mClipPlaneFar }
+        self.raw().mClipPlaneFar
     }
 
     /// Get the aspect ratio
     pub fn aspect(&self) -> f32 {
-        unsafe { (*self.camera_ptr.as_ptr()).mAspect }
+        self.raw().mAspect
     }
 
     /// Get the orthographic width (for orthographic cameras)
     pub fn orthographic_width(&self) -> f32 {
-        unsafe { (*self.camera_ptr.as_ptr()).mOrthographicWidth }
+        self.raw().mOrthographicWidth
     }
 }
