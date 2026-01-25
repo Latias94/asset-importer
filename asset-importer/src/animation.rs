@@ -84,15 +84,16 @@ impl Animation {
 
         unsafe {
             let animation = &*self.animation_ptr.as_ptr();
-            if animation.mChannels.is_null() {
-                return None;
-            }
-            let channel_ptr = *animation.mChannels.add(index);
-            if channel_ptr.is_null() {
-                None
-            } else {
-                Some(NodeAnimation::from_raw(self.scene.clone(), channel_ptr))
-            }
+            let channel_ptr = ffi::ptr_array_get(
+                self,
+                animation.mChannels,
+                animation.mNumChannels as usize,
+                index,
+            )?;
+            Some(NodeAnimation::from_raw(
+                self.scene.clone(),
+                channel_ptr as *const sys::aiNodeAnim,
+            ))
         }
     }
 
@@ -124,15 +125,16 @@ impl Animation {
         }
         unsafe {
             let anim = &*self.animation_ptr.as_ptr();
-            if anim.mMeshChannels.is_null() {
-                return None;
-            }
-            let ptr = *anim.mMeshChannels.add(index);
-            if ptr.is_null() {
-                None
-            } else {
-                Some(MeshAnimation::from_raw(self.scene.clone(), ptr))
-            }
+            let ptr = ffi::ptr_array_get(
+                self,
+                anim.mMeshChannels,
+                anim.mNumMeshChannels as usize,
+                index,
+            )?;
+            Some(MeshAnimation::from_raw(
+                self.scene.clone(),
+                ptr as *const sys::aiMeshAnim,
+            ))
         }
     }
 
@@ -164,15 +166,16 @@ impl Animation {
         }
         unsafe {
             let anim = &*self.animation_ptr.as_ptr();
-            if anim.mMorphMeshChannels.is_null() {
-                return None;
-            }
-            let ptr = *anim.mMorphMeshChannels.add(index);
-            if ptr.is_null() {
-                None
-            } else {
-                Some(MorphMeshAnimation::from_raw(self.scene.clone(), ptr))
-            }
+            let ptr = ffi::ptr_array_get(
+                self,
+                anim.mMorphMeshChannels,
+                anim.mNumMorphMeshChannels as usize,
+                index,
+            )?;
+            Some(MorphMeshAnimation::from_raw(
+                self.scene.clone(),
+                ptr as *const sys::aiMeshMorphAnim,
+            ))
         }
     }
 
@@ -462,16 +465,21 @@ impl Iterator for NodeAnimationIterator {
     fn next(&mut self) -> Option<Self::Item> {
         unsafe {
             let animation = &*self.animation_ptr.as_ptr();
-            if animation.mChannels.is_null() || animation.mNumChannels == 0 {
-                return None;
-            }
-            while self.index < animation.mNumChannels as usize {
-                let channel_ptr = *animation.mChannels.add(self.index);
+            let channels = ffi::slice_from_ptr_len_opt(
+                animation,
+                animation.mChannels,
+                animation.mNumChannels as usize,
+            )?;
+            while self.index < channels.len() {
+                let channel_ptr = channels[self.index];
                 self.index += 1;
                 if channel_ptr.is_null() {
                     continue;
                 }
-                return Some(NodeAnimation::from_raw(self.scene.clone(), channel_ptr));
+                return Some(NodeAnimation::from_raw(
+                    self.scene.clone(),
+                    channel_ptr as *const sys::aiNodeAnim,
+                ));
             }
             None
         }
@@ -559,16 +567,21 @@ impl Iterator for MeshAnimationIterator {
     fn next(&mut self) -> Option<Self::Item> {
         unsafe {
             let anim = &*self.animation_ptr.as_ptr();
-            if anim.mMeshChannels.is_null() || anim.mNumMeshChannels == 0 {
-                return None;
-            }
-            while self.index < anim.mNumMeshChannels as usize {
-                let ptr = *anim.mMeshChannels.add(self.index);
+            let chans = ffi::slice_from_ptr_len_opt(
+                anim,
+                anim.mMeshChannels,
+                anim.mNumMeshChannels as usize,
+            )?;
+            while self.index < chans.len() {
+                let ptr = chans[self.index];
                 self.index += 1;
                 if ptr.is_null() {
                     continue;
                 }
-                return Some(MeshAnimation::from_raw(self.scene.clone(), ptr));
+                return Some(MeshAnimation::from_raw(
+                    self.scene.clone(),
+                    ptr as *const sys::aiMeshAnim,
+                ));
             }
             None
         }
@@ -701,16 +714,21 @@ impl Iterator for MorphMeshAnimationIterator {
     fn next(&mut self) -> Option<Self::Item> {
         unsafe {
             let anim = &*self.animation_ptr.as_ptr();
-            if anim.mMorphMeshChannels.is_null() || anim.mNumMorphMeshChannels == 0 {
-                return None;
-            }
-            while self.index < anim.mNumMorphMeshChannels as usize {
-                let ptr = *anim.mMorphMeshChannels.add(self.index);
+            let chans = ffi::slice_from_ptr_len_opt(
+                anim,
+                anim.mMorphMeshChannels,
+                anim.mNumMorphMeshChannels as usize,
+            )?;
+            while self.index < chans.len() {
+                let ptr = chans[self.index];
                 self.index += 1;
                 if ptr.is_null() {
                     continue;
                 }
-                return Some(MorphMeshAnimation::from_raw(self.scene.clone(), ptr));
+                return Some(MorphMeshAnimation::from_raw(
+                    self.scene.clone(),
+                    ptr as *const sys::aiMeshMorphAnim,
+                ));
             }
             None
         }

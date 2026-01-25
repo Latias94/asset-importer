@@ -5,7 +5,7 @@
 
 use crate::{
     error::Result,
-    raw, sys,
+    ffi, raw, sys,
     types::{Vector3D, ai_string_to_string},
 };
 
@@ -215,19 +215,17 @@ impl Metadata {
         }
         let mut entries = std::collections::HashMap::new();
 
-        // Parse each metadata entry
-        for i in 0..metadata.mNumProperties {
-            let key_ai_string = unsafe { &*metadata.mKeys.add(i as usize) };
-            let entry_ptr = unsafe { metadata.mValues.add(i as usize) };
-
-            if !entry_ptr.is_null() {
-                let key = ai_string_to_string(key_ai_string);
-                if key.is_empty() {
-                    continue;
-                }
-                if let Ok(entry) = unsafe { Self::parse_metadata_entry(&*entry_ptr) } {
-                    entries.insert(key, entry);
-                }
+        // Parse each metadata entry.
+        let n = metadata.mNumProperties as usize;
+        let keys = unsafe { ffi::slice_from_ptr_len(metadata, metadata.mKeys, n) };
+        let values = unsafe { ffi::slice_from_ptr_len(metadata, metadata.mValues, n) };
+        for (key_ai_string, entry) in keys.iter().zip(values.iter()) {
+            let key = ai_string_to_string(key_ai_string);
+            if key.is_empty() {
+                continue;
+            }
+            if let Ok(entry) = unsafe { Self::parse_metadata_entry(entry) } {
+                entries.insert(key, entry);
             }
         }
 

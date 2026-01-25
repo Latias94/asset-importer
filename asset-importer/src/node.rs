@@ -89,15 +89,12 @@ impl Node {
 
         unsafe {
             let node = &*self.node_ptr.as_ptr();
-            if node.mChildren.is_null() {
-                return None;
-            }
-            let child_ptr = *node.mChildren.add(index);
-            if child_ptr.is_null() {
-                None
-            } else {
-                Some(Node::from_raw(self.scene.clone(), child_ptr))
-            }
+            let child_ptr =
+                ffi::ptr_array_get(self, node.mChildren, node.mNumChildren as usize, index)?;
+            Some(Node::from_raw(
+                self.scene.clone(),
+                child_ptr as *const sys::aiNode,
+            ))
         }
     }
 
@@ -124,17 +121,7 @@ impl Node {
 
     /// Get a mesh index by index
     pub fn mesh_index(&self, index: usize) -> Option<usize> {
-        if index >= self.num_meshes() {
-            return None;
-        }
-
-        unsafe {
-            let node = &*self.node_ptr.as_ptr();
-            if node.mMeshes.is_null() {
-                return None;
-            }
-            Some(*node.mMeshes.add(index) as usize)
-        }
+        self.mesh_indices_raw().get(index).map(|&x| x as usize)
     }
 
     /// Get an iterator over all mesh indices
@@ -197,16 +184,18 @@ impl Iterator for NodeIterator {
     fn next(&mut self) -> Option<Self::Item> {
         unsafe {
             let node = &*self.node_ptr.as_ptr();
-            if node.mChildren.is_null() || node.mNumChildren == 0 {
-                return None;
-            }
-            while self.index < node.mNumChildren as usize {
-                let child_ptr = *node.mChildren.add(self.index);
+            let children =
+                ffi::slice_from_ptr_len_opt(node, node.mChildren, node.mNumChildren as usize)?;
+            while self.index < children.len() {
+                let child_ptr = children[self.index];
                 self.index += 1;
                 if child_ptr.is_null() {
                     continue;
                 }
-                return Some(Node::from_raw(self.scene.clone(), child_ptr));
+                return Some(Node::from_raw(
+                    self.scene.clone(),
+                    child_ptr as *const sys::aiNode,
+                ));
             }
             None
         }
@@ -239,16 +228,17 @@ impl Iterator for MeshIndexIterator {
     fn next(&mut self) -> Option<Self::Item> {
         unsafe {
             let node = &*self.node_ptr.as_ptr();
-            if node.mMeshes.is_null() || node.mNumMeshes == 0 {
+            let indices = ffi::slice_from_ptr_len_opt(
+                node,
+                node.mMeshes as *const u32,
+                node.mNumMeshes as usize,
+            )?;
+            if self.index >= indices.len() {
                 return None;
             }
-            if self.index >= node.mNumMeshes as usize {
-                None
-            } else {
-                let mesh_index = *node.mMeshes.add(self.index) as usize;
-                self.index += 1;
-                Some(mesh_index)
-            }
+            let mesh_index = indices[self.index] as usize;
+            self.index += 1;
+            Some(mesh_index)
         }
     }
 

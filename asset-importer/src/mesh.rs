@@ -590,19 +590,13 @@ impl Mesh {
         }
         unsafe {
             let mesh = &*self.mesh_ptr.as_ptr();
-            if mesh.mAnimMeshes.is_null() {
-                return None;
-            }
-            let ptr = *mesh.mAnimMeshes.add(index);
-            if ptr.is_null() {
-                None
-            } else {
-                let anim_ptr = SharedPtr::new(ptr)?;
-                Some(AnimMesh {
-                    scene: self.scene.clone(),
-                    anim_ptr,
-                })
-            }
+            let ptr =
+                ffi::ptr_array_get(self, mesh.mAnimMeshes, mesh.mNumAnimMeshes as usize, index)?;
+            let anim_ptr = SharedPtr::new(ptr as *const sys::aiAnimMesh)?;
+            Some(AnimMesh {
+                scene: self.scene.clone(),
+                anim_ptr,
+            })
         }
     }
 
@@ -635,15 +629,8 @@ impl Mesh {
 
         unsafe {
             let mesh = &*self.mesh_ptr.as_ptr();
-            if mesh.mBones.is_null() {
-                return None;
-            }
-            let bone_ptr = *mesh.mBones.add(index);
-            if bone_ptr.is_null() {
-                None
-            } else {
-                Bone::from_raw(self.scene.clone(), bone_ptr).ok()
-            }
+            let bone_ptr = ffi::ptr_array_get(self, mesh.mBones, mesh.mNumBones as usize, index)?;
+            Bone::from_raw(self.scene.clone(), bone_ptr as *const sys::aiBone).ok()
         }
     }
 
@@ -1142,16 +1129,15 @@ impl Iterator for AnimMeshIterator {
     fn next(&mut self) -> Option<Self::Item> {
         unsafe {
             let mesh = &*self.mesh_ptr.as_ptr();
-            if mesh.mAnimMeshes.is_null() || mesh.mNumAnimMeshes == 0 {
-                return None;
-            }
-            while self.index < mesh.mNumAnimMeshes as usize {
-                let ptr = *mesh.mAnimMeshes.add(self.index);
+            let meshes =
+                ffi::slice_from_ptr_len_opt(mesh, mesh.mAnimMeshes, mesh.mNumAnimMeshes as usize)?;
+            while self.index < meshes.len() {
+                let ptr = meshes[self.index];
                 self.index += 1;
                 if ptr.is_null() {
                     continue;
                 }
-                let anim_ptr = SharedPtr::new(ptr)?;
+                let anim_ptr = SharedPtr::new(ptr as *const sys::aiAnimMesh)?;
                 return Some(AnimMesh {
                     scene: self.scene.clone(),
                     anim_ptr,

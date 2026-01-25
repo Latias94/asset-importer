@@ -6,6 +6,7 @@ use crate::{
     animation::Animation,
     camera::Camera,
     error::{Error, Result},
+    ffi,
     importer::{Importer, PropertyStore},
     light::Light,
     material::Material,
@@ -421,15 +422,9 @@ impl Scene {
 
         unsafe {
             let scene = &*self.inner.scene_ptr.as_ptr();
-            if scene.mMeshes.is_null() {
-                return None;
-            }
-            let mesh_ptr = *scene.mMeshes.add(index);
-            if mesh_ptr.is_null() {
-                None
-            } else {
-                Some(Mesh::from_raw(self.clone(), mesh_ptr))
-            }
+            let mesh_ptr =
+                ffi::ptr_array_get(self, scene.mMeshes, scene.mNumMeshes as usize, index)?;
+            Some(Mesh::from_raw(self.clone(), mesh_ptr as *const sys::aiMesh))
         }
     }
 
@@ -461,15 +456,12 @@ impl Scene {
 
         unsafe {
             let scene = &*self.inner.scene_ptr.as_ptr();
-            if scene.mMaterials.is_null() {
-                return None;
-            }
-            let material_ptr = *scene.mMaterials.add(index);
-            if material_ptr.is_null() {
-                None
-            } else {
-                Some(Material::from_raw(self.clone(), material_ptr))
-            }
+            let material_ptr =
+                ffi::ptr_array_get(self, scene.mMaterials, scene.mNumMaterials as usize, index)?;
+            Some(Material::from_raw(
+                self.clone(),
+                material_ptr as *const sys::aiMaterial,
+            ))
         }
     }
 
@@ -501,15 +493,16 @@ impl Scene {
 
         unsafe {
             let scene = &*self.inner.scene_ptr.as_ptr();
-            if scene.mAnimations.is_null() {
-                return None;
-            }
-            let animation_ptr = *scene.mAnimations.add(index);
-            if animation_ptr.is_null() {
-                None
-            } else {
-                Some(Animation::from_raw(self.clone(), animation_ptr))
-            }
+            let animation_ptr = ffi::ptr_array_get(
+                self,
+                scene.mAnimations,
+                scene.mNumAnimations as usize,
+                index,
+            )?;
+            Some(Animation::from_raw(
+                self.clone(),
+                animation_ptr as *const sys::aiAnimation,
+            ))
         }
     }
 
@@ -541,15 +534,12 @@ impl Scene {
 
         unsafe {
             let scene = &*self.inner.scene_ptr.as_ptr();
-            if scene.mCameras.is_null() {
-                return None;
-            }
-            let camera_ptr = *scene.mCameras.add(index);
-            if camera_ptr.is_null() {
-                None
-            } else {
-                Some(Camera::from_raw(self.clone(), camera_ptr))
-            }
+            let camera_ptr =
+                ffi::ptr_array_get(self, scene.mCameras, scene.mNumCameras as usize, index)?;
+            Some(Camera::from_raw(
+                self.clone(),
+                camera_ptr as *const sys::aiCamera,
+            ))
         }
     }
 
@@ -581,15 +571,12 @@ impl Scene {
 
         unsafe {
             let scene = &*self.inner.scene_ptr.as_ptr();
-            if scene.mLights.is_null() {
-                return None;
-            }
-            let light_ptr = *scene.mLights.add(index);
-            if light_ptr.is_null() {
-                None
-            } else {
-                Some(Light::from_raw(self.clone(), light_ptr))
-            }
+            let light_ptr =
+                ffi::ptr_array_get(self, scene.mLights, scene.mNumLights as usize, index)?;
+            Some(Light::from_raw(
+                self.clone(),
+                light_ptr as *const sys::aiLight,
+            ))
         }
     }
 
@@ -780,15 +767,9 @@ impl Scene {
 
         unsafe {
             let scene = &*self.inner.scene_ptr.as_ptr();
-            if scene.mTextures.is_null() {
-                return None;
-            }
-            let texture_ptr = *scene.mTextures.add(index);
-            if texture_ptr.is_null() {
-                None
-            } else {
-                Texture::from_raw(self.clone(), texture_ptr).ok()
-            }
+            let texture_ptr =
+                ffi::ptr_array_get(self, scene.mTextures, scene.mNumTextures as usize, index)?;
+            Texture::from_raw(self.clone(), texture_ptr as *const sys::aiTexture).ok()
         }
     }
 
