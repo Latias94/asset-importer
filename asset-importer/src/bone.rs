@@ -99,25 +99,28 @@ impl Bone {
         self.as_raw_sys()
     }
 
+    #[inline]
+    fn raw(&self) -> &sys::aiBone {
+        unsafe { &*self.bone_ptr.as_ptr() }
+    }
+
     /// Get the name of the bone
     pub fn name(&self) -> String {
-        unsafe { ai_string_to_string(&(*self.bone_ptr.as_ptr()).mName) }
+        ai_string_to_string(&self.raw().mName)
     }
 
     /// Get the name of the bone (zero-copy, lossy UTF-8).
     pub fn name_str(&self) -> std::borrow::Cow<'_, str> {
-        unsafe { ai_string_to_str(&(*self.bone_ptr.as_ptr()).mName) }
+        ai_string_to_str(&self.raw().mName)
     }
 
     /// Get the number of vertex weights for this bone
     pub fn num_weights(&self) -> usize {
-        unsafe {
-            let bone = &*self.bone_ptr.as_ptr();
-            if bone.mWeights.is_null() {
-                0
-            } else {
-                bone.mNumWeights as usize
-            }
+        let bone = self.raw();
+        if bone.mWeights.is_null() {
+            0
+        } else {
+            bone.mNumWeights as usize
         }
     }
 
@@ -129,7 +132,7 @@ impl Bone {
     /// Get the raw vertex weight array (zero-copy).
     pub fn weights_raw(&self) -> &[raw::AiVertexWeight] {
         unsafe {
-            let bone = &*self.bone_ptr.as_ptr();
+            let bone = self.raw();
             debug_assert!(bone.mNumWeights == 0 || !bone.mWeights.is_null());
             ffi::slice_from_ptr_len(
                 self,
@@ -142,7 +145,7 @@ impl Bone {
     /// Get the raw vertex weight array (zero-copy), returning `None` when absent.
     pub fn weights_raw_opt(&self) -> Option<&[raw::AiVertexWeight]> {
         unsafe {
-            let bone = &*self.bone_ptr.as_ptr();
+            let bone = self.raw();
             ffi::slice_from_ptr_len_opt(
                 self,
                 bone.mWeights as *const raw::AiVertexWeight,
@@ -166,7 +169,7 @@ impl Bone {
     /// The offset matrix transforms vertices from mesh space to bone space.
     /// It's typically the inverse of the bone's transformation matrix in bind pose.
     pub fn offset_matrix(&self) -> Matrix4x4 {
-        unsafe { from_ai_matrix4x4((*self.bone_ptr.as_ptr()).mOffsetMatrix) }
+        from_ai_matrix4x4(self.raw().mOffsetMatrix)
     }
 
     /// Get weights that affect a specific vertex
