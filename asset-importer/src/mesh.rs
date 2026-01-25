@@ -44,7 +44,7 @@ impl Mesh {
 
     #[inline]
     fn raw(&self) -> &sys::aiMesh {
-        unsafe { &*self.mesh_ptr.as_ptr() }
+        self.mesh_ptr.as_ref()
     }
 
     /// Get the name of the mesh
@@ -623,7 +623,7 @@ pub struct Face {
 impl Face {
     #[inline]
     fn raw(&self) -> &raw::AiFace {
-        unsafe { &*self.face_ptr.as_ptr() }
+        self.face_ptr.as_ref()
     }
 
     /// Get the number of indices in this face
@@ -673,8 +673,8 @@ pub struct FaceIterator {
 
 impl FaceIterator {
     #[inline]
-    fn mesh_ptr(&self) -> *const sys::aiMesh {
-        self.mesh_ptr.as_ptr()
+    fn mesh_ptr(&self) -> SharedPtr<sys::aiMesh> {
+        self.mesh_ptr
     }
 }
 
@@ -682,7 +682,8 @@ impl Iterator for FaceIterator {
     type Item = Face;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let mesh = unsafe { &*self.mesh_ptr() };
+        let mesh_ptr = self.mesh_ptr();
+        let mesh = mesh_ptr.as_ref();
         let faces: &[raw::AiFace] = unsafe {
             ffi::slice_from_ptr_len_opt(
                 mesh,
@@ -701,7 +702,8 @@ impl Iterator for FaceIterator {
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
-        let mesh = unsafe { &*self.mesh_ptr() };
+        let mesh_ptr = self.mesh_ptr();
+        let mesh = mesh_ptr.as_ref();
         if mesh.mFaces.is_null() {
             (0, Some(0))
         } else {
@@ -724,7 +726,7 @@ pub struct AnimMesh {
 impl AnimMesh {
     #[inline]
     fn raw(&self) -> &sys::aiAnimMesh {
-        unsafe { &*self.anim_ptr.as_ptr() }
+        self.anim_ptr.as_ref()
     }
 
     /// Name of this anim mesh (if present)
@@ -1053,8 +1055,8 @@ pub struct AnimMeshIterator {
 
 impl AnimMeshIterator {
     #[inline]
-    fn mesh_ptr(&self) -> *const sys::aiMesh {
-        self.mesh_ptr.as_ptr()
+    fn mesh_ptr(&self) -> SharedPtr<sys::aiMesh> {
+        self.mesh_ptr
     }
 }
 
@@ -1062,7 +1064,8 @@ impl Iterator for AnimMeshIterator {
     type Item = AnimMesh;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let mesh = unsafe { &*self.mesh_ptr() };
+        let mesh_ptr = self.mesh_ptr();
+        let mesh = mesh_ptr.as_ref();
         let meshes: &[*mut sys::aiAnimMesh] = unsafe {
             ffi::slice_from_ptr_len_opt(
                 mesh,
@@ -1087,7 +1090,8 @@ impl Iterator for AnimMeshIterator {
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
-        let mesh = unsafe { &*self.mesh_ptr() };
+        let mesh_ptr = self.mesh_ptr();
+        let mesh = mesh_ptr.as_ref();
         if mesh.mAnimMeshes.is_null() {
             (0, Some(0))
         } else {

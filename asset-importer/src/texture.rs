@@ -151,7 +151,7 @@ impl Texture {
 
     #[inline]
     fn raw(&self) -> &sys::aiTexture {
-        unsafe { &*self.texture_ptr.as_ptr() }
+        self.texture_ptr.as_ref()
     }
 
     /// Get the width of the texture

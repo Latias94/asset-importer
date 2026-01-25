@@ -101,7 +101,7 @@ impl Bone {
 
     #[inline]
     fn raw(&self) -> &sys::aiBone {
-        unsafe { &*self.bone_ptr.as_ptr() }
+        self.bone_ptr.as_ref()
     }
 
     /// Get the name of the bone

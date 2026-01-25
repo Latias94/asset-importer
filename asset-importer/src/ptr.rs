@@ -74,6 +74,16 @@ impl<T> SharedPtr<T> {
     pub(crate) fn as_ptr(&self) -> *const T {
         self.0
     }
+
+    /// Returns a shared reference to the pointed-to value.
+    ///
+    /// This is safe because `SharedPtr` is only constructed from pointers that are guaranteed
+    /// to remain valid for the lifetime of the owning safe wrapper type.
+    pub(crate) fn as_ref(&self) -> &T {
+        // SAFETY: The crate only constructs `SharedPtr` from pointers that remain valid for the
+        // lifetime of the owning wrapper, and the safe API treats Assimp scene data as read-only.
+        unsafe { &*self.0 }
+    }
 }
 
 // Safety: only allow cross-thread sharing for targets explicitly marked as safe to share

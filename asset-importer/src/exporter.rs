@@ -269,7 +269,7 @@ impl ExportBlob {
 
     #[inline]
     fn raw_root(&self) -> &sys::aiExportDataBlob {
-        unsafe { &*self.inner.root.as_ptr() }
+        self.inner.root.as_ref()
     }
 
     /// Get the data as a byte slice
@@ -330,7 +330,7 @@ pub struct ExportBlobView {
 impl ExportBlobView {
     #[inline]
     fn raw(&self) -> &sys::aiExportDataBlob {
-        unsafe { &*self.blob_ptr.as_ptr() }
+        self.blob_ptr.as_ref()
     }
 
     /// Get the data as a byte slice.
@@ -380,7 +380,7 @@ impl Iterator for ExportBlobIterator {
 
     fn next(&mut self) -> Option<Self::Item> {
         let current = self.current?;
-        let next = unsafe { (&*current.as_ptr()).next as *const sys::aiExportDataBlob };
+        let next = current.as_ref().next as *const sys::aiExportDataBlob;
         self.current = SharedPtr::new(next);
         Some(ExportBlobView {
             inner: self.inner.clone(),

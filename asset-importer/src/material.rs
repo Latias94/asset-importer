@@ -166,7 +166,7 @@ impl Material {
 
     #[inline]
     fn raw(&self) -> &sys::aiMaterial {
-        unsafe { &*self.material_ptr.as_ptr() }
+        self.material_ptr.as_ref()
     }
 
     /// Get the name of the material
@@ -1191,7 +1191,7 @@ impl MaterialPropertyRef {
 
     #[inline]
     fn raw(&self) -> &sys::aiMaterialProperty {
-        unsafe { &*self.prop_ptr.as_ptr() }
+        self.prop_ptr.as_ref()
     }
 
     /// Property key as UTF-8 (lossy), without allocation.

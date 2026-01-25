@@ -193,7 +193,7 @@ impl Scene {
 
     #[inline]
     fn raw(&self) -> &sys::aiScene {
-        unsafe { &*self.inner.scene_ptr.as_ptr() }
+        self.inner.scene_ptr.as_ref()
     }
 
     /// Apply Assimp post-processing to this scene.

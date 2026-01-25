@@ -42,7 +42,7 @@ impl Light {
 
     #[inline]
     fn raw(&self) -> &sys::aiLight {
-        unsafe { &*self.light_ptr.as_ptr() }
+        self.light_ptr.as_ref()
     }
 
     /// Get the name of the light

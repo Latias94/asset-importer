@@ -39,7 +39,7 @@ impl Camera {
 
     #[inline]
     fn raw(&self) -> &sys::aiCamera {
-        unsafe { &*self.camera_ptr.as_ptr() }
+        self.camera_ptr.as_ref()
     }
 
     /// Get the name of the camera

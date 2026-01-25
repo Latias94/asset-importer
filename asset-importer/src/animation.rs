@@ -43,7 +43,7 @@ impl Animation {
 
     #[inline]
     fn raw(&self) -> &sys::aiAnimation {
-        unsafe { &*self.animation_ptr.as_ptr() }
+        self.animation_ptr.as_ref()
     }
 
     #[inline]
@@ -222,7 +222,7 @@ impl NodeAnimation {
 
     #[inline]
     fn raw(&self) -> &sys::aiNodeAnim {
-        unsafe { &*self.channel_ptr.as_ptr() }
+        self.channel_ptr.as_ref()
     }
 
     /// Get the name of the node this animation affects
@@ -438,7 +438,7 @@ pub struct NodeAnimationIterator {
 impl NodeAnimationIterator {
     #[inline]
     fn raw(&self) -> &sys::aiAnimation {
-        unsafe { &*self.animation_ptr.as_ptr() }
+        self.animation_ptr.as_ref()
     }
 
     #[inline]
@@ -507,7 +507,7 @@ impl MeshAnimation {
 
     #[inline]
     fn raw(&self) -> &sys::aiMeshAnim {
-        unsafe { &*self.channel_ptr.as_ptr() }
+        self.channel_ptr.as_ref()
     }
 
     /// Get the name of this mesh animation channel
@@ -544,7 +544,7 @@ pub struct MeshAnimationIterator {
 impl MeshAnimationIterator {
     #[inline]
     fn raw(&self) -> &sys::aiAnimation {
-        unsafe { &*self.animation_ptr.as_ptr() }
+        self.animation_ptr.as_ref()
     }
 
     #[inline]
@@ -594,7 +594,7 @@ pub struct MorphMeshKey {
 impl MorphMeshKey {
     #[inline]
     fn raw(&self) -> &sys::aiMeshMorphKey {
-        unsafe { &*self.key_ptr.as_ptr() }
+        self.key_ptr.as_ref()
     }
 
     /// Key time in ticks.
@@ -647,7 +647,7 @@ impl MorphMeshAnimation {
 
     #[inline]
     fn raw(&self) -> &sys::aiMeshMorphAnim {
-        unsafe { &*self.channel_ptr.as_ptr() }
+        self.channel_ptr.as_ref()
     }
 
     #[inline]
@@ -700,7 +700,7 @@ pub struct MorphMeshAnimationIterator {
 impl MorphMeshAnimationIterator {
     #[inline]
     fn raw(&self) -> &sys::aiAnimation {
-        unsafe { &*self.animation_ptr.as_ptr() }
+        self.animation_ptr.as_ref()
     }
 
     #[inline]

@@ -41,7 +41,7 @@ impl Node {
 
     #[inline]
     fn raw(&self) -> &sys::aiNode {
-        unsafe { &*self.node_ptr.as_ptr() }
+        self.node_ptr.as_ref()
     }
 
     /// Get the name of the node
@@ -171,8 +171,8 @@ pub struct NodeIterator {
 
 impl NodeIterator {
     #[inline]
-    fn node_ptr(&self) -> *const sys::aiNode {
-        self.node_ptr.as_ptr()
+    fn node_ptr(&self) -> SharedPtr<sys::aiNode> {
+        self.node_ptr
     }
 }
 
@@ -180,7 +180,8 @@ impl Iterator for NodeIterator {
     type Item = Node;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let node = unsafe { &*self.node_ptr() };
+        let node_ptr = self.node_ptr();
+        let node = node_ptr.as_ref();
         let children: &[*mut sys::aiNode] = unsafe {
             ffi::slice_from_ptr_len_opt(
                 node,
@@ -203,7 +204,8 @@ impl Iterator for NodeIterator {
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
-        let node = unsafe { &*self.node_ptr() };
+        let node_ptr = self.node_ptr();
+        let node = node_ptr.as_ref();
         if node.mChildren.is_null() {
             (0, Some(0))
         } else {
@@ -223,8 +225,8 @@ pub struct MeshIndexIterator {
 
 impl MeshIndexIterator {
     #[inline]
-    fn node_ptr(&self) -> *const sys::aiNode {
-        self.node_ptr.as_ptr()
+    fn node_ptr(&self) -> SharedPtr<sys::aiNode> {
+        self.node_ptr
     }
 }
 
@@ -232,7 +234,8 @@ impl Iterator for MeshIndexIterator {
     type Item = usize;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let node = unsafe { &*self.node_ptr() };
+        let node_ptr = self.node_ptr();
+        let node = node_ptr.as_ref();
         let indices: &[u32] = unsafe {
             ffi::slice_from_ptr_len_opt(node, node.mMeshes as *const u32, node.mNumMeshes as usize)
         }?;
@@ -245,7 +248,8 @@ impl Iterator for MeshIndexIterator {
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
-        let node = unsafe { &*self.node_ptr() };
+        let node_ptr = self.node_ptr();
+        let node = node_ptr.as_ref();
         if node.mMeshes.is_null() {
             (0, Some(0))
         } else {
