@@ -267,17 +267,20 @@ impl ExportBlob {
         }
     }
 
+    #[inline]
+    fn raw_root(&self) -> &sys::aiExportDataBlob {
+        unsafe { &*self.inner.root.as_ptr() }
+    }
+
     /// Get the data as a byte slice
     pub fn data(&self) -> &[u8] {
-        unsafe {
-            let blob = &*self.inner.root.as_ptr();
-            ffi::slice_from_ptr_len(self, blob.data as *const u8, blob.size)
-        }
+        let blob = self.raw_root();
+        unsafe { ffi::slice_from_ptr_len(self, blob.data as *const u8, blob.size) }
     }
 
     /// Get the size of the data
     pub fn size(&self) -> usize {
-        unsafe { (*self.inner.root.as_ptr()).size }
+        self.raw_root().size
     }
 
     /// Get the name/hint for this blob
@@ -325,45 +328,44 @@ pub struct ExportBlobView {
 }
 
 impl ExportBlobView {
+    #[inline]
+    fn raw(&self) -> &sys::aiExportDataBlob {
+        unsafe { &*self.blob_ptr.as_ptr() }
+    }
+
     /// Get the data as a byte slice.
     pub fn data(&self) -> &[u8] {
-        unsafe {
-            let blob = &*self.blob_ptr.as_ptr();
-            ffi::slice_from_ptr_len(self, blob.data as *const u8, blob.size)
-        }
+        let blob = self.raw();
+        unsafe { ffi::slice_from_ptr_len(self, blob.data as *const u8, blob.size) }
     }
 
     /// Get the size of the data.
     pub fn size(&self) -> usize {
-        unsafe { (*self.blob_ptr.as_ptr()).size }
+        self.raw().size
     }
 
     /// Get the name/hint for this blob.
     pub fn name(&self) -> String {
-        unsafe {
-            let blob = &*self.blob_ptr.as_ptr();
-            if blob.name.length == 0 {
-                String::new()
-            } else {
-                ai_string_to_string(&blob.name)
-            }
+        let blob = self.raw();
+        if blob.name.length == 0 {
+            String::new()
+        } else {
+            ai_string_to_string(&blob.name)
         }
     }
 
     /// Check if this blob has a next blob (for multi-file exports).
     pub fn has_next(&self) -> bool {
-        unsafe { !(*self.blob_ptr.as_ptr()).next.is_null() }
+        !self.raw().next.is_null()
     }
 
     /// Get the next blob in the chain.
     pub fn next(&self) -> Option<ExportBlobView> {
-        unsafe {
-            let next = (*self.blob_ptr.as_ptr()).next as *const sys::aiExportDataBlob;
-            SharedPtr::new(next).map(|blob_ptr| ExportBlobView {
-                inner: self.inner.clone(),
-                blob_ptr,
-            })
-        }
+        let next = self.raw().next as *const sys::aiExportDataBlob;
+        SharedPtr::new(next).map(|blob_ptr| ExportBlobView {
+            inner: self.inner.clone(),
+            blob_ptr,
+        })
     }
 }
 
@@ -378,10 +380,8 @@ impl Iterator for ExportBlobIterator {
 
     fn next(&mut self) -> Option<Self::Item> {
         let current = self.current?;
-        unsafe {
-            let next = (*current.as_ptr()).next as *const sys::aiExportDataBlob;
-            self.current = SharedPtr::new(next);
-        }
+        let next = unsafe { (&*current.as_ptr()).next as *const sys::aiExportDataBlob };
+        self.current = SharedPtr::new(next);
         Some(ExportBlobView {
             inner: self.inner.clone(),
             blob_ptr: current,
