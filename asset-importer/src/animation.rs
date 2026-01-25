@@ -242,14 +242,10 @@ impl NodeAnimation {
 
     /// Get the raw position keyframes (zero-copy).
     pub fn position_keys_raw(&self) -> &[raw::AiVectorKey] {
-        unsafe {
-            let ch = self.raw();
-            ffi::slice_from_ptr_len(
-                self,
-                ch.mPositionKeys as *const raw::AiVectorKey,
-                ch.mNumPositionKeys as usize,
-            )
-        }
+        let ch = self.raw();
+        let n = ch.mNumPositionKeys as usize;
+        debug_assert!(n == 0 || !ch.mPositionKeys.is_null());
+        unsafe { ffi::slice_from_ptr_len(self, ch.mPositionKeys as *const raw::AiVectorKey, n) }
     }
 
     /// Iterate position keyframes without allocation.
@@ -277,14 +273,10 @@ impl NodeAnimation {
 
     /// Get the raw rotation keyframes (zero-copy).
     pub fn rotation_keys_raw(&self) -> &[raw::AiQuatKey] {
-        unsafe {
-            let ch = self.raw();
-            ffi::slice_from_ptr_len(
-                self,
-                ch.mRotationKeys as *const raw::AiQuatKey,
-                ch.mNumRotationKeys as usize,
-            )
-        }
+        let ch = self.raw();
+        let n = ch.mNumRotationKeys as usize;
+        debug_assert!(n == 0 || !ch.mRotationKeys.is_null());
+        unsafe { ffi::slice_from_ptr_len(self, ch.mRotationKeys as *const raw::AiQuatKey, n) }
     }
 
     /// Iterate rotation keyframes without allocation.
@@ -312,14 +304,10 @@ impl NodeAnimation {
 
     /// Get the raw scaling keyframes (zero-copy).
     pub fn scaling_keys_raw(&self) -> &[raw::AiVectorKey] {
-        unsafe {
-            let ch = self.raw();
-            ffi::slice_from_ptr_len(
-                self,
-                ch.mScalingKeys as *const raw::AiVectorKey,
-                ch.mNumScalingKeys as usize,
-            )
-        }
+        let ch = self.raw();
+        let n = ch.mNumScalingKeys as usize;
+        debug_assert!(n == 0 || !ch.mScalingKeys.is_null());
+        unsafe { ffi::slice_from_ptr_len(self, ch.mScalingKeys as *const raw::AiVectorKey, n) }
     }
 
     /// Iterate scaling keyframes without allocation.
@@ -465,7 +453,8 @@ impl Iterator for NodeAnimationIterator {
 
     fn next(&mut self) -> Option<Self::Item> {
         let (base, len) = self.channel_array();
-        let channels = unsafe { ffi::slice_from_ptr_len_opt(&(), base, len) }?;
+        let channels: &[*mut sys::aiNodeAnim] =
+            unsafe { ffi::slice_from_ptr_len_opt(&(), base as *const *mut sys::aiNodeAnim, len) }?;
         while self.index < channels.len() {
             let channel_ptr = channels[self.index];
             self.index += 1;
@@ -538,12 +527,10 @@ impl MeshAnimation {
 
     /// Get the array of animation keys
     pub fn keys(&self) -> &[MeshKey] {
-        unsafe {
-            let ch = self.raw();
-            let n = ch.mNumKeys as usize;
-            debug_assert!(n == 0 || !ch.mKeys.is_null());
-            ffi::slice_from_ptr_len(self, ch.mKeys as *const MeshKey, n)
-        }
+        let ch = self.raw();
+        let n = ch.mNumKeys as usize;
+        debug_assert!(n == 0 || !ch.mKeys.is_null());
+        unsafe { ffi::slice_from_ptr_len(self, ch.mKeys as *const MeshKey, n) }
     }
 }
 
@@ -571,7 +558,8 @@ impl Iterator for MeshAnimationIterator {
     type Item = MeshAnimation;
     fn next(&mut self) -> Option<Self::Item> {
         let (base, len) = self.channel_array();
-        let chans = unsafe { ffi::slice_from_ptr_len_opt(&(), base, len) }?;
+        let chans: &[*mut sys::aiMeshAnim] =
+            unsafe { ffi::slice_from_ptr_len_opt(&(), base as *const *mut sys::aiMeshAnim, len) }?;
         while self.index < chans.len() {
             let ptr = chans[self.index];
             self.index += 1;
@@ -626,22 +614,18 @@ impl MorphMeshKey {
 
     /// Morph target indices (zero-copy).
     pub fn values(&self) -> &[u32] {
-        unsafe {
-            let k = self.raw();
-            let n = k.mNumValuesAndWeights as usize;
-            debug_assert!(n == 0 || !k.mValues.is_null());
-            ffi::slice_from_ptr_len(self, k.mValues as *const u32, n)
-        }
+        let k = self.raw();
+        let n = k.mNumValuesAndWeights as usize;
+        debug_assert!(n == 0 || !k.mValues.is_null());
+        unsafe { ffi::slice_from_ptr_len(self, k.mValues as *const u32, n) }
     }
 
     /// Morph target weights (zero-copy).
     pub fn weights(&self) -> &[f64] {
-        unsafe {
-            let k = self.raw();
-            let n = k.mNumValuesAndWeights as usize;
-            debug_assert!(n == 0 || !k.mWeights.is_null());
-            ffi::slice_from_ptr_len(self, k.mWeights as *const f64, n)
-        }
+        let k = self.raw();
+        let n = k.mNumValuesAndWeights as usize;
+        debug_assert!(n == 0 || !k.mWeights.is_null());
+        unsafe { ffi::slice_from_ptr_len(self, k.mWeights as *const f64, n) }
     }
 }
 
@@ -694,12 +678,11 @@ impl MorphMeshAnimation {
         }
         let keys = self.keys_raw()?;
         let key_ref = keys.get(index)?;
-        let key_ptr = SharedPtr::new(std::ptr::from_ref(key_ref))?;
-        let k = unsafe { &*key_ptr.as_ptr() };
-        let n = k.mNumValuesAndWeights as usize;
-        if n > 0 && (k.mValues.is_null() || k.mWeights.is_null()) {
+        let n = key_ref.mNumValuesAndWeights as usize;
+        if n > 0 && (key_ref.mValues.is_null() || key_ref.mWeights.is_null()) {
             return None;
         }
+        let key_ptr = SharedPtr::new(std::ptr::from_ref(key_ref))?;
         Some(MorphMeshKey {
             scene: self.scene.clone(),
             key_ptr,
@@ -731,7 +714,9 @@ impl Iterator for MorphMeshAnimationIterator {
     type Item = MorphMeshAnimation;
     fn next(&mut self) -> Option<Self::Item> {
         let (base, len) = self.channel_array();
-        let chans = unsafe { ffi::slice_from_ptr_len_opt(&(), base, len) }?;
+        let chans: &[*mut sys::aiMeshMorphAnim] = unsafe {
+            ffi::slice_from_ptr_len_opt(&(), base as *const *mut sys::aiMeshMorphAnim, len)
+        }?;
         while self.index < chans.len() {
             let ptr = chans[self.index];
             self.index += 1;
