@@ -249,8 +249,11 @@ impl Metadata {
         match entry.mType {
             sys::aiMetadataType::AI_BOOL => {
                 // `aiMetadataEntry::mData` is an untyped pointer; do not assume alignment.
-                let value = unsafe { std::ptr::read_unaligned(entry.mData as *const bool) };
-                Ok(MetadataEntry::Bool(value))
+                //
+                // Don't read a Rust `bool` directly: if a corrupted/malicious scene stores a value
+                // other than 0/1, materializing it as `bool` is UB. Decode as a byte instead.
+                let value = unsafe { std::ptr::read_unaligned(entry.mData as *const u8) };
+                Ok(MetadataEntry::Bool(value != 0))
             }
             sys::aiMetadataType::AI_INT32 => {
                 let value = unsafe { std::ptr::read_unaligned(entry.mData as *const i32) };
@@ -398,5 +401,69 @@ impl Metadata {
 impl Default for Metadata {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_bool_is_robust_to_noncanonical_values() {
+        let mut b0: u8 = 0;
+        let entry0 = sys::aiMetadataEntry {
+            mType: sys::aiMetadataType::AI_BOOL,
+            mData: std::ptr::from_mut(&mut b0).cast::<std::ffi::c_void>(),
+        };
+        assert!(matches!(
+            unsafe { Metadata::parse_metadata_entry(&entry0) }.unwrap(),
+            MetadataEntry::Bool(false)
+        ));
+
+        let mut b1: u8 = 1;
+        let entry1 = sys::aiMetadataEntry {
+            mType: sys::aiMetadataType::AI_BOOL,
+            mData: std::ptr::from_mut(&mut b1).cast::<std::ffi::c_void>(),
+        };
+        assert!(matches!(
+            unsafe { Metadata::parse_metadata_entry(&entry1) }.unwrap(),
+            MetadataEntry::Bool(true)
+        ));
+
+        // A corrupted scene could technically store other non-zero values; treat as true without UB.
+        let mut b2: u8 = 2;
+        let entry2 = sys::aiMetadataEntry {
+            mType: sys::aiMetadataType::AI_BOOL,
+            mData: std::ptr::from_mut(&mut b2).cast::<std::ffi::c_void>(),
+        };
+        assert!(matches!(
+            unsafe { Metadata::parse_metadata_entry(&entry2) }.unwrap(),
+            MetadataEntry::Bool(true)
+        ));
+    }
+
+    #[test]
+    fn parse_int32_allows_unaligned_data() {
+        let mut buf = vec![0u8; 8];
+        let offset = 1usize;
+        buf[offset..offset + 4].copy_from_slice(&(-42i32).to_ne_bytes());
+
+        let entry = sys::aiMetadataEntry {
+            mType: sys::aiMetadataType::AI_INT32,
+            mData: unsafe { buf.as_mut_ptr().add(offset) }.cast::<std::ffi::c_void>(),
+        };
+        assert!(matches!(
+            unsafe { Metadata::parse_metadata_entry(&entry) }.unwrap(),
+            MetadataEntry::Int32(-42)
+        ));
+    }
+
+    #[test]
+    fn parse_metadata_entry_rejects_null_data() {
+        let entry = sys::aiMetadataEntry {
+            mType: sys::aiMetadataType::AI_UINT32,
+            mData: std::ptr::null_mut(),
+        };
+        assert!(unsafe { Metadata::parse_metadata_entry(&entry) }.is_err());
     }
 }
