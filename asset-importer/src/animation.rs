@@ -41,22 +41,62 @@ impl Animation {
         self.as_raw_sys()
     }
 
+    #[inline]
+    fn raw(&self) -> &sys::aiAnimation {
+        unsafe { &*self.animation_ptr.as_ptr() }
+    }
+
+    #[inline]
+    fn channel_ptr(&self, index: usize) -> Option<*const sys::aiNodeAnim> {
+        let anim = self.raw();
+        unsafe {
+            ffi::ptr_array_get(self, anim.mChannels, anim.mNumChannels as usize, index)
+                .map(|p| p as *const sys::aiNodeAnim)
+        }
+    }
+
+    #[inline]
+    fn mesh_channel_ptr(&self, index: usize) -> Option<*const sys::aiMeshAnim> {
+        let anim = self.raw();
+        unsafe {
+            ffi::ptr_array_get(
+                self,
+                anim.mMeshChannels,
+                anim.mNumMeshChannels as usize,
+                index,
+            )
+            .map(|p| p as *const sys::aiMeshAnim)
+        }
+    }
+
+    #[inline]
+    fn morph_mesh_channel_ptr(&self, index: usize) -> Option<*const sys::aiMeshMorphAnim> {
+        let anim = self.raw();
+        unsafe {
+            ffi::ptr_array_get(
+                self,
+                anim.mMorphMeshChannels,
+                anim.mNumMorphMeshChannels as usize,
+                index,
+            )
+            .map(|p| p as *const sys::aiMeshMorphAnim)
+        }
+    }
+
     /// Get the name of the animation
     pub fn name(&self) -> String {
-        unsafe { ai_string_to_string(&(*self.animation_ptr.as_ptr()).mName) }
+        ai_string_to_string(&self.raw().mName)
     }
 
     /// Get the duration of the animation in ticks
     pub fn duration(&self) -> f64 {
-        unsafe { (*self.animation_ptr.as_ptr()).mDuration }
+        self.raw().mDuration
     }
 
     /// Get the ticks per second for this animation
     pub fn ticks_per_second(&self) -> f64 {
-        unsafe {
-            let tps = (*self.animation_ptr.as_ptr()).mTicksPerSecond;
-            if tps != 0.0 { tps } else { 25.0 } // Default to 25 FPS
-        }
+        let tps = self.raw().mTicksPerSecond;
+        if tps != 0.0 { tps } else { 25.0 } // Default to 25 FPS
     }
 
     /// Get the duration in seconds
@@ -66,13 +106,11 @@ impl Animation {
 
     /// Get the number of node animation channels
     pub fn num_channels(&self) -> usize {
-        unsafe {
-            let anim = &*self.animation_ptr.as_ptr();
-            if anim.mChannels.is_null() {
-                0
-            } else {
-                anim.mNumChannels as usize
-            }
+        let anim = self.raw();
+        if anim.mChannels.is_null() {
+            0
+        } else {
+            anim.mNumChannels as usize
         }
     }
 
@@ -82,19 +120,8 @@ impl Animation {
             return None;
         }
 
-        unsafe {
-            let animation = &*self.animation_ptr.as_ptr();
-            let channel_ptr = ffi::ptr_array_get(
-                self,
-                animation.mChannels,
-                animation.mNumChannels as usize,
-                index,
-            )?;
-            Some(NodeAnimation::from_raw(
-                self.scene.clone(),
-                channel_ptr as *const sys::aiNodeAnim,
-            ))
-        }
+        let channel_ptr = self.channel_ptr(index)?;
+        Some(unsafe { NodeAnimation::from_raw(self.scene.clone(), channel_ptr) })
     }
 
     /// Get an iterator over all node animation channels
@@ -108,13 +135,11 @@ impl Animation {
 
     /// Get the number of mesh animation channels (vertex anim via aiAnimMesh)
     pub fn num_mesh_channels(&self) -> usize {
-        unsafe {
-            let anim = &*self.animation_ptr.as_ptr();
-            if anim.mMeshChannels.is_null() {
-                0
-            } else {
-                anim.mNumMeshChannels as usize
-            }
+        let anim = self.raw();
+        if anim.mMeshChannels.is_null() {
+            0
+        } else {
+            anim.mNumMeshChannels as usize
         }
     }
 
@@ -123,19 +148,8 @@ impl Animation {
         if index >= self.num_mesh_channels() {
             return None;
         }
-        unsafe {
-            let anim = &*self.animation_ptr.as_ptr();
-            let ptr = ffi::ptr_array_get(
-                self,
-                anim.mMeshChannels,
-                anim.mNumMeshChannels as usize,
-                index,
-            )?;
-            Some(MeshAnimation::from_raw(
-                self.scene.clone(),
-                ptr as *const sys::aiMeshAnim,
-            ))
-        }
+        let ptr = self.mesh_channel_ptr(index)?;
+        Some(unsafe { MeshAnimation::from_raw(self.scene.clone(), ptr) })
     }
 
     /// Iterate mesh animation channels
@@ -149,13 +163,11 @@ impl Animation {
 
     /// Get the number of morph mesh animation channels
     pub fn num_morph_mesh_channels(&self) -> usize {
-        unsafe {
-            let anim = &*self.animation_ptr.as_ptr();
-            if anim.mMorphMeshChannels.is_null() {
-                0
-            } else {
-                anim.mNumMorphMeshChannels as usize
-            }
+        let anim = self.raw();
+        if anim.mMorphMeshChannels.is_null() {
+            0
+        } else {
+            anim.mNumMorphMeshChannels as usize
         }
     }
 
@@ -164,19 +176,8 @@ impl Animation {
         if index >= self.num_morph_mesh_channels() {
             return None;
         }
-        unsafe {
-            let anim = &*self.animation_ptr.as_ptr();
-            let ptr = ffi::ptr_array_get(
-                self,
-                anim.mMorphMeshChannels,
-                anim.mNumMorphMeshChannels as usize,
-                index,
-            )?;
-            Some(MorphMeshAnimation::from_raw(
-                self.scene.clone(),
-                ptr as *const sys::aiMeshMorphAnim,
-            ))
-        }
+        let ptr = self.morph_mesh_channel_ptr(index)?;
+        Some(unsafe { MorphMeshAnimation::from_raw(self.scene.clone(), ptr) })
     }
 
     /// Iterate morph mesh animation channels
@@ -219,36 +220,35 @@ impl NodeAnimation {
         self.as_raw_sys()
     }
 
+    #[inline]
+    fn raw(&self) -> &sys::aiNodeAnim {
+        unsafe { &*self.channel_ptr.as_ptr() }
+    }
+
     /// Get the name of the node this animation affects
     pub fn node_name(&self) -> String {
-        unsafe { ai_string_to_string(&(*self.channel_ptr.as_ptr()).mNodeName) }
+        ai_string_to_string(&self.raw().mNodeName)
     }
 
     /// Get the number of position keyframes
     pub fn num_position_keys(&self) -> usize {
-        unsafe {
-            let ch = &*self.channel_ptr.as_ptr();
-            if ch.mPositionKeys.is_null() {
-                0
-            } else {
-                ch.mNumPositionKeys as usize
-            }
+        let ch = self.raw();
+        if ch.mPositionKeys.is_null() {
+            0
+        } else {
+            ch.mNumPositionKeys as usize
         }
     }
 
     /// Get the raw position keyframes (zero-copy).
     pub fn position_keys_raw(&self) -> &[raw::AiVectorKey] {
         unsafe {
-            let ch = &*self.channel_ptr.as_ptr();
-            if ch.mPositionKeys.is_null() || ch.mNumPositionKeys == 0 {
-                &[]
-            } else {
-                ffi::slice_from_ptr_len(
-                    self,
-                    ch.mPositionKeys as *const raw::AiVectorKey,
-                    ch.mNumPositionKeys as usize,
-                )
-            }
+            let ch = self.raw();
+            ffi::slice_from_ptr_len(
+                self,
+                ch.mPositionKeys as *const raw::AiVectorKey,
+                ch.mNumPositionKeys as usize,
+            )
         }
     }
 
@@ -267,29 +267,23 @@ impl NodeAnimation {
 
     /// Get the number of rotation keyframes
     pub fn num_rotation_keys(&self) -> usize {
-        unsafe {
-            let ch = &*self.channel_ptr.as_ptr();
-            if ch.mRotationKeys.is_null() {
-                0
-            } else {
-                ch.mNumRotationKeys as usize
-            }
+        let ch = self.raw();
+        if ch.mRotationKeys.is_null() {
+            0
+        } else {
+            ch.mNumRotationKeys as usize
         }
     }
 
     /// Get the raw rotation keyframes (zero-copy).
     pub fn rotation_keys_raw(&self) -> &[raw::AiQuatKey] {
         unsafe {
-            let ch = &*self.channel_ptr.as_ptr();
-            if ch.mRotationKeys.is_null() || ch.mNumRotationKeys == 0 {
-                &[]
-            } else {
-                ffi::slice_from_ptr_len(
-                    self,
-                    ch.mRotationKeys as *const raw::AiQuatKey,
-                    ch.mNumRotationKeys as usize,
-                )
-            }
+            let ch = self.raw();
+            ffi::slice_from_ptr_len(
+                self,
+                ch.mRotationKeys as *const raw::AiQuatKey,
+                ch.mNumRotationKeys as usize,
+            )
         }
     }
 
@@ -308,29 +302,23 @@ impl NodeAnimation {
 
     /// Get the number of scaling keyframes
     pub fn num_scaling_keys(&self) -> usize {
-        unsafe {
-            let ch = &*self.channel_ptr.as_ptr();
-            if ch.mScalingKeys.is_null() {
-                0
-            } else {
-                ch.mNumScalingKeys as usize
-            }
+        let ch = self.raw();
+        if ch.mScalingKeys.is_null() {
+            0
+        } else {
+            ch.mNumScalingKeys as usize
         }
     }
 
     /// Get the raw scaling keyframes (zero-copy).
     pub fn scaling_keys_raw(&self) -> &[raw::AiVectorKey] {
         unsafe {
-            let ch = &*self.channel_ptr.as_ptr();
-            if ch.mScalingKeys.is_null() || ch.mNumScalingKeys == 0 {
-                &[]
-            } else {
-                ffi::slice_from_ptr_len(
-                    self,
-                    ch.mScalingKeys as *const raw::AiVectorKey,
-                    ch.mNumScalingKeys as usize,
-                )
-            }
+            let ch = self.raw();
+            ffi::slice_from_ptr_len(
+                self,
+                ch.mScalingKeys as *const raw::AiVectorKey,
+                ch.mNumScalingKeys as usize,
+            )
         }
     }
 
@@ -348,11 +336,11 @@ impl NodeAnimation {
     }
     /// Behaviour before the first key
     pub fn pre_state(&self) -> AnimBehaviour {
-        unsafe { AnimBehaviour::from_sys((*self.channel_ptr.as_ptr()).mPreState) }
+        AnimBehaviour::from_sys(self.raw().mPreState)
     }
     /// Behaviour after the last key
     pub fn post_state(&self) -> AnimBehaviour {
-        unsafe { AnimBehaviour::from_sys((*self.channel_ptr.as_ptr()).mPostState) }
+        AnimBehaviour::from_sys(self.raw().mPostState)
     }
 }
 
@@ -459,41 +447,45 @@ pub struct NodeAnimationIterator {
     index: usize,
 }
 
+impl NodeAnimationIterator {
+    #[inline]
+    fn raw(&self) -> &sys::aiAnimation {
+        unsafe { &*self.animation_ptr.as_ptr() }
+    }
+
+    #[inline]
+    fn channel_array(&self) -> (*mut *mut sys::aiNodeAnim, usize) {
+        let animation = self.raw();
+        (animation.mChannels, animation.mNumChannels as usize)
+    }
+}
+
 impl Iterator for NodeAnimationIterator {
     type Item = NodeAnimation;
 
     fn next(&mut self) -> Option<Self::Item> {
-        unsafe {
-            let animation = &*self.animation_ptr.as_ptr();
-            let channels = ffi::slice_from_ptr_len_opt(
-                animation,
-                animation.mChannels,
-                animation.mNumChannels as usize,
-            )?;
-            while self.index < channels.len() {
-                let channel_ptr = channels[self.index];
-                self.index += 1;
-                if channel_ptr.is_null() {
-                    continue;
-                }
-                return Some(NodeAnimation::from_raw(
-                    self.scene.clone(),
-                    channel_ptr as *const sys::aiNodeAnim,
-                ));
+        let (base, len) = self.channel_array();
+        let channels = unsafe { ffi::slice_from_ptr_len_opt(&(), base, len) }?;
+        while self.index < channels.len() {
+            let channel_ptr = channels[self.index];
+            self.index += 1;
+            if channel_ptr.is_null() {
+                continue;
             }
-            None
+            return Some(unsafe {
+                NodeAnimation::from_raw(self.scene.clone(), channel_ptr as *const sys::aiNodeAnim)
+            });
         }
+        None
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
-        unsafe {
-            let animation = &*self.animation_ptr.as_ptr();
-            if animation.mChannels.is_null() {
-                (0, Some(0))
-            } else {
-                let remaining = (animation.mNumChannels as usize).saturating_sub(self.index);
-                (0, Some(remaining))
-            }
+        let animation = self.raw();
+        if animation.mChannels.is_null() {
+            (0, Some(0))
+        } else {
+            let remaining = (animation.mNumChannels as usize).saturating_sub(self.index);
+            (0, Some(remaining))
         }
     }
 }
@@ -524,30 +516,30 @@ impl MeshAnimation {
         Self { scene, channel_ptr }
     }
 
+    #[inline]
+    fn raw(&self) -> &sys::aiMeshAnim {
+        unsafe { &*self.channel_ptr.as_ptr() }
+    }
+
     /// Get the name of this mesh animation channel
     pub fn name(&self) -> String {
-        unsafe {
-            let ch = &*self.channel_ptr.as_ptr();
-            ai_string_to_string(&ch.mName)
-        }
+        ai_string_to_string(&self.raw().mName)
     }
 
     /// Get the number of animation keys
     pub fn num_keys(&self) -> usize {
-        unsafe {
-            let ch = &*self.channel_ptr.as_ptr();
-            if ch.mKeys.is_null() {
-                0
-            } else {
-                ch.mNumKeys as usize
-            }
+        let ch = self.raw();
+        if ch.mKeys.is_null() {
+            0
+        } else {
+            ch.mNumKeys as usize
         }
     }
 
     /// Get the array of animation keys
     pub fn keys(&self) -> &[MeshKey] {
         unsafe {
-            let ch = &*self.channel_ptr.as_ptr();
+            let ch = self.raw();
             let n = ch.mNumKeys as usize;
             debug_assert!(n == 0 || !ch.mKeys.is_null());
             ffi::slice_from_ptr_len(self, ch.mKeys as *const MeshKey, n)
@@ -562,39 +554,43 @@ pub struct MeshAnimationIterator {
     index: usize,
 }
 
+impl MeshAnimationIterator {
+    #[inline]
+    fn raw(&self) -> &sys::aiAnimation {
+        unsafe { &*self.animation_ptr.as_ptr() }
+    }
+
+    #[inline]
+    fn channel_array(&self) -> (*mut *mut sys::aiMeshAnim, usize) {
+        let anim = self.raw();
+        (anim.mMeshChannels, anim.mNumMeshChannels as usize)
+    }
+}
+
 impl Iterator for MeshAnimationIterator {
     type Item = MeshAnimation;
     fn next(&mut self) -> Option<Self::Item> {
-        unsafe {
-            let anim = &*self.animation_ptr.as_ptr();
-            let chans = ffi::slice_from_ptr_len_opt(
-                anim,
-                anim.mMeshChannels,
-                anim.mNumMeshChannels as usize,
-            )?;
-            while self.index < chans.len() {
-                let ptr = chans[self.index];
-                self.index += 1;
-                if ptr.is_null() {
-                    continue;
-                }
-                return Some(MeshAnimation::from_raw(
-                    self.scene.clone(),
-                    ptr as *const sys::aiMeshAnim,
-                ));
+        let (base, len) = self.channel_array();
+        let chans = unsafe { ffi::slice_from_ptr_len_opt(&(), base, len) }?;
+        while self.index < chans.len() {
+            let ptr = chans[self.index];
+            self.index += 1;
+            if ptr.is_null() {
+                continue;
             }
-            None
+            return Some(unsafe {
+                MeshAnimation::from_raw(self.scene.clone(), ptr as *const sys::aiMeshAnim)
+            });
         }
+        None
     }
     fn size_hint(&self) -> (usize, Option<usize>) {
-        unsafe {
-            let anim = &*self.animation_ptr.as_ptr();
-            if anim.mMeshChannels.is_null() {
-                (0, Some(0))
-            } else {
-                let remaining = (anim.mNumMeshChannels as usize).saturating_sub(self.index);
-                (0, Some(remaining))
-            }
+        let anim = self.raw();
+        if anim.mMeshChannels.is_null() {
+            (0, Some(0))
+        } else {
+            let remaining = (anim.mNumMeshChannels as usize).saturating_sub(self.index);
+            (0, Some(remaining))
         }
     }
 }
@@ -608,14 +604,19 @@ pub struct MorphMeshKey {
 }
 
 impl MorphMeshKey {
+    #[inline]
+    fn raw(&self) -> &sys::aiMeshMorphKey {
+        unsafe { &*self.key_ptr.as_ptr() }
+    }
+
     /// Key time in ticks.
     pub fn time(&self) -> f64 {
-        unsafe { (*self.key_ptr.as_ptr()).mTime }
+        self.raw().mTime
     }
 
     /// Number of values/weights in this key.
     pub fn len(&self) -> usize {
-        unsafe { (*self.key_ptr.as_ptr()).mNumValuesAndWeights as usize }
+        self.raw().mNumValuesAndWeights as usize
     }
 
     /// Returns `true` if this key has no values/weights.
@@ -626,7 +627,7 @@ impl MorphMeshKey {
     /// Morph target indices (zero-copy).
     pub fn values(&self) -> &[u32] {
         unsafe {
-            let k = &*self.key_ptr.as_ptr();
+            let k = self.raw();
             let n = k.mNumValuesAndWeights as usize;
             debug_assert!(n == 0 || !k.mValues.is_null());
             ffi::slice_from_ptr_len(self, k.mValues as *const u32, n)
@@ -636,7 +637,7 @@ impl MorphMeshKey {
     /// Morph target weights (zero-copy).
     pub fn weights(&self) -> &[f64] {
         unsafe {
-            let k = &*self.key_ptr.as_ptr();
+            let k = self.raw();
             let n = k.mNumValuesAndWeights as usize;
             debug_assert!(n == 0 || !k.mWeights.is_null());
             ffi::slice_from_ptr_len(self, k.mWeights as *const f64, n)
@@ -660,20 +661,29 @@ impl MorphMeshAnimation {
         Self { scene, channel_ptr }
     }
 
+    #[inline]
+    fn raw(&self) -> &sys::aiMeshMorphAnim {
+        unsafe { &*self.channel_ptr.as_ptr() }
+    }
+
+    #[inline]
+    fn keys_raw(&self) -> Option<&[sys::aiMeshMorphKey]> {
+        let ch = self.raw();
+        unsafe { ffi::slice_from_ptr_len_opt(ch, ch.mKeys, ch.mNumKeys as usize) }
+    }
+
     /// Get the name of this morph mesh animation channel
     pub fn name(&self) -> String {
-        unsafe { ai_string_to_string(&(*self.channel_ptr.as_ptr()).mName) }
+        ai_string_to_string(&self.raw().mName)
     }
 
     /// Get the number of animation keys
     pub fn num_keys(&self) -> usize {
-        unsafe {
-            let ch = &*self.channel_ptr.as_ptr();
-            if ch.mKeys.is_null() {
-                0
-            } else {
-                ch.mNumKeys as usize
-            }
+        let ch = self.raw();
+        if ch.mKeys.is_null() {
+            0
+        } else {
+            ch.mNumKeys as usize
         }
     }
 
@@ -682,21 +692,18 @@ impl MorphMeshAnimation {
         if index >= self.num_keys() {
             return None;
         }
-        unsafe {
-            let ch = &*self.channel_ptr.as_ptr();
-            let keys = ffi::slice_from_ptr_len_opt(ch, ch.mKeys, ch.mNumKeys as usize)?;
-            let key_ref = keys.get(index)?;
-            let key_ptr = SharedPtr::new(std::ptr::from_ref(key_ref))?;
-            let k = &*key_ptr.as_ptr();
-            let n = k.mNumValuesAndWeights as usize;
-            if n > 0 && (k.mValues.is_null() || k.mWeights.is_null()) {
-                return None;
-            }
-            Some(MorphMeshKey {
-                scene: self.scene.clone(),
-                key_ptr,
-            })
+        let keys = self.keys_raw()?;
+        let key_ref = keys.get(index)?;
+        let key_ptr = SharedPtr::new(std::ptr::from_ref(key_ref))?;
+        let k = unsafe { &*key_ptr.as_ptr() };
+        let n = k.mNumValuesAndWeights as usize;
+        if n > 0 && (k.mValues.is_null() || k.mWeights.is_null()) {
+            return None;
         }
+        Some(MorphMeshKey {
+            scene: self.scene.clone(),
+            key_ptr,
+        })
     }
 }
 
@@ -707,39 +714,43 @@ pub struct MorphMeshAnimationIterator {
     index: usize,
 }
 
+impl MorphMeshAnimationIterator {
+    #[inline]
+    fn raw(&self) -> &sys::aiAnimation {
+        unsafe { &*self.animation_ptr.as_ptr() }
+    }
+
+    #[inline]
+    fn channel_array(&self) -> (*mut *mut sys::aiMeshMorphAnim, usize) {
+        let anim = self.raw();
+        (anim.mMorphMeshChannels, anim.mNumMorphMeshChannels as usize)
+    }
+}
+
 impl Iterator for MorphMeshAnimationIterator {
     type Item = MorphMeshAnimation;
     fn next(&mut self) -> Option<Self::Item> {
-        unsafe {
-            let anim = &*self.animation_ptr.as_ptr();
-            let chans = ffi::slice_from_ptr_len_opt(
-                anim,
-                anim.mMorphMeshChannels,
-                anim.mNumMorphMeshChannels as usize,
-            )?;
-            while self.index < chans.len() {
-                let ptr = chans[self.index];
-                self.index += 1;
-                if ptr.is_null() {
-                    continue;
-                }
-                return Some(MorphMeshAnimation::from_raw(
-                    self.scene.clone(),
-                    ptr as *const sys::aiMeshMorphAnim,
-                ));
+        let (base, len) = self.channel_array();
+        let chans = unsafe { ffi::slice_from_ptr_len_opt(&(), base, len) }?;
+        while self.index < chans.len() {
+            let ptr = chans[self.index];
+            self.index += 1;
+            if ptr.is_null() {
+                continue;
             }
-            None
+            return Some(unsafe {
+                MorphMeshAnimation::from_raw(self.scene.clone(), ptr as *const sys::aiMeshMorphAnim)
+            });
         }
+        None
     }
     fn size_hint(&self) -> (usize, Option<usize>) {
-        unsafe {
-            let anim = &*self.animation_ptr.as_ptr();
-            if anim.mMorphMeshChannels.is_null() {
-                (0, Some(0))
-            } else {
-                let remaining = (anim.mNumMorphMeshChannels as usize).saturating_sub(self.index);
-                (0, Some(remaining))
-            }
+        let anim = self.raw();
+        if anim.mMorphMeshChannels.is_null() {
+            (0, Some(0))
+        } else {
+            let remaining = (anim.mNumMorphMeshChannels as usize).saturating_sub(self.index);
+            (0, Some(remaining))
         }
     }
 }
