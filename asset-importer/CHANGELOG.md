@@ -12,6 +12,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - **Bundled Assimp updated**: Vendored Assimp (via `asset-importer-sys`) is now pinned to `v6.0.4`.
 
+### Fixed
+- **Property key constants**: `import_properties::*` and `export_properties::*` now match Assimp's expected property keys (macro values), so `PropertyStore` settings reliably take effect.
+
 ## [0.6.0] - 2026-01-20
 
 ### Changed

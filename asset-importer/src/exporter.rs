@@ -24,7 +24,25 @@ pub mod export_properties {
     ///
     /// (AI_CONFIG_EXPORT_FBX_TRANSPARENCY_FACTOR_REFER_TO_OPACITY)
     pub const FBX_TRANSPARENCY_FACTOR_REFER_TO_OPACITY: &str =
-        "AI_CONFIG_EXPORT_FBX_TRANSPARENCY_FACTOR_REFER_TO_OPACITY";
+        "EXPORT_FBX_TRANSPARENCY_FACTOR_REFER_TO_OPACITY";
+}
+
+#[cfg(test)]
+mod export_properties_tests {
+    use super::export_properties;
+
+    fn c_key(bytes: &[u8]) -> &str {
+        let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
+        std::str::from_utf8(&bytes[..end]).expect("Assimp config key should be UTF-8")
+    }
+
+    #[test]
+    fn export_property_keys_match_assimp_macros() {
+        assert_eq!(
+            export_properties::FBX_TRANSPARENCY_FACTOR_REFER_TO_OPACITY,
+            c_key(crate::sys::AI_CONFIG_EXPORT_FBX_TRANSPARENCY_FACTOR_REFER_TO_OPACITY)
+        );
+    }
 }
 
 /// Builder for configuring and executing scene exports

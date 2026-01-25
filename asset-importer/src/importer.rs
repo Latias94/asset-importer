@@ -116,44 +116,44 @@ impl From<PropertyStore> for Vec<(String, PropertyValue)> {
 /// These constants provide convenient access to commonly used Assimp import properties.
 pub mod import_properties {
     /// Remove vertex components (AI_CONFIG_PP_RVC_FLAGS)
-    pub const REMOVE_VERTEX_COMPONENTS: &str = "AI_CONFIG_PP_RVC_FLAGS";
+    pub const REMOVE_VERTEX_COMPONENTS: &str = "PP_RVC_FLAGS";
 
     /// Maximum smoothing angle for normal generation (AI_CONFIG_PP_CT_MAX_SMOOTHING_ANGLE)
-    pub const MAX_SMOOTHING_ANGLE: &str = "AI_CONFIG_PP_CT_MAX_SMOOTHING_ANGLE";
+    pub const MAX_SMOOTHING_ANGLE: &str = "PP_CT_MAX_SMOOTHING_ANGLE";
 
     /// FBX: Read all geometry layers (AI_CONFIG_IMPORT_FBX_READ_ALL_GEOMETRY_LAYERS)
-    pub const FBX_READ_ALL_GEOMETRY_LAYERS: &str = "AI_CONFIG_IMPORT_FBX_READ_ALL_GEOMETRY_LAYERS";
+    pub const FBX_READ_ALL_GEOMETRY_LAYERS: &str = "IMPORT_FBX_READ_ALL_GEOMETRY_LAYERS";
 
     /// FBX: Read all materials (AI_CONFIG_IMPORT_FBX_READ_ALL_MATERIALS)
-    pub const FBX_READ_ALL_MATERIALS: &str = "AI_CONFIG_IMPORT_FBX_READ_ALL_MATERIALS";
+    pub const FBX_READ_ALL_MATERIALS: &str = "IMPORT_FBX_READ_ALL_MATERIALS";
 
     /// FBX: Read materials (AI_CONFIG_IMPORT_FBX_READ_MATERIALS)
-    pub const FBX_READ_MATERIALS: &str = "AI_CONFIG_IMPORT_FBX_READ_MATERIALS";
+    pub const FBX_READ_MATERIALS: &str = "IMPORT_FBX_READ_MATERIALS";
 
     /// FBX: Read textures (AI_CONFIG_IMPORT_FBX_READ_TEXTURES)
-    pub const FBX_READ_TEXTURES: &str = "AI_CONFIG_IMPORT_FBX_READ_TEXTURES";
+    pub const FBX_READ_TEXTURES: &str = "IMPORT_FBX_READ_TEXTURES";
 
     /// FBX: Read cameras (AI_CONFIG_IMPORT_FBX_READ_CAMERAS)
-    pub const FBX_READ_CAMERAS: &str = "AI_CONFIG_IMPORT_FBX_READ_CAMERAS";
+    pub const FBX_READ_CAMERAS: &str = "IMPORT_FBX_READ_CAMERAS";
 
     /// FBX: Read lights (AI_CONFIG_IMPORT_FBX_READ_LIGHTS)
-    pub const FBX_READ_LIGHTS: &str = "AI_CONFIG_IMPORT_FBX_READ_LIGHTS";
+    pub const FBX_READ_LIGHTS: &str = "IMPORT_FBX_READ_LIGHTS";
 
     /// FBX: Read animations (AI_CONFIG_IMPORT_FBX_READ_ANIMATIONS)
-    pub const FBX_READ_ANIMATIONS: &str = "AI_CONFIG_IMPORT_FBX_READ_ANIMATIONS";
+    pub const FBX_READ_ANIMATIONS: &str = "IMPORT_FBX_READ_ANIMATIONS";
 
     /// FBX: Read weights (AI_CONFIG_IMPORT_FBX_READ_WEIGHTS)
-    pub const FBX_READ_WEIGHTS: &str = "AI_CONFIG_IMPORT_FBX_READ_WEIGHTS";
+    pub const FBX_READ_WEIGHTS: &str = "IMPORT_FBX_READ_WEIGHTS";
 
     /// FBX: Strict mode (AI_CONFIG_IMPORT_FBX_STRICT_MODE)
-    pub const FBX_STRICT_MODE: &str = "AI_CONFIG_IMPORT_FBX_STRICT_MODE";
+    pub const FBX_STRICT_MODE: &str = "IMPORT_FBX_STRICT_MODE";
 
     /// FBX: Preserve pivots (AI_CONFIG_IMPORT_FBX_PRESERVE_PIVOTS)
-    pub const FBX_PRESERVE_PIVOTS: &str = "AI_CONFIG_IMPORT_FBX_PRESERVE_PIVOTS";
+    pub const FBX_PRESERVE_PIVOTS: &str = "IMPORT_FBX_PRESERVE_PIVOTS";
 
     /// FBX: Optimize empty animation curves (AI_CONFIG_IMPORT_FBX_OPTIMIZE_EMPTY_ANIMATION_CURVES)
     pub const FBX_OPTIMIZE_EMPTY_ANIMATION_CURVES: &str =
-        "AI_CONFIG_IMPORT_FBX_OPTIMIZE_EMPTY_ANIMATION_CURVES";
+        "IMPORT_FBX_OPTIMIZE_EMPTY_ANIMATION_CURVES";
 
     /// FBX: Use legacy naming for embedded textures (AI_CONFIG_IMPORT_FBX_EMBEDDED_TEXTURES_LEGACY_NAMING)
     pub const FBX_EMBEDDED_TEXTURES_LEGACY_NAMING: &str =
@@ -165,29 +165,134 @@ pub mod import_properties {
     pub const FBX_IGNORE_UP_DIRECTION: &str = "AI_CONFIG_IMPORT_FBX_IGNORE_UP_DIRECTION";
 
     /// Remove degenerate faces (AI_CONFIG_PP_FD_REMOVE)
-    pub const REMOVE_DEGENERATE_FACES: &str = "AI_CONFIG_PP_FD_REMOVE";
+    pub const REMOVE_DEGENERATE_FACES: &str = "PP_FD_REMOVE";
 
     /// Split large meshes (AI_CONFIG_PP_SLM_VERTEX_LIMIT)
-    pub const SPLIT_LARGE_MESHES_VERTEX_LIMIT: &str = "AI_CONFIG_PP_SLM_VERTEX_LIMIT";
+    pub const SPLIT_LARGE_MESHES_VERTEX_LIMIT: &str = "PP_SLM_VERTEX_LIMIT";
 
     /// Split large meshes triangle limit (AI_CONFIG_PP_SLM_TRIANGLE_LIMIT)
-    pub const SPLIT_LARGE_MESHES_TRIANGLE_LIMIT: &str = "AI_CONFIG_PP_SLM_TRIANGLE_LIMIT";
+    pub const SPLIT_LARGE_MESHES_TRIANGLE_LIMIT: &str = "PP_SLM_TRIANGLE_LIMIT";
 
     /// Limit bone weights (AI_CONFIG_PP_LBW_MAX_WEIGHTS)
-    pub const LIMIT_BONE_WEIGHTS_MAX: &str = "AI_CONFIG_PP_LBW_MAX_WEIGHTS";
+    pub const LIMIT_BONE_WEIGHTS_MAX: &str = "PP_LBW_MAX_WEIGHTS";
 
     /// Validate data structure (AI_CONFIG_PP_DB_THRESHOLD)
-    pub const VALIDATE_DATA_STRUCTURE_THRESHOLD: &str = "AI_CONFIG_PP_DB_THRESHOLD";
+    pub const VALIDATE_DATA_STRUCTURE_THRESHOLD: &str = "PP_DB_THRESHOLD";
 
     /// IFC: Skip space representations (AI_CONFIG_IMPORT_IFC_SKIP_SPACE_REPRESENTATIONS)
-    pub const IFC_SKIP_SPACE_REPRESENTATIONS: &str =
-        "AI_CONFIG_IMPORT_IFC_SKIP_SPACE_REPRESENTATIONS";
+    pub const IFC_SKIP_SPACE_REPRESENTATIONS: &str = "IMPORT_IFC_SKIP_SPACE_REPRESENTATIONS";
 
     /// Global scale factor (AI_CONFIG_GLOBAL_SCALE_FACTOR_KEY)
-    pub const GLOBAL_SCALE_FACTOR: &str = "AI_CONFIG_GLOBAL_SCALE_FACTOR_KEY";
+    pub const GLOBAL_SCALE_FACTOR: &str = "GLOBAL_SCALE_FACTOR";
 
     /// Application scale factor (AI_CONFIG_APP_SCALE_KEY)
-    pub const APP_SCALE_FACTOR: &str = "AI_CONFIG_APP_SCALE_KEY";
+    pub const APP_SCALE_FACTOR: &str = "APP_SCALE_FACTOR";
+}
+
+#[cfg(test)]
+mod import_properties_tests {
+    use super::import_properties;
+
+    fn c_key(bytes: &[u8]) -> &str {
+        let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
+        std::str::from_utf8(&bytes[..end]).expect("Assimp config key should be UTF-8")
+    }
+
+    #[test]
+    fn import_property_keys_match_assimp_macros() {
+        assert_eq!(
+            import_properties::REMOVE_VERTEX_COMPONENTS,
+            c_key(crate::sys::AI_CONFIG_PP_RVC_FLAGS)
+        );
+        assert_eq!(
+            import_properties::MAX_SMOOTHING_ANGLE,
+            c_key(crate::sys::AI_CONFIG_PP_CT_MAX_SMOOTHING_ANGLE)
+        );
+        assert_eq!(
+            import_properties::FBX_READ_ALL_GEOMETRY_LAYERS,
+            c_key(crate::sys::AI_CONFIG_IMPORT_FBX_READ_ALL_GEOMETRY_LAYERS)
+        );
+        assert_eq!(
+            import_properties::FBX_READ_ALL_MATERIALS,
+            c_key(crate::sys::AI_CONFIG_IMPORT_FBX_READ_ALL_MATERIALS)
+        );
+        assert_eq!(
+            import_properties::FBX_READ_MATERIALS,
+            c_key(crate::sys::AI_CONFIG_IMPORT_FBX_READ_MATERIALS)
+        );
+        assert_eq!(
+            import_properties::FBX_READ_TEXTURES,
+            c_key(crate::sys::AI_CONFIG_IMPORT_FBX_READ_TEXTURES)
+        );
+        assert_eq!(
+            import_properties::FBX_READ_CAMERAS,
+            c_key(crate::sys::AI_CONFIG_IMPORT_FBX_READ_CAMERAS)
+        );
+        assert_eq!(
+            import_properties::FBX_READ_LIGHTS,
+            c_key(crate::sys::AI_CONFIG_IMPORT_FBX_READ_LIGHTS)
+        );
+        assert_eq!(
+            import_properties::FBX_READ_ANIMATIONS,
+            c_key(crate::sys::AI_CONFIG_IMPORT_FBX_READ_ANIMATIONS)
+        );
+        assert_eq!(
+            import_properties::FBX_READ_WEIGHTS,
+            c_key(crate::sys::AI_CONFIG_IMPORT_FBX_READ_WEIGHTS)
+        );
+        assert_eq!(
+            import_properties::FBX_STRICT_MODE,
+            c_key(crate::sys::AI_CONFIG_IMPORT_FBX_STRICT_MODE)
+        );
+        assert_eq!(
+            import_properties::FBX_PRESERVE_PIVOTS,
+            c_key(crate::sys::AI_CONFIG_IMPORT_FBX_PRESERVE_PIVOTS)
+        );
+        assert_eq!(
+            import_properties::FBX_OPTIMIZE_EMPTY_ANIMATION_CURVES,
+            c_key(crate::sys::AI_CONFIG_IMPORT_FBX_OPTIMIZE_EMPTY_ANIMATION_CURVES)
+        );
+        assert_eq!(
+            import_properties::FBX_EMBEDDED_TEXTURES_LEGACY_NAMING,
+            c_key(crate::sys::AI_CONFIG_IMPORT_FBX_EMBEDDED_TEXTURES_LEGACY_NAMING)
+        );
+        assert_eq!(
+            import_properties::FBX_IGNORE_UP_DIRECTION,
+            c_key(crate::sys::AI_CONFIG_IMPORT_FBX_IGNORE_UP_DIRECTION)
+        );
+        assert_eq!(
+            import_properties::REMOVE_DEGENERATE_FACES,
+            c_key(crate::sys::AI_CONFIG_PP_FD_REMOVE)
+        );
+        assert_eq!(
+            import_properties::SPLIT_LARGE_MESHES_VERTEX_LIMIT,
+            c_key(crate::sys::AI_CONFIG_PP_SLM_VERTEX_LIMIT)
+        );
+        assert_eq!(
+            import_properties::SPLIT_LARGE_MESHES_TRIANGLE_LIMIT,
+            c_key(crate::sys::AI_CONFIG_PP_SLM_TRIANGLE_LIMIT)
+        );
+        assert_eq!(
+            import_properties::LIMIT_BONE_WEIGHTS_MAX,
+            c_key(crate::sys::AI_CONFIG_PP_LBW_MAX_WEIGHTS)
+        );
+        assert_eq!(
+            import_properties::VALIDATE_DATA_STRUCTURE_THRESHOLD,
+            c_key(crate::sys::AI_CONFIG_PP_DB_THRESHOLD)
+        );
+        assert_eq!(
+            import_properties::IFC_SKIP_SPACE_REPRESENTATIONS,
+            c_key(crate::sys::AI_CONFIG_IMPORT_IFC_SKIP_SPACE_REPRESENTATIONS)
+        );
+        assert_eq!(
+            import_properties::GLOBAL_SCALE_FACTOR,
+            c_key(crate::sys::AI_CONFIG_GLOBAL_SCALE_FACTOR_KEY)
+        );
+        assert_eq!(
+            import_properties::APP_SCALE_FACTOR,
+            c_key(crate::sys::AI_CONFIG_APP_SCALE_KEY)
+        );
+    }
 }
 
 /// Builder for configuring and executing scene imports
