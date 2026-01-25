@@ -16,6 +16,88 @@ use crate::{
 
 use crate::bridge_properties::build_rust_properties;
 
+type ProgressMutex = std::sync::Mutex<Box<dyn ProgressHandler>>;
+
+struct ProgressUser {
+    ptr: *mut ProgressMutex,
+}
+
+impl ProgressUser {
+    fn new(handler: Box<dyn ProgressHandler>) -> Self {
+        let ptr = Box::into_raw(Box::new(std::sync::Mutex::new(handler)));
+        Self { ptr }
+    }
+
+    fn as_void_ptr(&self) -> *mut c_void {
+        self.ptr.cast::<c_void>()
+    }
+}
+
+impl Drop for ProgressUser {
+    fn drop(&mut self) {
+        if self.ptr.is_null() {
+            return;
+        }
+        unsafe {
+            drop(Box::from_raw(self.ptr));
+        }
+    }
+}
+
+extern "C" fn progress_cb(percentage: f32, message: *const c_char, user: *mut c_void) -> bool {
+    if user.is_null() {
+        return true;
+    }
+
+    let msg_opt = if message.is_null() {
+        None
+    } else {
+        unsafe { CStr::from_ptr(message) }.to_str().ok()
+    };
+
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let mutex = unsafe { &*(user as *const ProgressMutex) };
+        let Ok(mut handler) = mutex.lock() else {
+            return false;
+        };
+        handler.update(percentage, msg_opt)
+    }));
+    result.unwrap_or(false)
+}
+
+struct PropertyStoreGuard {
+    ptr: *mut sys::aiPropertyStore,
+}
+
+impl PropertyStoreGuard {
+    fn new(ptr: *mut sys::aiPropertyStore) -> Self {
+        Self { ptr }
+    }
+}
+
+impl Drop for PropertyStoreGuard {
+    fn drop(&mut self) {
+        if self.ptr.is_null() {
+            return;
+        }
+        unsafe {
+            sys::aiReleasePropertyStore(self.ptr);
+        }
+    }
+}
+
+fn last_bridge_error_string() -> Option<String> {
+    let last_bridge_err = unsafe { sys::aiGetLastErrorStringRust() };
+    if last_bridge_err.is_null() {
+        return None;
+    }
+    Some(
+        unsafe { CStr::from_ptr(last_bridge_err) }
+            .to_string_lossy()
+            .into_owned(),
+    )
+}
+
 /// A property store for configuring import behavior
 ///
 /// This provides a more convenient API for setting import properties
@@ -522,6 +604,7 @@ impl ImportBuilder {
         } else {
             self.create_property_store()
         };
+        let _property_store_guard = PropertyStoreGuard::new(property_store);
 
         // Create custom file I/O if specified
         let mut file_io = self
@@ -542,39 +625,9 @@ impl ImportBuilder {
                 .ok_or_else(|| Error::invalid_parameter("progress handler missing"))?;
             // Prepare property list for the bridge
             let buffers = build_rust_properties(&self.properties)?;
+            let user = ProgressUser::new(handler);
 
-            // Prepare progress callback state
-            extern "C" fn progress_cb(
-                percentage: f32,
-                message: *const c_char,
-                user: *mut c_void,
-            ) -> bool {
-                if user.is_null() {
-                    return true;
-                }
-                let msg_opt = if message.is_null() {
-                    None
-                } else {
-                    unsafe { CStr::from_ptr(message) }.to_str().ok()
-                };
-
-                // The callback can be invoked from worker threads; serialize access to the handler
-                // to avoid aliasing `&mut` across threads.
-                let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                    let mutex =
-                        unsafe { &*(user as *const std::sync::Mutex<Box<dyn ProgressHandler>>) };
-                    let Ok(mut handler) = mutex.lock() else {
-                        return false;
-                    };
-                    handler.update(percentage, msg_opt)
-                }));
-                result.unwrap_or(false)
-            }
-
-            // Box the handler to pass across FFI and reclaim after call
-            let user_ptr = Box::into_raw(Box::new(std::sync::Mutex::new(handler))) as *mut c_void;
-
-            let ptr = unsafe {
+            unsafe {
                 sys::aiImportFileExWithProgressRust(
                     c_path.as_ptr(),
                     self.post_process.as_raw(),
@@ -582,18 +635,9 @@ impl ImportBuilder {
                     buffers.ffi_props.as_ptr(),
                     buffers.ffi_props.len(),
                     Some(progress_cb),
-                    user_ptr,
+                    user.as_void_ptr(),
                 )
-            };
-
-            // Reclaim box (drop) now that import returned
-            unsafe {
-                drop(Box::from_raw(
-                    user_ptr as *mut std::sync::Mutex<Box<dyn ProgressHandler>>,
-                ));
             }
-
-            ptr
         } else {
             // Fallback to C API paths
             unsafe {
@@ -623,21 +667,9 @@ impl ImportBuilder {
             }
         };
 
-        // Clean up property store
-        if !property_store.is_null() {
-            unsafe {
-                sys::aiReleasePropertyStore(property_store);
-            }
-        }
-
         // Check if import was successful
         if scene_ptr.is_null() {
-            // Prefer bridge error if using it
-            let last_bridge_err = unsafe { sys::aiGetLastErrorStringRust() };
-            if !last_bridge_err.is_null() {
-                let msg = unsafe { CStr::from_ptr(last_bridge_err) }
-                    .to_string_lossy()
-                    .into_owned();
+            if let Some(msg) = last_bridge_error_string() {
                 return Err(Error::other(msg));
             }
             return Err(Error::from_assimp());
@@ -676,6 +708,7 @@ impl ImportBuilder {
         } else {
             self.create_property_store()
         };
+        let _property_store_guard = PropertyStoreGuard::new(property_store);
 
         // Import from memory (bridge if progress specified)
         let scene_ptr = if use_bridge {
@@ -684,35 +717,9 @@ impl ImportBuilder {
                 .ok_or_else(|| Error::invalid_parameter("progress handler missing"))?;
             // Prepare properties
             let buffers = build_rust_properties(&self.properties)?;
+            let user = ProgressUser::new(handler);
 
-            extern "C" fn progress_cb(
-                percentage: f32,
-                message: *const c_char,
-                user: *mut c_void,
-            ) -> bool {
-                if user.is_null() {
-                    return true;
-                }
-                let msg_opt = if message.is_null() {
-                    None
-                } else {
-                    unsafe { CStr::from_ptr(message) }.to_str().ok()
-                };
-
-                let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                    let mutex =
-                        unsafe { &*(user as *const std::sync::Mutex<Box<dyn ProgressHandler>>) };
-                    let Ok(mut handler) = mutex.lock() else {
-                        return false;
-                    };
-                    handler.update(percentage, msg_opt)
-                }));
-                result.unwrap_or(false)
-            }
-
-            let user_ptr = Box::into_raw(Box::new(std::sync::Mutex::new(handler))) as *mut c_void;
-
-            let ptr = unsafe {
+            unsafe {
                 sys::aiImportFileFromMemoryWithProgressRust(
                     data.as_ptr() as *const c_char,
                     data.len() as u32,
@@ -721,16 +728,9 @@ impl ImportBuilder {
                     buffers.ffi_props.as_ptr(),
                     buffers.ffi_props.len(),
                     Some(progress_cb),
-                    user_ptr,
+                    user.as_void_ptr(),
                 )
-            };
-
-            unsafe {
-                drop(Box::from_raw(
-                    user_ptr as *mut std::sync::Mutex<Box<dyn ProgressHandler>>,
-                ));
             }
-            ptr
         } else {
             unsafe {
                 if property_store.is_null() {
@@ -752,20 +752,9 @@ impl ImportBuilder {
             }
         };
 
-        // Clean up property store
-        if !property_store.is_null() {
-            unsafe {
-                sys::aiReleasePropertyStore(property_store);
-            }
-        }
-
         // Check if import was successful
         if scene_ptr.is_null() {
-            let last_bridge_err = unsafe { sys::aiGetLastErrorStringRust() };
-            if !last_bridge_err.is_null() {
-                let msg = unsafe { CStr::from_ptr(last_bridge_err) }
-                    .to_string_lossy()
-                    .into_owned();
+            if let Some(msg) = last_bridge_error_string() {
                 return Err(Error::other(msg));
             }
             return Err(Error::from_assimp());
