@@ -5,7 +5,7 @@
 
 Low-level FFI bindings for the [Assimp](https://github.com/assimp/assimp) 3D asset import library.
 
-This crate provides unsafe Rust FFI bindings for **Assimp v6.0.3**, implementing the vast majority of the C API functions, types, and constants.
+This crate provides unsafe Rust FFI bindings for **Assimp v6.0.4**, implementing the vast majority of the C API functions, types, and constants.
 
 ## Status
 
@@ -13,7 +13,7 @@ This crate provides unsafe Rust FFI bindings for **Assimp v6.0.3**, implementing
 
 ## Overview
 
-This crate provides unsafe Rust bindings to the [Assimp v6.0.3](https://github.com/assimp/assimp/releases/tag/v6.0.3) C API, implementing the vast majority of functions, types, and constants. For a safe, high-level API, use the [`asset-importer`](../asset-importer/) crate instead.
+This crate provides unsafe Rust bindings to the [Assimp v6.0.4](https://github.com/assimp/assimp/releases/tag/v6.0.4) C API, implementing the vast majority of functions, types, and constants. For a safe, high-level API, use the [`asset-importer`](../asset-importer/) crate instead.
 
 ### API Coverage
 
@@ -36,7 +36,7 @@ If you want the fastest builds without compiling native code, prefer the high-le
 ### Prebuilt Binaries
 ```toml
 [dependencies]
-asset-importer-sys = { version = "0.6", features = ["prebuilt"] }
+asset-importer-sys = { version = "0.7", features = ["prebuilt"] }
 ```
 - Downloads prebuilt libraries from GitHub releases
 - No build dependencies required
@@ -44,7 +44,7 @@ asset-importer-sys = { version = "0.6", features = ["prebuilt"] }
 
 ### Build from Source
 ```toml
-asset-importer-sys = { version = "0.6", features = ["build-assimp"] }
+asset-importer-sys = { version = "0.7", features = ["build-assimp"] }
 ```
 - Builds assimp from bundled source
 - Requires: CMake, C++ compiler, Git
@@ -53,7 +53,7 @@ asset-importer-sys = { version = "0.6", features = ["build-assimp"] }
 
 ### System Library
 ```toml
-asset-importer-sys = { version = "0.6", features = ["system"] }
+asset-importer-sys = { version = "0.7", features = ["system"] }
 ```
 Uses system-installed assimp. Install via package manager:
 - **macOS**: `brew install assimp`
@@ -78,7 +78,7 @@ rustflags = ["-C", "target-feature=+crt-static"]
 
 ### Static Linking
 ```toml
-asset-importer-sys = { version = "0.6", features = ["static-link", "build-assimp"] }
+asset-importer-sys = { version = "0.7", features = ["static-link", "build-assimp"] }
 ```
 - Creates single executable with fewer external runtime dependencies
 - Larger binary size
@@ -86,7 +86,7 @@ asset-importer-sys = { version = "0.6", features = ["static-link", "build-assimp
 ### Additional Options
 ```toml
 asset-importer-sys = {
-    version = "0.6",
+    version = "0.7",
     features = [
         "build-assimp",
         "export",        # Enable export functionality

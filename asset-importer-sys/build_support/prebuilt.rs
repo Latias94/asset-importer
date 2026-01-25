@@ -10,7 +10,7 @@ use flate2::read::GzDecoder;
 use tar::Archive;
 
 const PACKAGE_PREFIX: &str = "asset-importer";
-const VENDORED_ASSIMP_VERSION: &str = "6.0.3";
+const VENDORED_ASSIMP_VERSION: &str = "6.0.4";
 
 pub fn prepare(cfg: &BuildConfig, link_kind: LinkKind) -> BuildPlan {
     let crate_version = env::var("CARGO_PKG_VERSION").unwrap();

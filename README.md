@@ -12,7 +12,7 @@
 
 A comprehensive Rust binding for the latest [Assimp](https://github.com/assimp/assimp) 3D asset import library.
 
-This crate provides safe, high-level Rust bindings for **Assimp v6.0.3**, implementing the vast majority of the C API with idiomatic Rust interfaces.
+This crate provides safe, high-level Rust bindings for **Assimp v6.0.4**, implementing the vast majority of the C API with idiomatic Rust interfaces.
 
 ## Example Application
 
@@ -24,7 +24,7 @@ See **[Model Viewer](https://github.com/Latias94/model-viewer)** (asset-importer
 
 ## Features
 
-- **Comprehensive API Coverage**: Implements the vast majority of [Assimp v6.0.3](https://github.com/assimp/assimp/releases/tag/v6.0.3) C API
+- **Comprehensive API Coverage**: Implements the vast majority of [Assimp v6.0.4](https://github.com/assimp/assimp/releases/tag/v6.0.4) C API
 - **Import Support**: 71+ 3D file formats (OBJ, FBX, glTF, DAE, etc.)
 - **Export Support**: 22+ output formats (optional)
 - **Memory Safe**: Safe Rust API over unsafe FFI bindings
@@ -39,13 +39,13 @@ Add to your `Cargo.toml`:
 ```toml
 [dependencies]
 # Default – Use prebuilt binaries (fastest)
-asset-importer = "0.6"
+asset-importer = "0.7"
 
 # Or build from source (best compatibility; mutually exclusive build mode)
-asset-importer = { version = "0.6", default-features = false, features = ["build-assimp"] }
+asset-importer = { version = "0.7", default-features = false, features = ["build-assimp"] }
 
 # Or link a system-installed Assimp (requires libclang/bindgen; mutually exclusive build mode)
-asset-importer = { version = "0.6", default-features = false, features = ["system"] }
+asset-importer = { version = "0.7", default-features = false, features = ["system"] }
 ```
 
 Basic usage:
@@ -105,7 +105,7 @@ Practical guidance:
 ### Default: Prebuilt Binaries (Recommended)
 
 ```toml
-asset-importer = "0.6"
+asset-importer = "0.7"
 ```
 
 - **Fastest**: No compilation time
@@ -116,7 +116,7 @@ asset-importer = "0.6"
 ### Build from Source
 
 ```toml
-asset-importer = { version = "0.6", default-features = false, features = ["build-assimp"] }
+asset-importer = { version = "0.7", default-features = false, features = ["build-assimp"] }
 ```
 
 - **Best compatibility**: Works on all platforms
@@ -126,7 +126,7 @@ asset-importer = { version = "0.6", default-features = false, features = ["build
 ### System Library
 
 ```toml
-asset-importer = { version = "0.6", default-features = false, features = ["system"] }
+asset-importer = { version = "0.7", default-features = false, features = ["system"] }
 ```
 
 - **Lightweight**: Uses existing system installation
@@ -137,7 +137,7 @@ asset-importer = { version = "0.6", default-features = false, features = ["syste
 
 ```toml
 asset-importer = {
-    version = "0.6",
+    version = "0.7",
     default-features = false,
     features = [
         "build-assimp",    # Choose exactly one build mode (or use default prebuilt)
@@ -222,7 +222,7 @@ For development work or when prebuilt binaries are not available:
 
 ```toml
 # Use this for development
-asset-importer = { version = "0.6", default-features = false, features = ["build-assimp"] }
+asset-importer = { version = "0.7", default-features = false, features = ["build-assimp"] }
 ```
 
 This ensures you can always build from source regardless of release availability.

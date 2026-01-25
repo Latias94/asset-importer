@@ -102,7 +102,7 @@ checksum = "175571dd1d178ced59193a6fc02dde1b972eb0bc56c892cde9beeceac5bf0f6b"
 
 [[package]]
 name = "asset-importer"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "approx",
  "asset-importer-sys",
@@ -123,7 +123,7 @@ dependencies = [
 
 [[package]]
 name = "asset-importer-sys"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "bindgen",
  "cc",

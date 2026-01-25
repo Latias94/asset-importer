@@ -1,6 +1,6 @@
 [package]
 name = "asset-importer"
-version = "0.6.0"
+version = "0.7.0"
 edition.workspace = true
 rust-version.workspace = true
 authors.workspace = true
@@ -42,7 +42,7 @@ exclude = [
 ]
 
 [dependencies]
-asset-importer-sys = { path = "../asset-importer-sys", version = "0.6" }
+asset-importer-sys = { path = "../asset-importer-sys", version = "0.7" }
 thiserror = "2.0.18"
 bitflags = "2.10.0"
 glam = { version = "0.30.10", optional = true }
