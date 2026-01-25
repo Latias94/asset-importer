@@ -39,45 +39,43 @@ impl Node {
         self.as_raw_sys()
     }
 
+    #[inline]
+    fn raw(&self) -> &sys::aiNode {
+        unsafe { &*self.node_ptr.as_ptr() }
+    }
+
     /// Get the name of the node
     pub fn name(&self) -> String {
-        unsafe { ai_string_to_string(&(*self.node_ptr.as_ptr()).mName) }
+        ai_string_to_string(&self.raw().mName)
     }
 
     /// Get the name of the node (zero-copy, lossy UTF-8).
     pub fn name_str(&self) -> std::borrow::Cow<'_, str> {
-        unsafe { ai_string_to_str(&(*self.node_ptr.as_ptr()).mName) }
+        ai_string_to_str(&self.raw().mName)
     }
 
     /// Get the transformation matrix of the node
     pub fn transformation(&self) -> Matrix4x4 {
-        unsafe {
-            let node = &*self.node_ptr.as_ptr();
-            from_ai_matrix4x4(node.mTransformation)
-        }
+        from_ai_matrix4x4(self.raw().mTransformation)
     }
 
     /// Get the parent node
     pub fn parent(&self) -> Option<Node> {
-        unsafe {
-            let node = &*self.node_ptr.as_ptr();
-            if node.mParent.is_null() {
-                None
-            } else {
-                Some(Node::from_raw(self.scene.clone(), node.mParent))
-            }
+        let node = self.raw();
+        if node.mParent.is_null() {
+            None
+        } else {
+            Some(unsafe { Node::from_raw(self.scene.clone(), node.mParent) })
         }
     }
 
     /// Get the number of child nodes
     pub fn num_children(&self) -> usize {
-        unsafe {
-            let node = &*self.node_ptr.as_ptr();
-            if node.mChildren.is_null() {
-                0
-            } else {
-                node.mNumChildren as usize
-            }
+        let node = self.raw();
+        if node.mChildren.is_null() {
+            0
+        } else {
+            node.mNumChildren as usize
         }
     }
 
@@ -87,15 +85,10 @@ impl Node {
             return None;
         }
 
-        unsafe {
-            let node = &*self.node_ptr.as_ptr();
-            let child_ptr =
-                ffi::ptr_array_get(self, node.mChildren, node.mNumChildren as usize, index)?;
-            Some(Node::from_raw(
-                self.scene.clone(),
-                child_ptr as *const sys::aiNode,
-            ))
-        }
+        let node = self.raw();
+        let child_ptr =
+            unsafe { ffi::ptr_array_get(self, node.mChildren, node.mNumChildren as usize, index) }?;
+        Some(unsafe { Node::from_raw(self.scene.clone(), child_ptr as *const sys::aiNode) })
     }
 
     /// Get an iterator over all child nodes
@@ -109,13 +102,11 @@ impl Node {
 
     /// Get the number of meshes attached to this node
     pub fn num_meshes(&self) -> usize {
-        unsafe {
-            let node = &*self.node_ptr.as_ptr();
-            if node.mMeshes.is_null() {
-                0
-            } else {
-                node.mNumMeshes as usize
-            }
+        let node = self.raw();
+        if node.mMeshes.is_null() {
+            0
+        } else {
+            node.mNumMeshes as usize
         }
     }
 
@@ -135,17 +126,17 @@ impl Node {
 
     /// Get the raw mesh index array (zero-copy).
     pub fn mesh_indices_raw(&self) -> &[u32] {
+        let node = self.raw();
+        debug_assert!(node.mNumMeshes == 0 || !node.mMeshes.is_null());
         unsafe {
-            let node = &*self.node_ptr.as_ptr();
-            debug_assert!(node.mNumMeshes == 0 || !node.mMeshes.is_null());
             ffi::slice_from_ptr_len(self, node.mMeshes as *const u32, node.mNumMeshes as usize)
         }
     }
 
     /// Get the raw mesh index array (zero-copy), returning `None` when absent.
     pub fn mesh_indices_raw_opt(&self) -> Option<&[u32]> {
+        let node = self.raw();
         unsafe {
-            let node = &*self.node_ptr.as_ptr();
             ffi::slice_from_ptr_len_opt(self, node.mMeshes as *const u32, node.mNumMeshes as usize)
         }
     }
@@ -260,9 +251,6 @@ impl ExactSizeIterator for MeshIndexIterator {}
 impl Node {
     /// Get node metadata
     pub fn metadata(&self) -> Result<Metadata> {
-        unsafe {
-            let node = &*self.node_ptr.as_ptr();
-            Metadata::from_raw_sys(node.mMetaData)
-        }
+        unsafe { Metadata::from_raw_sys(self.raw().mMetaData) }
     }
 }
