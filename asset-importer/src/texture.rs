@@ -358,17 +358,17 @@ impl Iterator for TextureIterator {
 
     fn next(&mut self) -> Option<Self::Item> {
         let textures = self.textures?;
-        while self.index < self.count {
-            unsafe {
-                let texture_ptr = *textures.as_ptr().add(self.index);
-                self.index += 1;
-                if texture_ptr.is_null() {
-                    continue;
-                }
-                // `from_raw` only fails on null pointers; keep the iterator robust anyway.
-                if let Ok(tex) = Texture::from_raw(self.scene.clone(), texture_ptr) {
-                    return Some(tex);
-                }
+        let slice =
+            unsafe { crate::ffi::slice_from_ptr_len_opt(&(), textures.as_ptr(), self.count) }?;
+        while self.index < slice.len() {
+            let texture_ptr = slice[self.index];
+            self.index += 1;
+            if texture_ptr.is_null() {
+                continue;
+            }
+            // `from_raw` only fails on null pointers; keep the iterator robust anyway.
+            if let Ok(tex) = unsafe { Texture::from_raw(self.scene.clone(), texture_ptr) } {
+                return Some(tex);
             }
         }
         None

@@ -1365,15 +1365,14 @@ impl Iterator for MaterialPropertyIterator {
 
     fn next(&mut self) -> Option<Self::Item> {
         let props = self.props?;
-        while self.index < self.count {
-            unsafe {
-                let ptr = *props.as_ptr().add(self.index);
-                self.index += 1;
-                if ptr.is_null() {
-                    continue;
-                }
-                return Some(MaterialPropertyRef::from_ptr(self.scene.clone(), ptr));
+        let slice = unsafe { crate::ffi::slice_from_ptr_len_opt(&(), props.as_ptr(), self.count) }?;
+        while self.index < slice.len() {
+            let ptr = slice[self.index];
+            self.index += 1;
+            if ptr.is_null() {
+                continue;
             }
+            return Some(MaterialPropertyRef::from_ptr(self.scene.clone(), ptr));
         }
         None
     }

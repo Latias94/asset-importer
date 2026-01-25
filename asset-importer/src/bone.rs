@@ -291,16 +291,15 @@ impl Iterator for BoneIterator {
 
     fn next(&mut self) -> Option<Self::Item> {
         let bones = self.bones?;
-        while self.index < self.count {
-            unsafe {
-                let bone_ptr = *bones.as_ptr().add(self.index);
-                self.index += 1;
-                if bone_ptr.is_null() {
-                    continue;
-                }
-                if let Ok(bone) = Bone::from_raw(self.scene.clone(), bone_ptr) {
-                    return Some(bone);
-                }
+        let slice = unsafe { crate::ffi::slice_from_ptr_len_opt(&(), bones.as_ptr(), self.count) }?;
+        while self.index < slice.len() {
+            let bone_ptr = slice[self.index];
+            self.index += 1;
+            if bone_ptr.is_null() {
+                continue;
+            }
+            if let Ok(bone) = unsafe { Bone::from_raw(self.scene.clone(), bone_ptr) } {
+                return Some(bone);
             }
         }
         None

@@ -121,6 +121,27 @@ mod tests {
     }
 
     #[test]
+    fn slice_from_ptr_len_opt_handles_null_and_zero_len() {
+        let owner = &();
+        let arr = [1u8, 2u8];
+
+        let got = unsafe { slice_from_ptr_len_opt(owner, arr.as_ptr(), 0) }.unwrap();
+        assert!(got.is_empty());
+
+        let got = unsafe { slice_from_ptr_len_opt(owner, arr.as_ptr(), arr.len()) }.unwrap();
+        assert_eq!(got, &arr);
+
+        assert_eq!(
+            unsafe { slice_from_ptr_len_opt(owner, std::ptr::null::<u8>(), 0) },
+            None
+        );
+        assert_eq!(
+            unsafe { slice_from_ptr_len_opt(owner, std::ptr::null::<u8>(), 2) },
+            None
+        );
+    }
+
+    #[test]
     fn ptr_array_get_handles_bounds_and_nulls() {
         let mut a = 1u32;
         let mut b = 2u32;
