@@ -71,9 +71,7 @@ impl AiFace {
     /// This is true for values borrowed from an Assimp-owned scene. It is **not**
     /// guaranteed for arbitrary `AiFace` values constructed by user code.
     pub unsafe fn indices_unchecked(&self) -> &[u32] {
-        unsafe {
-            crate::ffi::slice_from_ptr_len(self, self.mIndices as *const u32, self.num_indices())
-        }
+        crate::ffi::slice_from_ptr_len(self, self.mIndices as *const u32, self.num_indices())
     }
 }
 

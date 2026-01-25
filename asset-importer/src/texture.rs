@@ -189,7 +189,7 @@ impl Texture {
                 return Ok(TextureDataRef::Compressed(&[]));
             }
             let data_ptr = texture.pcData as *const u8;
-            let Some(bytes) = (unsafe { ffi::slice_from_ptr_len_opt(self, data_ptr, size) }) else {
+            let Some(bytes) = ffi::slice_from_ptr_len_opt(self, data_ptr, size) else {
                 return Err(Error::invalid_scene("Texture data is null"));
             };
             Ok(TextureDataRef::Compressed(bytes))
@@ -202,9 +202,9 @@ impl Texture {
             if size == 0 {
                 return Ok(TextureDataRef::Texels(&[]));
             }
-            let Some(texels) = (unsafe {
+            let Some(texels) =
                 ffi::slice_from_ptr_len_opt(self, texture.pcData as *const Texel, size)
-            }) else {
+            else {
                 return Err(Error::invalid_scene("Texture data is null"));
             };
             Ok(TextureDataRef::Texels(texels))
@@ -231,7 +231,7 @@ impl Texture {
         let hint = &self.raw().achFormatHint;
         // Find the null terminator
         let len = hint.iter().position(|&c| c == 0).unwrap_or(hint.len());
-        unsafe { ffi::slice_from_ptr_len(self, hint.as_ptr() as *const u8, len) }
+        ffi::slice_from_ptr_len(self, hint.as_ptr() as *const u8, len)
     }
 
     /// Get the format hint as UTF-8 (lossy) without allocation.
@@ -355,8 +355,7 @@ impl Iterator for TextureIterator {
 
     fn next(&mut self) -> Option<Self::Item> {
         let textures = self.textures?;
-        let slice =
-            unsafe { crate::ffi::slice_from_ptr_len_opt(&(), textures.as_ptr(), self.count) }?;
+        let slice = crate::ffi::slice_from_ptr_len_opt(&(), textures.as_ptr(), self.count)?;
         while self.index < slice.len() {
             let texture_ptr = slice[self.index];
             self.index += 1;

@@ -118,7 +118,7 @@ impl MaterialStringRef {
     /// Raw bytes (without assuming NUL-termination).
     pub fn as_bytes(&self) -> &[u8] {
         let len = (self.value.length as usize).min(self.value.data.len());
-        unsafe { ffi::slice_from_ptr_len(self, self.value.data.as_ptr() as *const u8, len) }
+        ffi::slice_from_ptr_len(self, self.value.data.as_ptr() as *const u8, len)
     }
 
     /// Borrow the underlying Assimp `aiString`.
@@ -1097,9 +1097,8 @@ impl<'a> MaterialPropertyData<'a> {
     /// # Safety
     /// The returned slice borrows Assimp-owned memory and must not outlive the scene.
     unsafe fn from_sys(prop: &'a sys::aiMaterialProperty) -> Option<Self> {
-        let bytes = unsafe {
-            ffi::slice_from_ptr_len_opt(prop, prop.mData as *const u8, prop.mDataLength as usize)?
-        };
+        let bytes =
+            ffi::slice_from_ptr_len_opt(prop, prop.mData as *const u8, prop.mDataLength as usize)?;
         Some(Self { bytes })
     }
 
@@ -1203,7 +1202,7 @@ impl MaterialPropertyRef {
     pub fn key_bytes(&self) -> &[u8] {
         let s = &self.raw().mKey;
         let len = (s.length as usize).min(s.data.len());
-        unsafe { ffi::slice_from_ptr_len(self, s.data.as_ptr() as *const u8, len) }
+        ffi::slice_from_ptr_len(self, s.data.as_ptr() as *const u8, len)
     }
 
     /// Property key as owned `String` (allocates).
@@ -1229,7 +1228,7 @@ impl MaterialPropertyRef {
     /// Raw property bytes as stored by Assimp (zero-copy).
     pub fn data(&self) -> &[u8] {
         let p = self.raw();
-        unsafe { ffi::slice_from_ptr_len(self, p.mData as *const u8, p.mDataLength as usize) }
+        ffi::slice_from_ptr_len(self, p.mData as *const u8, p.mDataLength as usize)
     }
 
     /// Interpret the property payload as an `i32` slice when stored as `Integer` (zero-copy).
@@ -1386,7 +1385,7 @@ impl MaterialPropertyRef {
         if (ptr as usize) % align != 0 || len % size != 0 {
             return None;
         }
-        Some(unsafe { ffi::slice_from_ptr_len(self, ptr as *const T, len / size) })
+        Some(ffi::slice_from_ptr_len(self, ptr as *const T, len / size))
     }
 
     fn into_info(self) -> MaterialPropertyInfo {
@@ -1407,7 +1406,7 @@ impl Iterator for MaterialPropertyIterator {
 
     fn next(&mut self) -> Option<Self::Item> {
         let props = self.props?;
-        let slice = unsafe { crate::ffi::slice_from_ptr_len_opt(&(), props.as_ptr(), self.count) }?;
+        let slice = crate::ffi::slice_from_ptr_len_opt(&(), props.as_ptr(), self.count)?;
         while self.index < slice.len() {
             let ptr = slice[self.index];
             self.index += 1;
@@ -1846,7 +1845,7 @@ impl TextureInfoRef {
     /// Raw bytes of the path (without assuming NUL-termination).
     pub fn path_bytes(&self) -> &[u8] {
         let len = (self.path.length as usize).min(self.path.data.len());
-        unsafe { ffi::slice_from_ptr_len(self, self.path.data.as_ptr() as *const u8, len) }
+        ffi::slice_from_ptr_len(self, self.path.data.as_ptr() as *const u8, len)
     }
 
     /// Borrow the underlying Assimp `aiString`.

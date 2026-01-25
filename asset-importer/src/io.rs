@@ -569,8 +569,7 @@ extern "C" fn file_write_proc(
         }
 
         let owner = &buffer;
-        let data_slice =
-            unsafe { ffi::slice_from_ptr_len(owner, buffer as *const u8, total_bytes) };
+        let data_slice = ffi::slice_from_ptr_len(owner, buffer as *const u8, total_bytes);
 
         match stream.write(data_slice) {
             Ok(bytes_written) => bytes_written.min(total_bytes) / size,

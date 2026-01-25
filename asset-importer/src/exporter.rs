@@ -275,7 +275,7 @@ impl ExportBlob {
     /// Get the data as a byte slice
     pub fn data(&self) -> &[u8] {
         let blob = self.raw_root();
-        unsafe { ffi::slice_from_ptr_len(self, blob.data as *const u8, blob.size) }
+        ffi::slice_from_ptr_len(self, blob.data as *const u8, blob.size)
     }
 
     /// Get the size of the data
@@ -336,7 +336,7 @@ impl ExportBlobView {
     /// Get the data as a byte slice.
     pub fn data(&self) -> &[u8] {
         let blob = self.raw();
-        unsafe { ffi::slice_from_ptr_len(self, blob.data as *const u8, blob.size) }
+        ffi::slice_from_ptr_len(self, blob.data as *const u8, blob.size)
     }
 
     /// Get the size of the data.

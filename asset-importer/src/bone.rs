@@ -131,27 +131,23 @@ impl Bone {
 
     /// Get the raw vertex weight array (zero-copy).
     pub fn weights_raw(&self) -> &[raw::AiVertexWeight] {
-        unsafe {
-            let bone = self.raw();
-            debug_assert!(bone.mNumWeights == 0 || !bone.mWeights.is_null());
-            ffi::slice_from_ptr_len(
-                self,
-                bone.mWeights as *const raw::AiVertexWeight,
-                bone.mNumWeights as usize,
-            )
-        }
+        let bone = self.raw();
+        debug_assert!(bone.mNumWeights == 0 || !bone.mWeights.is_null());
+        ffi::slice_from_ptr_len(
+            self,
+            bone.mWeights as *const raw::AiVertexWeight,
+            bone.mNumWeights as usize,
+        )
     }
 
     /// Get the raw vertex weight array (zero-copy), returning `None` when absent.
     pub fn weights_raw_opt(&self) -> Option<&[raw::AiVertexWeight]> {
-        unsafe {
-            let bone = self.raw();
-            ffi::slice_from_ptr_len_opt(
-                self,
-                bone.mWeights as *const raw::AiVertexWeight,
-                bone.mNumWeights as usize,
-            )
-        }
+        let bone = self.raw();
+        ffi::slice_from_ptr_len_opt(
+            self,
+            bone.mWeights as *const raw::AiVertexWeight,
+            bone.mNumWeights as usize,
+        )
     }
 
     /// Iterate vertex weights without allocation.
@@ -294,7 +290,7 @@ impl Iterator for BoneIterator {
 
     fn next(&mut self) -> Option<Self::Item> {
         let bones = self.bones?;
-        let slice = unsafe { crate::ffi::slice_from_ptr_len_opt(&(), bones.as_ptr(), self.count) }?;
+        let slice = crate::ffi::slice_from_ptr_len_opt(&(), bones.as_ptr(), self.count)?;
         while self.index < slice.len() {
             let bone_ptr = slice[self.index];
             self.index += 1;

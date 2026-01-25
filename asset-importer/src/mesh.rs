@@ -114,7 +114,7 @@ impl Mesh {
         let mesh = self.raw();
         let n = mesh.mNumVertices as usize;
         debug_assert!(n == 0 || !mesh.mVertices.is_null());
-        unsafe { ffi::slice_from_ptr_len(self, mesh.mVertices as *const raw::AiVector3D, n) }
+        ffi::slice_from_ptr_len(self, mesh.mVertices as *const raw::AiVector3D, n)
     }
 
     /// Get the raw vertex buffer as bytes (zero-copy).
@@ -137,7 +137,7 @@ impl Mesh {
         if ptr.is_null() {
             None
         } else {
-            Some(unsafe { ffi::slice_from_ptr_len(self, ptr, n) })
+            Some(ffi::slice_from_ptr_len(self, ptr, n))
         }
     }
 
@@ -157,13 +157,11 @@ impl Mesh {
     /// Get the raw normal buffer (zero-copy).
     pub fn normals_raw(&self) -> &[raw::AiVector3D] {
         let mesh = self.raw();
-        unsafe {
-            ffi::slice_from_ptr_len(
-                self,
-                mesh.mNormals as *const raw::AiVector3D,
-                mesh.mNumVertices as usize,
-            )
-        }
+        ffi::slice_from_ptr_len(
+            self,
+            mesh.mNormals as *const raw::AiVector3D,
+            mesh.mNumVertices as usize,
+        )
     }
 
     /// Get the raw normal buffer as bytes (zero-copy).
@@ -185,7 +183,11 @@ impl Mesh {
         if ptr.is_null() {
             None
         } else {
-            Some(unsafe { ffi::slice_from_ptr_len(self, ptr, mesh.mNumVertices as usize) })
+            Some(ffi::slice_from_ptr_len(
+                self,
+                ptr,
+                mesh.mNumVertices as usize,
+            ))
         }
     }
 
@@ -205,13 +207,11 @@ impl Mesh {
     /// Get the raw tangent buffer (zero-copy).
     pub fn tangents_raw(&self) -> &[raw::AiVector3D] {
         let mesh = self.raw();
-        unsafe {
-            ffi::slice_from_ptr_len(
-                self,
-                mesh.mTangents as *const raw::AiVector3D,
-                mesh.mNumVertices as usize,
-            )
-        }
+        ffi::slice_from_ptr_len(
+            self,
+            mesh.mTangents as *const raw::AiVector3D,
+            mesh.mNumVertices as usize,
+        )
     }
 
     /// Get the raw tangent buffer as bytes (zero-copy).
@@ -233,7 +233,11 @@ impl Mesh {
         if ptr.is_null() {
             None
         } else {
-            Some(unsafe { ffi::slice_from_ptr_len(self, ptr, mesh.mNumVertices as usize) })
+            Some(ffi::slice_from_ptr_len(
+                self,
+                ptr,
+                mesh.mNumVertices as usize,
+            ))
         }
     }
 
@@ -253,13 +257,11 @@ impl Mesh {
     /// Get the raw bitangent buffer (zero-copy).
     pub fn bitangents_raw(&self) -> &[raw::AiVector3D] {
         let mesh = self.raw();
-        unsafe {
-            ffi::slice_from_ptr_len(
-                self,
-                mesh.mBitangents as *const raw::AiVector3D,
-                mesh.mNumVertices as usize,
-            )
-        }
+        ffi::slice_from_ptr_len(
+            self,
+            mesh.mBitangents as *const raw::AiVector3D,
+            mesh.mNumVertices as usize,
+        )
     }
 
     /// Get the raw bitangent buffer as bytes (zero-copy).
@@ -281,7 +283,11 @@ impl Mesh {
         if ptr.is_null() {
             None
         } else {
-            Some(unsafe { ffi::slice_from_ptr_len(self, ptr, mesh.mNumVertices as usize) })
+            Some(ffi::slice_from_ptr_len(
+                self,
+                ptr,
+                mesh.mNumVertices as usize,
+            ))
         }
     }
 
@@ -314,13 +320,11 @@ impl Mesh {
 
         let mesh = self.raw();
         let tex_coords_ptr = mesh.mTextureCoords[channel];
-        unsafe {
-            ffi::slice_from_ptr_len(
-                self,
-                tex_coords_ptr as *const raw::AiVector3D,
-                mesh.mNumVertices as usize,
-            )
-        }
+        ffi::slice_from_ptr_len(
+            self,
+            tex_coords_ptr as *const raw::AiVector3D,
+            mesh.mNumVertices as usize,
+        )
     }
 
     /// Get raw texture coordinates for a specific channel as bytes (zero-copy).
@@ -345,7 +349,11 @@ impl Mesh {
         if ptr.is_null() {
             None
         } else {
-            Some(unsafe { ffi::slice_from_ptr_len(self, ptr, mesh.mNumVertices as usize) })
+            Some(ffi::slice_from_ptr_len(
+                self,
+                ptr,
+                mesh.mNumVertices as usize,
+            ))
         }
     }
 
@@ -382,13 +390,11 @@ impl Mesh {
 
         let mesh = self.raw();
         let colors_ptr = mesh.mColors[channel];
-        unsafe {
-            ffi::slice_from_ptr_len(
-                self,
-                colors_ptr as *const raw::AiColor4D,
-                mesh.mNumVertices as usize,
-            )
-        }
+        ffi::slice_from_ptr_len(
+            self,
+            colors_ptr as *const raw::AiColor4D,
+            mesh.mNumVertices as usize,
+        )
     }
 
     /// Get raw vertex colors for a specific channel as bytes (zero-copy).
@@ -413,7 +419,11 @@ impl Mesh {
         if ptr.is_null() {
             None
         } else {
-            Some(unsafe { ffi::slice_from_ptr_len(self, ptr, mesh.mNumVertices as usize) })
+            Some(ffi::slice_from_ptr_len(
+                self,
+                ptr,
+                mesh.mNumVertices as usize,
+            ))
         }
     }
 
@@ -468,7 +478,7 @@ impl Mesh {
         let mesh = self.raw();
         let n = mesh.mNumFaces as usize;
         debug_assert!(n == 0 || !mesh.mFaces.is_null());
-        unsafe { ffi::slice_from_ptr_len(self, mesh.mFaces as *const raw::AiFace, n) }
+        ffi::slice_from_ptr_len(self, mesh.mFaces as *const raw::AiFace, n)
     }
 
     /// Get the raw face array (zero-copy), returning `None` when absent.
@@ -479,7 +489,7 @@ impl Mesh {
         if ptr.is_null() {
             None
         } else {
-            Some(unsafe { ffi::slice_from_ptr_len(self, ptr, n) })
+            Some(ffi::slice_from_ptr_len(self, ptr, n))
         }
     }
 
@@ -539,9 +549,7 @@ impl Mesh {
             return None;
         }
         let mesh = self.raw();
-        let ptr = unsafe {
-            ffi::ptr_array_get(self, mesh.mAnimMeshes, mesh.mNumAnimMeshes as usize, index)
-        }?;
+        let ptr = ffi::ptr_array_get(self, mesh.mAnimMeshes, mesh.mNumAnimMeshes as usize, index)?;
         let anim_ptr = SharedPtr::new(ptr as *const sys::aiAnimMesh)?;
         Some(AnimMesh {
             scene: self.scene.clone(),
@@ -575,8 +583,7 @@ impl Mesh {
         }
 
         let mesh = self.raw();
-        let bone_ptr =
-            unsafe { ffi::ptr_array_get(self, mesh.mBones, mesh.mNumBones as usize, index) }?;
+        let bone_ptr = ffi::ptr_array_get(self, mesh.mBones, mesh.mNumBones as usize, index)?;
         unsafe { Bone::from_raw(self.scene.clone(), bone_ptr as *const sys::aiBone) }.ok()
     }
 
@@ -635,9 +642,7 @@ impl Face {
     pub fn indices_raw(&self) -> &[u32] {
         let face = self.raw();
         debug_assert!(face.mNumIndices == 0 || !face.mIndices.is_null());
-        unsafe {
-            ffi::slice_from_ptr_len(self, face.mIndices as *const u32, face.mNumIndices as usize)
-        }
+        ffi::slice_from_ptr_len(self, face.mIndices as *const u32, face.mNumIndices as usize)
     }
 
     /// Get the raw index slice as bytes (zero-copy).
@@ -649,13 +654,7 @@ impl Face {
     /// Get the raw index slice (zero-copy), returning `None` when absent.
     pub fn indices_raw_opt(&self) -> Option<&[u32]> {
         let face = self.raw();
-        unsafe {
-            ffi::slice_from_ptr_len_opt(
-                self,
-                face.mIndices as *const u32,
-                face.mNumIndices as usize,
-            )
-        }
+        ffi::slice_from_ptr_len_opt(self, face.mIndices as *const u32, face.mNumIndices as usize)
     }
 
     /// Get the indices of this face.
@@ -684,13 +683,11 @@ impl Iterator for FaceIterator {
     fn next(&mut self) -> Option<Self::Item> {
         let mesh_ptr = self.mesh_ptr();
         let mesh = mesh_ptr.as_ref();
-        let faces: &[raw::AiFace] = unsafe {
-            ffi::slice_from_ptr_len_opt(
-                mesh,
-                mesh.mFaces as *const raw::AiFace,
-                mesh.mNumFaces as usize,
-            )
-        }?;
+        let faces: &[raw::AiFace] = ffi::slice_from_ptr_len_opt(
+            mesh,
+            mesh.mFaces as *const raw::AiFace,
+            mesh.mNumFaces as usize,
+        )?;
         let index = self.index;
         let face_ref = faces.get(index)?;
         self.index = index + 1;
@@ -789,13 +786,11 @@ impl AnimMesh {
     /// Raw replacement positions (zero-copy).
     pub fn vertices_raw(&self) -> &[raw::AiVector3D] {
         let m = self.raw();
-        unsafe {
-            ffi::slice_from_ptr_len(
-                self,
-                m.mVertices as *const raw::AiVector3D,
-                m.mNumVertices as usize,
-            )
-        }
+        ffi::slice_from_ptr_len(
+            self,
+            m.mVertices as *const raw::AiVector3D,
+            m.mNumVertices as usize,
+        )
     }
 
     /// Raw replacement positions as bytes (zero-copy).
@@ -817,7 +812,7 @@ impl AnimMesh {
         if ptr.is_null() {
             None
         } else {
-            Some(unsafe { ffi::slice_from_ptr_len(self, ptr, m.mNumVertices as usize) })
+            Some(ffi::slice_from_ptr_len(self, ptr, m.mNumVertices as usize))
         }
     }
 
@@ -830,13 +825,11 @@ impl AnimMesh {
     /// Raw replacement normals (zero-copy).
     pub fn normals_raw(&self) -> &[raw::AiVector3D] {
         let m = self.raw();
-        unsafe {
-            ffi::slice_from_ptr_len(
-                self,
-                m.mNormals as *const raw::AiVector3D,
-                m.mNumVertices as usize,
-            )
-        }
+        ffi::slice_from_ptr_len(
+            self,
+            m.mNormals as *const raw::AiVector3D,
+            m.mNumVertices as usize,
+        )
     }
 
     /// Raw replacement normals as bytes (zero-copy).
@@ -858,7 +851,7 @@ impl AnimMesh {
         if ptr.is_null() {
             None
         } else {
-            Some(unsafe { ffi::slice_from_ptr_len(self, ptr, m.mNumVertices as usize) })
+            Some(ffi::slice_from_ptr_len(self, ptr, m.mNumVertices as usize))
         }
     }
 
@@ -871,13 +864,11 @@ impl AnimMesh {
     /// Raw replacement tangents (zero-copy).
     pub fn tangents_raw(&self) -> &[raw::AiVector3D] {
         let m = self.raw();
-        unsafe {
-            ffi::slice_from_ptr_len(
-                self,
-                m.mTangents as *const raw::AiVector3D,
-                m.mNumVertices as usize,
-            )
-        }
+        ffi::slice_from_ptr_len(
+            self,
+            m.mTangents as *const raw::AiVector3D,
+            m.mNumVertices as usize,
+        )
     }
 
     /// Raw replacement tangents as bytes (zero-copy).
@@ -899,7 +890,7 @@ impl AnimMesh {
         if ptr.is_null() {
             None
         } else {
-            Some(unsafe { ffi::slice_from_ptr_len(self, ptr, m.mNumVertices as usize) })
+            Some(ffi::slice_from_ptr_len(self, ptr, m.mNumVertices as usize))
         }
     }
 
@@ -912,13 +903,11 @@ impl AnimMesh {
     /// Raw replacement bitangents (zero-copy).
     pub fn bitangents_raw(&self) -> &[raw::AiVector3D] {
         let m = self.raw();
-        unsafe {
-            ffi::slice_from_ptr_len(
-                self,
-                m.mBitangents as *const raw::AiVector3D,
-                m.mNumVertices as usize,
-            )
-        }
+        ffi::slice_from_ptr_len(
+            self,
+            m.mBitangents as *const raw::AiVector3D,
+            m.mNumVertices as usize,
+        )
     }
 
     /// Raw replacement bitangents as bytes (zero-copy).
@@ -940,7 +929,7 @@ impl AnimMesh {
         if ptr.is_null() {
             None
         } else {
-            Some(unsafe { ffi::slice_from_ptr_len(self, ptr, m.mNumVertices as usize) })
+            Some(ffi::slice_from_ptr_len(self, ptr, m.mNumVertices as usize))
         }
     }
 
@@ -960,9 +949,7 @@ impl AnimMesh {
         }
         let m = self.raw();
         let ptr = m.mColors[channel];
-        unsafe {
-            ffi::slice_from_ptr_len(self, ptr as *const raw::AiColor4D, m.mNumVertices as usize)
-        }
+        ffi::slice_from_ptr_len(self, ptr as *const raw::AiColor4D, m.mNumVertices as usize)
     }
 
     /// Raw replacement vertex colors for a specific channel (zero-copy), returning `None` when absent.
@@ -975,7 +962,7 @@ impl AnimMesh {
         if ptr.is_null() {
             None
         } else {
-            Some(unsafe { ffi::slice_from_ptr_len(self, ptr, m.mNumVertices as usize) })
+            Some(ffi::slice_from_ptr_len(self, ptr, m.mNumVertices as usize))
         }
     }
 
@@ -1000,9 +987,7 @@ impl AnimMesh {
         }
         let m = self.raw();
         let ptr = m.mTextureCoords[channel];
-        unsafe {
-            ffi::slice_from_ptr_len(self, ptr as *const raw::AiVector3D, m.mNumVertices as usize)
-        }
+        ffi::slice_from_ptr_len(self, ptr as *const raw::AiVector3D, m.mNumVertices as usize)
     }
 
     /// Raw replacement texture coordinates for a specific channel as bytes (zero-copy).
@@ -1027,7 +1012,7 @@ impl AnimMesh {
         if ptr.is_null() {
             None
         } else {
-            Some(unsafe { ffi::slice_from_ptr_len(self, ptr, m.mNumVertices as usize) })
+            Some(ffi::slice_from_ptr_len(self, ptr, m.mNumVertices as usize))
         }
     }
 
@@ -1066,13 +1051,11 @@ impl Iterator for AnimMeshIterator {
     fn next(&mut self) -> Option<Self::Item> {
         let mesh_ptr = self.mesh_ptr();
         let mesh = mesh_ptr.as_ref();
-        let meshes: &[*mut sys::aiAnimMesh] = unsafe {
-            ffi::slice_from_ptr_len_opt(
-                mesh,
-                mesh.mAnimMeshes as *const *mut sys::aiAnimMesh,
-                mesh.mNumAnimMeshes as usize,
-            )
-        }?;
+        let meshes: &[*mut sys::aiAnimMesh] = ffi::slice_from_ptr_len_opt(
+            mesh,
+            mesh.mAnimMeshes as *const *mut sys::aiAnimMesh,
+            mesh.mNumAnimMeshes as usize,
+        )?;
         while self.index < meshes.len() {
             let index = self.index;
             self.index = index + 1;

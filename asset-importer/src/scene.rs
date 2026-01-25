@@ -422,8 +422,7 @@ impl Scene {
         }
 
         let scene = self.raw();
-        let mesh_ptr =
-            unsafe { ffi::ptr_array_get(self, scene.mMeshes, scene.mNumMeshes as usize, index) }?;
+        let mesh_ptr = ffi::ptr_array_get(self, scene.mMeshes, scene.mNumMeshes as usize, index)?;
         Some(unsafe { Mesh::from_raw(self.clone(), mesh_ptr as *const sys::aiMesh) })
     }
 
@@ -452,9 +451,8 @@ impl Scene {
         }
 
         let scene = self.raw();
-        let material_ptr = unsafe {
-            ffi::ptr_array_get(self, scene.mMaterials, scene.mNumMaterials as usize, index)
-        }?;
+        let material_ptr =
+            ffi::ptr_array_get(self, scene.mMaterials, scene.mNumMaterials as usize, index)?;
         Some(unsafe { Material::from_raw(self.clone(), material_ptr as *const sys::aiMaterial) })
     }
 
@@ -483,14 +481,12 @@ impl Scene {
         }
 
         let scene = self.raw();
-        let animation_ptr = unsafe {
-            ffi::ptr_array_get(
-                self,
-                scene.mAnimations,
-                scene.mNumAnimations as usize,
-                index,
-            )
-        }?;
+        let animation_ptr = ffi::ptr_array_get(
+            self,
+            scene.mAnimations,
+            scene.mNumAnimations as usize,
+            index,
+        )?;
         Some(unsafe { Animation::from_raw(self.clone(), animation_ptr as *const sys::aiAnimation) })
     }
 
@@ -520,7 +516,7 @@ impl Scene {
 
         let scene = self.raw();
         let camera_ptr =
-            unsafe { ffi::ptr_array_get(self, scene.mCameras, scene.mNumCameras as usize, index) }?;
+            ffi::ptr_array_get(self, scene.mCameras, scene.mNumCameras as usize, index)?;
         Some(unsafe { Camera::from_raw(self.clone(), camera_ptr as *const sys::aiCamera) })
     }
 
@@ -549,8 +545,7 @@ impl Scene {
         }
 
         let scene = self.raw();
-        let light_ptr =
-            unsafe { ffi::ptr_array_get(self, scene.mLights, scene.mNumLights as usize, index) }?;
+        let light_ptr = ffi::ptr_array_get(self, scene.mLights, scene.mNumLights as usize, index)?;
         Some(unsafe { Light::from_raw(self.clone(), light_ptr as *const sys::aiLight) })
     }
 
@@ -737,9 +732,8 @@ impl Scene {
         }
 
         let scene = self.raw();
-        let texture_ptr = unsafe {
-            ffi::ptr_array_get(self, scene.mTextures, scene.mNumTextures as usize, index)
-        }?;
+        let texture_ptr =
+            ffi::ptr_array_get(self, scene.mTextures, scene.mNumTextures as usize, index)?;
         unsafe { Texture::from_raw(self.clone(), texture_ptr as *const sys::aiTexture) }.ok()
     }
 

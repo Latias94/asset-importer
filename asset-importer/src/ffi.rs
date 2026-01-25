@@ -9,14 +9,10 @@
 ///
 /// Returns an empty slice when `ptr` is null or `len == 0`.
 ///
-/// # Safety
-/// Callers must ensure the memory behind `ptr` is valid for `len` elements of `T`
-/// for at least as long as `owner` is alive.
-pub(crate) unsafe fn slice_from_ptr_len<O: ?Sized, T>(
-    owner: &O,
-    ptr: *const T,
-    len: usize,
-) -> &[T] {
+/// # Assumptions
+/// This crate assumes Assimp returns valid pointers/lengths for scene-backed data.
+/// The returned slice is tied to `owner` so it cannot outlive the safe wrapper type.
+pub(crate) fn slice_from_ptr_len<O: ?Sized, T>(owner: &O, ptr: *const T, len: usize) -> &[T] {
     let _ = owner;
     if ptr.is_null() || len == 0 {
         &[]
@@ -28,6 +24,8 @@ pub(crate) unsafe fn slice_from_ptr_len<O: ?Sized, T>(
         if elem_size != 0 && len > (isize::MAX as usize) / elem_size {
             &[]
         } else {
+            // SAFETY: The crate assumes `ptr` is valid for `len` elements of `T` when sourced
+            // from Assimp, and we defensively clamp insane lengths above.
             unsafe { std::slice::from_raw_parts(ptr, len) }
         }
     }
@@ -36,9 +34,9 @@ pub(crate) unsafe fn slice_from_ptr_len<O: ?Sized, T>(
 /// Borrow a slice from a raw pointer and element count, returning `None` when
 /// `ptr` is null.
 ///
-/// # Safety
+/// # Assumptions
 /// Same as [`slice_from_ptr_len`].
-pub(crate) unsafe fn slice_from_ptr_len_opt<O: ?Sized, T>(
+pub(crate) fn slice_from_ptr_len_opt<O: ?Sized, T>(
     owner: &O,
     ptr: *const T,
     len: usize,
@@ -47,7 +45,7 @@ pub(crate) unsafe fn slice_from_ptr_len_opt<O: ?Sized, T>(
     if ptr.is_null() {
         return None;
     }
-    Some(unsafe { slice_from_ptr_len(owner, ptr, len) })
+    Some(slice_from_ptr_len(owner, ptr, len))
 }
 
 /// Read a pointer element from a `T**`-style pointer array.
@@ -55,16 +53,15 @@ pub(crate) unsafe fn slice_from_ptr_len_opt<O: ?Sized, T>(
 /// Returns `None` when the base pointer is null, the index is out-of-bounds, or
 /// the element pointer at `index` is null.
 ///
-/// # Safety
-/// Callers must ensure `base` is valid for `len` elements and that the pointer
-/// array lives for at least as long as `owner` is alive.
-pub(crate) unsafe fn ptr_array_get<O: ?Sized, T>(
+/// # Assumptions
+/// Same as [`slice_from_ptr_len`], plus `base` must be valid for `len` elements.
+pub(crate) fn ptr_array_get<O: ?Sized, T>(
     owner: &O,
     base: *const *mut T,
     len: usize,
     index: usize,
 ) -> Option<*mut T> {
-    let slice = unsafe { slice_from_ptr_len_opt(owner, base, len) }?;
+    let slice = slice_from_ptr_len_opt(owner, base, len)?;
     let ptr = *slice.get(index)?;
     if ptr.is_null() { None } else { Some(ptr) }
 }
@@ -112,7 +109,7 @@ mod tests {
         let mut_p = 1usize as *mut u8;
 
         let owner = &();
-        let s = unsafe { slice_from_ptr_len(owner, p, too_large) };
+        let s = slice_from_ptr_len(owner, p, too_large);
         assert!(s.is_empty());
 
         let mut owner = ();
@@ -125,18 +122,18 @@ mod tests {
         let owner = &();
         let arr = [1u8, 2u8];
 
-        let got = unsafe { slice_from_ptr_len_opt(owner, arr.as_ptr(), 0) }.unwrap();
+        let got = slice_from_ptr_len_opt(owner, arr.as_ptr(), 0).unwrap();
         assert!(got.is_empty());
 
-        let got = unsafe { slice_from_ptr_len_opt(owner, arr.as_ptr(), arr.len()) }.unwrap();
+        let got = slice_from_ptr_len_opt(owner, arr.as_ptr(), arr.len()).unwrap();
         assert_eq!(got, &arr);
 
         assert_eq!(
-            unsafe { slice_from_ptr_len_opt(owner, std::ptr::null::<u8>(), 0) },
+            slice_from_ptr_len_opt(owner, std::ptr::null::<u8>(), 0),
             None
         );
         assert_eq!(
-            unsafe { slice_from_ptr_len_opt(owner, std::ptr::null::<u8>(), 2) },
+            slice_from_ptr_len_opt(owner, std::ptr::null::<u8>(), 2),
             None
         );
     }
@@ -149,25 +146,19 @@ mod tests {
 
         let owner = &arr;
         assert_eq!(
-            unsafe { ptr_array_get(owner, arr.as_ptr(), arr.len(), 0) },
+            ptr_array_get(owner, arr.as_ptr(), arr.len(), 0),
             Some(&mut a as *mut u32)
         );
+        assert_eq!(ptr_array_get(owner, arr.as_ptr(), arr.len(), 1), None);
         assert_eq!(
-            unsafe { ptr_array_get(owner, arr.as_ptr(), arr.len(), 1) },
-            None
-        );
-        assert_eq!(
-            unsafe { ptr_array_get(owner, arr.as_ptr(), arr.len(), 2) },
+            ptr_array_get(owner, arr.as_ptr(), arr.len(), 2),
             Some(&mut b as *mut u32)
         );
-        assert_eq!(
-            unsafe { ptr_array_get(owner, arr.as_ptr(), arr.len(), 3) },
-            None
-        );
+        assert_eq!(ptr_array_get(owner, arr.as_ptr(), arr.len(), 3), None);
 
         // Null base pointer should yield None even if len/index are non-zero.
         assert_eq!(
-            unsafe { ptr_array_get(owner, std::ptr::null::<*mut u32>(), 10, 0) },
+            ptr_array_get(owner, std::ptr::null::<*mut u32>(), 10, 0),
             None
         );
     }

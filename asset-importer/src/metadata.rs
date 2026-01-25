@@ -315,8 +315,8 @@ impl Metadata {
 
         // Parse each metadata entry.
         let n = metadata.mNumProperties as usize;
-        let keys = unsafe { ffi::slice_from_ptr_len(metadata, metadata.mKeys, n) };
-        let values = unsafe { ffi::slice_from_ptr_len(metadata, metadata.mValues, n) };
+        let keys = ffi::slice_from_ptr_len(metadata, metadata.mKeys, n);
+        let values = ffi::slice_from_ptr_len(metadata, metadata.mValues, n);
         for (key_ai_string, entry) in keys.iter().zip(values.iter()) {
             let key = ai_string_to_string(key_ai_string);
             if key.is_empty() {

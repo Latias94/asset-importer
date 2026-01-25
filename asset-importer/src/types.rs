@@ -649,7 +649,7 @@ pub(crate) fn ai_string_to_str(value: &sys::aiString) -> Cow<'_, str> {
     if len == 0 {
         return Cow::Borrowed("");
     }
-    let bytes = unsafe { ffi::slice_from_ptr_len(value, value.data.as_ptr() as *const u8, len) };
+    let bytes = ffi::slice_from_ptr_len(value, value.data.as_ptr() as *const u8, len);
     String::from_utf8_lossy(bytes)
 }
 
