@@ -5,9 +5,107 @@
 
 use crate::{
     error::Result,
-    ffi, raw, sys,
+    ffi, sys,
     types::{Vector3D, ai_string_to_string},
 };
+
+/// Decode `aiMetadataEntry::mData` without assuming alignment.
+///
+/// Note: `aiMetadataEntry` does not carry a length, so decoding is inherently unsafe: callers must
+/// trust Assimp to provide a valid pointer for the requested type. We still centralize reads here
+/// to reduce `unsafe` surface and avoid UB-prone patterns (e.g. decoding `bool` directly).
+struct MetadataEntryData {
+    ptr: *const u8,
+}
+
+impl MetadataEntryData {
+    /// # Safety
+    /// `entry.mData` must be a valid pointer for the corresponding metadata type.
+    unsafe fn from_entry(entry: &sys::aiMetadataEntry) -> Result<Self> {
+        if entry.mData.is_null() {
+            return Err(crate::error::Error::invalid_parameter(
+                "Null metadata data".to_string(),
+            ));
+        }
+        Ok(Self {
+            ptr: entry.mData.cast::<u8>(),
+        })
+    }
+
+    /// # Safety
+    /// `self.ptr` must be valid for `N` bytes.
+    unsafe fn read_bytes<const N: usize>(&self) -> [u8; N] {
+        let mut out = [0u8; N];
+        unsafe { std::ptr::copy_nonoverlapping(self.ptr, out.as_mut_ptr(), N) };
+        out
+    }
+
+    /// # Safety
+    /// `self.ptr` must point to a valid `T` value in native endianness.
+    unsafe fn read_ne_i32(&self) -> i32 {
+        i32::from_ne_bytes(unsafe { self.read_bytes::<4>() })
+    }
+
+    /// # Safety
+    /// `self.ptr` must point to a valid `T` value in native endianness.
+    unsafe fn read_ne_u32(&self) -> u32 {
+        u32::from_ne_bytes(unsafe { self.read_bytes::<4>() })
+    }
+
+    /// # Safety
+    /// `self.ptr` must point to a valid `T` value in native endianness.
+    unsafe fn read_ne_i64(&self) -> i64 {
+        i64::from_ne_bytes(unsafe { self.read_bytes::<8>() })
+    }
+
+    /// # Safety
+    /// `self.ptr` must point to a valid `T` value in native endianness.
+    unsafe fn read_ne_u64(&self) -> u64 {
+        u64::from_ne_bytes(unsafe { self.read_bytes::<8>() })
+    }
+
+    /// # Safety
+    /// `self.ptr` must point to a valid `T` value in native endianness.
+    unsafe fn read_ne_f32(&self) -> f32 {
+        f32::from_ne_bytes(unsafe { self.read_bytes::<4>() })
+    }
+
+    /// # Safety
+    /// `self.ptr` must point to a valid `T` value in native endianness.
+    unsafe fn read_ne_f64(&self) -> f64 {
+        f64::from_ne_bytes(unsafe { self.read_bytes::<8>() })
+    }
+
+    /// # Safety
+    /// `self.ptr` must point to a valid `aiString` value.
+    unsafe fn read_ai_string(&self) -> sys::aiString {
+        let mut out = std::mem::MaybeUninit::<sys::aiString>::uninit();
+        unsafe {
+            std::ptr::copy_nonoverlapping(
+                self.ptr,
+                out.as_mut_ptr().cast::<u8>(),
+                std::mem::size_of::<sys::aiString>(),
+            );
+            out.assume_init()
+        }
+    }
+
+    /// # Safety
+    /// `self.ptr` must point to a valid `aiVector3D`-compatible layout.
+    unsafe fn read_vector3d(&self) -> Vector3D {
+        let bytes = unsafe { self.read_bytes::<12>() };
+        let x = f32::from_ne_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
+        let y = f32::from_ne_bytes([bytes[4], bytes[5], bytes[6], bytes[7]]);
+        let z = f32::from_ne_bytes([bytes[8], bytes[9], bytes[10], bytes[11]]);
+        Vector3D::new(x, y, z)
+    }
+
+    /// # Safety
+    /// `self.ptr` must point to a boolean value stored as a byte.
+    unsafe fn read_bool_byte(&self) -> bool {
+        unsafe { *self.ptr != 0 }
+    }
+}
 
 /// Common metadata keys used across different file formats
 pub mod common_metadata {
@@ -240,11 +338,7 @@ impl Metadata {
 
     /// Parse a single metadata entry
     unsafe fn parse_metadata_entry(entry: &sys::aiMetadataEntry) -> Result<MetadataEntry> {
-        if entry.mData.is_null() {
-            return Err(crate::error::Error::invalid_parameter(
-                "Null metadata data".to_string(),
-            ));
-        }
+        let data = unsafe { MetadataEntryData::from_entry(entry) }?;
 
         match entry.mType {
             sys::aiMetadataType::AI_BOOL => {
@@ -252,36 +346,26 @@ impl Metadata {
                 //
                 // Don't read a Rust `bool` directly: if a corrupted/malicious scene stores a value
                 // other than 0/1, materializing it as `bool` is UB. Decode as a byte instead.
-                let value = unsafe { std::ptr::read_unaligned(entry.mData as *const u8) };
-                Ok(MetadataEntry::Bool(value != 0))
+                Ok(MetadataEntry::Bool(unsafe { data.read_bool_byte() }))
             }
             sys::aiMetadataType::AI_INT32 => {
-                let value = unsafe { std::ptr::read_unaligned(entry.mData as *const i32) };
-                Ok(MetadataEntry::Int32(value))
+                Ok(MetadataEntry::Int32(unsafe { data.read_ne_i32() }))
             }
             sys::aiMetadataType::AI_UINT64 => {
-                let value = unsafe { std::ptr::read_unaligned(entry.mData as *const u64) };
-                Ok(MetadataEntry::UInt64(value))
+                Ok(MetadataEntry::UInt64(unsafe { data.read_ne_u64() }))
             }
             sys::aiMetadataType::AI_FLOAT => {
-                let value = unsafe { std::ptr::read_unaligned(entry.mData as *const f32) };
-                Ok(MetadataEntry::Float(value))
+                Ok(MetadataEntry::Float(unsafe { data.read_ne_f32() }))
             }
             sys::aiMetadataType::AI_DOUBLE => {
-                let value = unsafe { std::ptr::read_unaligned(entry.mData as *const f64) };
-                Ok(MetadataEntry::Double(value))
+                Ok(MetadataEntry::Double(unsafe { data.read_ne_f64() }))
             }
             sys::aiMetadataType::AI_AISTRING => {
-                let ai_string =
-                    unsafe { std::ptr::read_unaligned(entry.mData as *const sys::aiString) };
+                let ai_string = unsafe { data.read_ai_string() };
                 Ok(MetadataEntry::String(ai_string_to_string(&ai_string)))
             }
             sys::aiMetadataType::AI_AIVECTOR3D => {
-                let vector =
-                    unsafe { std::ptr::read_unaligned(entry.mData as *const raw::AiVector3D) };
-                Ok(MetadataEntry::Vector3D(crate::types::Vector3D::new(
-                    vector.x, vector.y, vector.z,
-                )))
+                Ok(MetadataEntry::Vector3D(unsafe { data.read_vector3d() }))
             }
             sys::aiMetadataType::AI_AIMETADATA => {
                 let nested_metadata =
@@ -289,12 +373,10 @@ impl Metadata {
                 Ok(MetadataEntry::Metadata(nested_metadata))
             }
             sys::aiMetadataType::AI_INT64 => {
-                let value = unsafe { std::ptr::read_unaligned(entry.mData as *const i64) };
-                Ok(MetadataEntry::Int64(value))
+                Ok(MetadataEntry::Int64(unsafe { data.read_ne_i64() }))
             }
             sys::aiMetadataType::AI_UINT32 => {
-                let value = unsafe { std::ptr::read_unaligned(entry.mData as *const u32) };
-                Ok(MetadataEntry::UInt32(value))
+                Ok(MetadataEntry::UInt32(unsafe { data.read_ne_u32() }))
             }
             _ => Err(crate::error::Error::invalid_parameter(
                 "Unknown metadata type".to_string(),
@@ -465,5 +547,58 @@ mod tests {
             mData: std::ptr::null_mut(),
         };
         assert!(unsafe { Metadata::parse_metadata_entry(&entry) }.is_err());
+    }
+
+    #[test]
+    fn parse_vector3d_allows_unaligned_data() {
+        let mut buf = vec![0u8; 32];
+        let offset = 1usize;
+
+        let x = 1.25f32.to_ne_bytes();
+        let y = (-2.0f32).to_ne_bytes();
+        let z = 3.5f32.to_ne_bytes();
+        buf[offset..offset + 4].copy_from_slice(&x);
+        buf[offset + 4..offset + 8].copy_from_slice(&y);
+        buf[offset + 8..offset + 12].copy_from_slice(&z);
+
+        let entry = sys::aiMetadataEntry {
+            mType: sys::aiMetadataType::AI_AIVECTOR3D,
+            mData: unsafe { buf.as_mut_ptr().add(offset) }.cast::<std::ffi::c_void>(),
+        };
+        assert!(matches!(
+            unsafe { Metadata::parse_metadata_entry(&entry) }.unwrap(),
+            MetadataEntry::Vector3D(v) if v == Vector3D::new(1.25, -2.0, 3.5)
+        ));
+    }
+
+    #[test]
+    fn parse_ai_string_allows_unaligned_data() {
+        let mut s = sys::aiString {
+            length: 3,
+            data: [0; sys::AI_MAXLEN as usize],
+        };
+        s.data[0] = b'a' as std::os::raw::c_char;
+        s.data[1] = b'b' as std::os::raw::c_char;
+        s.data[2] = b'c' as std::os::raw::c_char;
+
+        let size = std::mem::size_of::<sys::aiString>();
+        let mut buf = vec![0u8; size + 8];
+        let offset = 1usize;
+        unsafe {
+            std::ptr::copy_nonoverlapping(
+                std::ptr::from_ref(&s).cast::<u8>(),
+                buf.as_mut_ptr().add(offset),
+                size,
+            );
+        }
+
+        let entry = sys::aiMetadataEntry {
+            mType: sys::aiMetadataType::AI_AISTRING,
+            mData: unsafe { buf.as_mut_ptr().add(offset) }.cast::<std::ffi::c_void>(),
+        };
+        assert!(matches!(
+            unsafe { Metadata::parse_metadata_entry(&entry) }.unwrap(),
+            MetadataEntry::String(v) if v == "abc"
+        ));
     }
 }
