@@ -70,7 +70,10 @@ pub(crate) fn build_rust_properties(
     // Patch matrix pointers after all matrix values are stored, so pointers are stable even if the
     // matrices Vec had to grow during collection.
     for (prop_index, matrix_index) in matrix_ptr_fixes {
-        let matrix_ptr = unsafe { matrices.as_ptr().add(matrix_index) };
+        let matrix = matrices
+            .get(matrix_index)
+            .expect("matrix index should be in-bounds");
+        let matrix_ptr = std::ptr::from_ref(matrix);
         let prop = ffi_props
             .get_mut(prop_index)
             .expect("prop index should be in-bounds");

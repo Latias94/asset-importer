@@ -734,20 +734,14 @@ impl Iterator for FaceIterator {
     fn next(&mut self) -> Option<Self::Item> {
         unsafe {
             let mesh = &*self.mesh_ptr.as_ptr();
-            if mesh.mFaces.is_null() || mesh.mNumFaces == 0 {
-                return None;
-            }
-            if self.index >= mesh.mNumFaces as usize {
-                None
-            } else {
-                let face_ptr = mesh.mFaces.add(self.index);
-                self.index += 1;
-                let face_ptr = SharedPtr::new(face_ptr as *const raw::AiFace)?;
-                Some(Face {
-                    scene: self.scene.clone(),
-                    face_ptr,
-                })
-            }
+            let faces = ffi::slice_from_ptr_len_opt(mesh, mesh.mFaces, mesh.mNumFaces as usize)?;
+            let face_ref = faces.get(self.index)?;
+            self.index += 1;
+            let face_ptr = SharedPtr::new(std::ptr::from_ref(face_ref).cast::<raw::AiFace>())?;
+            Some(Face {
+                scene: self.scene.clone(),
+                face_ptr,
+            })
         }
     }
 

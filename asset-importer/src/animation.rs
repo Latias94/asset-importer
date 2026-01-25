@@ -684,11 +684,9 @@ impl MorphMeshAnimation {
         }
         unsafe {
             let ch = &*self.channel_ptr.as_ptr();
-            if ch.mKeys.is_null() {
-                return None;
-            }
-            let key_ptr = ch.mKeys.add(index);
-            let key_ptr = SharedPtr::new(key_ptr)?;
+            let keys = ffi::slice_from_ptr_len_opt(ch, ch.mKeys, ch.mNumKeys as usize)?;
+            let key_ref = keys.get(index)?;
+            let key_ptr = SharedPtr::new(std::ptr::from_ref(key_ref))?;
             let k = &*key_ptr.as_ptr();
             let n = k.mNumValuesAndWeights as usize;
             if n > 0 && (k.mValues.is_null() || k.mWeights.is_null()) {
