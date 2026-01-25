@@ -671,32 +671,42 @@ pub struct FaceIterator {
     index: usize,
 }
 
+impl FaceIterator {
+    #[inline]
+    fn mesh_ptr(&self) -> *const sys::aiMesh {
+        self.mesh_ptr.as_ptr()
+    }
+}
+
 impl Iterator for FaceIterator {
     type Item = Face;
 
     fn next(&mut self) -> Option<Self::Item> {
-        unsafe {
-            let mesh = &*self.mesh_ptr.as_ptr();
-            let faces = ffi::slice_from_ptr_len_opt(mesh, mesh.mFaces, mesh.mNumFaces as usize)?;
-            let face_ref = faces.get(self.index)?;
-            self.index += 1;
-            let face_ptr = SharedPtr::new(std::ptr::from_ref(face_ref).cast::<raw::AiFace>())?;
-            Some(Face {
-                scene: self.scene.clone(),
-                face_ptr,
-            })
-        }
+        let mesh = unsafe { &*self.mesh_ptr() };
+        let faces: &[raw::AiFace] = unsafe {
+            ffi::slice_from_ptr_len_opt(
+                mesh,
+                mesh.mFaces as *const raw::AiFace,
+                mesh.mNumFaces as usize,
+            )
+        }?;
+        let index = self.index;
+        let face_ref = faces.get(index)?;
+        self.index = index + 1;
+        let face_ptr = SharedPtr::new(std::ptr::from_ref(face_ref))?;
+        Some(Face {
+            scene: self.scene.clone(),
+            face_ptr,
+        })
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
-        unsafe {
-            let mesh = &*self.mesh_ptr.as_ptr();
-            if mesh.mFaces.is_null() {
-                (0, Some(0))
-            } else {
-                let remaining = (mesh.mNumFaces as usize).saturating_sub(self.index);
-                (remaining, Some(remaining))
-            }
+        let mesh = unsafe { &*self.mesh_ptr() };
+        if mesh.mFaces.is_null() {
+            (0, Some(0))
+        } else {
+            let remaining = (mesh.mNumFaces as usize).saturating_sub(self.index);
+            (remaining, Some(remaining))
         }
     }
 }
@@ -1041,39 +1051,48 @@ pub struct AnimMeshIterator {
     index: usize,
 }
 
+impl AnimMeshIterator {
+    #[inline]
+    fn mesh_ptr(&self) -> *const sys::aiMesh {
+        self.mesh_ptr.as_ptr()
+    }
+}
+
 impl Iterator for AnimMeshIterator {
     type Item = AnimMesh;
 
     fn next(&mut self) -> Option<Self::Item> {
-        unsafe {
-            let mesh = &*self.mesh_ptr.as_ptr();
-            let meshes =
-                ffi::slice_from_ptr_len_opt(mesh, mesh.mAnimMeshes, mesh.mNumAnimMeshes as usize)?;
-            while self.index < meshes.len() {
-                let ptr = meshes[self.index];
-                self.index += 1;
-                if ptr.is_null() {
-                    continue;
-                }
-                let anim_ptr = SharedPtr::new(ptr as *const sys::aiAnimMesh)?;
-                return Some(AnimMesh {
-                    scene: self.scene.clone(),
-                    anim_ptr,
-                });
+        let mesh = unsafe { &*self.mesh_ptr() };
+        let meshes: &[*mut sys::aiAnimMesh] = unsafe {
+            ffi::slice_from_ptr_len_opt(
+                mesh,
+                mesh.mAnimMeshes as *const *mut sys::aiAnimMesh,
+                mesh.mNumAnimMeshes as usize,
+            )
+        }?;
+        while self.index < meshes.len() {
+            let index = self.index;
+            self.index = index + 1;
+            let ptr = meshes[index];
+            if ptr.is_null() {
+                continue;
             }
-            None
+            let anim_ptr = SharedPtr::new(ptr as *const sys::aiAnimMesh)?;
+            return Some(AnimMesh {
+                scene: self.scene.clone(),
+                anim_ptr,
+            });
         }
+        None
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
-        unsafe {
-            let mesh = &*self.mesh_ptr.as_ptr();
-            if mesh.mAnimMeshes.is_null() {
-                (0, Some(0))
-            } else {
-                let remaining = (mesh.mNumAnimMeshes as usize).saturating_sub(self.index);
-                (0, Some(remaining))
-            }
+        let mesh = unsafe { &*self.mesh_ptr() };
+        if mesh.mAnimMeshes.is_null() {
+            (0, Some(0))
+        } else {
+            let remaining = (mesh.mNumAnimMeshes as usize).saturating_sub(self.index);
+            (0, Some(remaining))
         }
     }
 }

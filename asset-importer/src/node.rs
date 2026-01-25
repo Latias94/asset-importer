@@ -169,38 +169,46 @@ pub struct NodeIterator {
     index: usize,
 }
 
+impl NodeIterator {
+    #[inline]
+    fn node_ptr(&self) -> *const sys::aiNode {
+        self.node_ptr.as_ptr()
+    }
+}
+
 impl Iterator for NodeIterator {
     type Item = Node;
 
     fn next(&mut self) -> Option<Self::Item> {
-        unsafe {
-            let node = &*self.node_ptr.as_ptr();
-            let children =
-                ffi::slice_from_ptr_len_opt(node, node.mChildren, node.mNumChildren as usize)?;
-            while self.index < children.len() {
-                let child_ptr = children[self.index];
-                self.index += 1;
-                if child_ptr.is_null() {
-                    continue;
-                }
-                return Some(Node::from_raw(
-                    self.scene.clone(),
-                    child_ptr as *const sys::aiNode,
-                ));
+        let node = unsafe { &*self.node_ptr() };
+        let children: &[*mut sys::aiNode] = unsafe {
+            ffi::slice_from_ptr_len_opt(
+                node,
+                node.mChildren as *const *mut sys::aiNode,
+                node.mNumChildren as usize,
+            )
+        }?;
+        while self.index < children.len() {
+            let index = self.index;
+            self.index = index + 1;
+            let child_ptr = children[index];
+            if child_ptr.is_null() {
+                continue;
             }
-            None
+            return Some(unsafe {
+                Node::from_raw(self.scene.clone(), child_ptr as *const sys::aiNode)
+            });
         }
+        None
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
-        unsafe {
-            let node = &*self.node_ptr.as_ptr();
-            if node.mChildren.is_null() {
-                (0, Some(0))
-            } else {
-                let remaining = (node.mNumChildren as usize).saturating_sub(self.index);
-                (0, Some(remaining))
-            }
+        let node = unsafe { &*self.node_ptr() };
+        if node.mChildren.is_null() {
+            (0, Some(0))
+        } else {
+            let remaining = (node.mNumChildren as usize).saturating_sub(self.index);
+            (0, Some(remaining))
         }
     }
 }
@@ -213,35 +221,36 @@ pub struct MeshIndexIterator {
     index: usize,
 }
 
+impl MeshIndexIterator {
+    #[inline]
+    fn node_ptr(&self) -> *const sys::aiNode {
+        self.node_ptr.as_ptr()
+    }
+}
+
 impl Iterator for MeshIndexIterator {
     type Item = usize;
 
     fn next(&mut self) -> Option<Self::Item> {
-        unsafe {
-            let node = &*self.node_ptr.as_ptr();
-            let indices = ffi::slice_from_ptr_len_opt(
-                node,
-                node.mMeshes as *const u32,
-                node.mNumMeshes as usize,
-            )?;
-            if self.index >= indices.len() {
-                return None;
-            }
-            let mesh_index = indices[self.index] as usize;
-            self.index += 1;
-            Some(mesh_index)
+        let node = unsafe { &*self.node_ptr() };
+        let indices: &[u32] = unsafe {
+            ffi::slice_from_ptr_len_opt(node, node.mMeshes as *const u32, node.mNumMeshes as usize)
+        }?;
+        if self.index >= indices.len() {
+            return None;
         }
+        let mesh_index = indices[self.index] as usize;
+        self.index += 1;
+        Some(mesh_index)
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
-        unsafe {
-            let node = &*self.node_ptr.as_ptr();
-            if node.mMeshes.is_null() {
-                (0, Some(0))
-            } else {
-                let remaining = (node.mNumMeshes as usize).saturating_sub(self.index);
-                (remaining, Some(remaining))
-            }
+        let node = unsafe { &*self.node_ptr() };
+        if node.mMeshes.is_null() {
+            (0, Some(0))
+        } else {
+            let remaining = (node.mNumMeshes as usize).saturating_sub(self.index);
+            (remaining, Some(remaining))
         }
     }
 }
