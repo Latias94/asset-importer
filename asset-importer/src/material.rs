@@ -164,6 +164,11 @@ impl Material {
         self.as_raw_sys()
     }
 
+    #[inline]
+    fn raw(&self) -> &sys::aiMaterial {
+        unsafe { &*self.material_ptr.as_ptr() }
+    }
+
     /// Get the name of the material
     pub fn name(&self) -> String {
         self.name_ref().map(|s| s.to_string()).unwrap_or_default()
@@ -180,7 +185,7 @@ impl Material {
 
         let result = unsafe {
             sys::aiGetMaterialString(
-                self.material_ptr.as_ptr(),
+                self.as_raw_sys(),
                 key.as_ptr(),
                 0, // type
                 0, // index
@@ -214,7 +219,7 @@ impl Material {
 
         let result = unsafe {
             sys::aiGetMaterialFloatArray(
-                self.material_ptr.as_ptr(),
+                self.as_raw_sys(),
                 key.as_ptr(),
                 0, // type
                 0, // index
@@ -244,7 +249,7 @@ impl Material {
 
         let result = unsafe {
             sys::aiGetMaterialIntegerArray(
-                self.material_ptr.as_ptr(),
+                self.as_raw_sys(),
                 key.as_ptr(),
                 0, // type
                 0, // index
@@ -278,7 +283,7 @@ impl Material {
 
         let result = unsafe {
             sys::aiGetMaterialColor(
-                self.material_ptr.as_ptr(),
+                self.as_raw_sys(),
                 key.as_ptr(),
                 0, // type
                 0, // index
@@ -520,7 +525,7 @@ impl Material {
         let mut prop_ptr: *const sys::aiMaterialProperty = std::ptr::null();
         let ok = unsafe {
             sys::aiGetMaterialProperty(
-                self.material_ptr.as_ptr(),
+                self.as_raw_sys(),
                 key.as_ptr(),
                 semantic.map(|t| t.to_sys() as u32).unwrap_or(0),
                 index,
@@ -593,7 +598,7 @@ impl Material {
         let mut max = count as u32;
         let result = unsafe {
             sys::aiGetMaterialIntegerArray(
-                self.material_ptr.as_ptr(),
+                self.as_raw_sys(),
                 key.as_ptr(),
                 semantic.map(|t| t.to_sys() as u32).unwrap_or(0),
                 index,
@@ -643,7 +648,7 @@ impl Material {
                 let mut max = count as u32;
                 let result = unsafe {
                     sys::aiGetMaterialFloatArray(
-                        self.material_ptr.as_ptr(),
+                        self.as_raw_sys(),
                         key.as_ptr(),
                         semantic.map(|t| t.to_sys() as u32).unwrap_or(0),
                         index,
@@ -751,14 +756,12 @@ impl Material {
 
     /// Iterate all material properties (zero allocation for keys and raw data).
     pub fn properties(&self) -> MaterialPropertyIterator {
-        unsafe {
-            let m = &*self.material_ptr.as_ptr();
-            MaterialPropertyIterator {
-                scene: self.scene.clone(),
-                props: SharedPtr::new(m.mProperties as *const *const sys::aiMaterialProperty),
-                count: m.mNumProperties as usize,
-                index: 0,
-            }
+        let m = self.raw();
+        MaterialPropertyIterator {
+            scene: self.scene.clone(),
+            props: SharedPtr::new(m.mProperties as *const *const sys::aiMaterialProperty),
+            count: m.mNumProperties as usize,
+            index: 0,
         }
     }
 
@@ -782,10 +785,7 @@ impl Material {
 
     /// Get the number of textures for a specific type
     pub fn texture_count(&self, texture_type: TextureType) -> usize {
-        unsafe {
-            sys::aiGetMaterialTextureCount(self.material_ptr.as_ptr(), texture_type.to_sys())
-                as usize
-        }
+        unsafe { sys::aiGetMaterialTextureCount(self.as_raw_sys(), texture_type.to_sys()) as usize }
     }
 
     /// Get texture information for a specific type and index (no heap allocation).
@@ -807,7 +807,7 @@ impl Material {
             let mut tex_flags: u32 = 0;
 
             let result = sys::aiGetMaterialTexture(
-                self.material_ptr.as_ptr(),
+                self.as_raw_sys(),
                 texture_type.to_sys(),
                 index as u32,
                 &mut path,
@@ -832,7 +832,7 @@ impl Material {
             let mut uv_transform = std::mem::MaybeUninit::<sys::aiUVTransform>::uninit();
             let uv_key: &CStr = c"$tex.uvtrafo";
             let uv_ok = sys::aiGetMaterialUVTransform(
-                self.material_ptr.as_ptr(),
+                self.as_raw_sys(),
                 uv_key.as_ptr(),
                 texture_type.to_sys() as u32,
                 index as u32,
@@ -855,7 +855,7 @@ impl Material {
                 let key: &CStr = c"$tex.mapaxis";
                 let mut prop_ptr: *const sys::aiMaterialProperty = std::ptr::null();
                 let ok = sys::aiGetMaterialProperty(
-                    self.material_ptr.as_ptr(),
+                    self.as_raw_sys(),
                     key.as_ptr(),
                     texture_type.to_sys() as u32,
                     index as u32,
@@ -1189,46 +1189,47 @@ impl MaterialPropertyRef {
         Self { scene, prop_ptr }
     }
 
+    #[inline]
+    fn raw(&self) -> &sys::aiMaterialProperty {
+        unsafe { &*self.prop_ptr.as_ptr() }
+    }
+
     /// Property key as UTF-8 (lossy), without allocation.
     pub fn key_str(&self) -> Cow<'_, str> {
-        unsafe { ai_string_to_str(&(*self.prop_ptr.as_ptr()).mKey) }
+        ai_string_to_str(&self.raw().mKey)
     }
 
     /// Raw bytes of the key (without assuming NUL-termination).
     pub fn key_bytes(&self) -> &[u8] {
-        unsafe {
-            let s = &(*self.prop_ptr.as_ptr()).mKey;
-            let len = (s.length as usize).min(s.data.len());
-            ffi::slice_from_ptr_len(self, s.data.as_ptr() as *const u8, len)
-        }
+        let s = &self.raw().mKey;
+        let len = (s.length as usize).min(s.data.len());
+        unsafe { ffi::slice_from_ptr_len(self, s.data.as_ptr() as *const u8, len) }
     }
 
     /// Property key as owned `String` (allocates).
     pub fn key_string(&self) -> String {
-        unsafe { ai_string_to_string(&(*self.prop_ptr.as_ptr()).mKey) }
+        ai_string_to_string(&self.raw().mKey)
     }
 
     /// Semantic (texture type) if texture-related.
     pub fn semantic(&self) -> Option<TextureType> {
-        unsafe { TextureType::from_u32((*self.prop_ptr.as_ptr()).mSemantic) }
+        TextureType::from_u32(self.raw().mSemantic)
     }
 
     /// Texture index (0 for non-texture properties).
     pub fn index(&self) -> u32 {
-        unsafe { (*self.prop_ptr.as_ptr()).mIndex }
+        self.raw().mIndex
     }
 
     /// Property type info.
     pub fn type_info(&self) -> PropertyTypeInfo {
-        unsafe { PropertyTypeInfo::from_sys((*self.prop_ptr.as_ptr()).mType) }
+        PropertyTypeInfo::from_sys(self.raw().mType)
     }
 
     /// Raw property bytes as stored by Assimp (zero-copy).
     pub fn data(&self) -> &[u8] {
-        unsafe {
-            let p = &*self.prop_ptr.as_ptr();
-            ffi::slice_from_ptr_len(self, p.mData as *const u8, p.mDataLength as usize)
-        }
+        let p = self.raw();
+        unsafe { ffi::slice_from_ptr_len(self, p.mData as *const u8, p.mDataLength as usize) }
     }
 
     /// Interpret the property payload as an `i32` slice when stored as `Integer` (zero-copy).
@@ -1271,12 +1272,10 @@ impl MaterialPropertyRef {
         if self.type_info() != PropertyTypeInfo::String {
             return None;
         }
-        unsafe {
-            let p = &*self.prop_ptr.as_ptr();
-            let d = MaterialPropertyData::from_sys(p)?;
-            let value = d.decode_ai_string()?;
-            Some(MaterialStringRef { value })
-        }
+        let p = self.raw();
+        let d = unsafe { MaterialPropertyData::from_sys(p) }?;
+        let value = d.decode_ai_string()?;
+        Some(MaterialStringRef { value })
     }
 
     /// Read the first element as `i32` when stored as `Integer`.
@@ -1284,11 +1283,9 @@ impl MaterialPropertyRef {
         if self.type_info() != PropertyTypeInfo::Integer {
             return None;
         }
-        unsafe {
-            let p = &*self.prop_ptr.as_ptr();
-            let d = MaterialPropertyData::from_sys(p)?;
-            d.read_ne_i32(0)
-        }
+        let p = self.raw();
+        let d = unsafe { MaterialPropertyData::from_sys(p) }?;
+        d.read_ne_i32(0)
     }
 
     /// Read the first element as `u32` when stored as `Integer` and non-negative.
@@ -1306,11 +1303,9 @@ impl MaterialPropertyRef {
         if self.type_info() != PropertyTypeInfo::Float {
             return None;
         }
-        unsafe {
-            let p = &*self.prop_ptr.as_ptr();
-            let d = MaterialPropertyData::from_sys(p)?;
-            d.read_ne_f32(0)
-        }
+        let p = self.raw();
+        let d = unsafe { MaterialPropertyData::from_sys(p) }?;
+        d.read_ne_f32(0)
     }
 
     /// Read the first element as `f64` when stored as `Double`.
@@ -1318,11 +1313,9 @@ impl MaterialPropertyRef {
         if self.type_info() != PropertyTypeInfo::Double {
             return None;
         }
-        unsafe {
-            let p = &*self.prop_ptr.as_ptr();
-            let d = MaterialPropertyData::from_sys(p)?;
-            d.read_ne_f64(0)
-        }
+        let p = self.raw();
+        let d = unsafe { MaterialPropertyData::from_sys(p) }?;
+        d.read_ne_f64(0)
     }
 
     /// Read `N` elements as `f32` when stored as `Float`.
@@ -1330,11 +1323,9 @@ impl MaterialPropertyRef {
         if self.type_info() != PropertyTypeInfo::Float {
             return None;
         }
-        unsafe {
-            let p = &*self.prop_ptr.as_ptr();
-            let d = MaterialPropertyData::from_sys(p)?;
-            d.read_ne_f32_array::<N>(0)
-        }
+        let p = self.raw();
+        let d = unsafe { MaterialPropertyData::from_sys(p) }?;
+        d.read_ne_f32_array::<N>(0)
     }
 
     /// Read `N` elements as `f64` when stored as `Double`.
@@ -1342,11 +1333,9 @@ impl MaterialPropertyRef {
         if self.type_info() != PropertyTypeInfo::Double {
             return None;
         }
-        unsafe {
-            let p = &*self.prop_ptr.as_ptr();
-            let d = MaterialPropertyData::from_sys(p)?;
-            d.read_ne_f64_array::<N>(0)
-        }
+        let p = self.raw();
+        let d = unsafe { MaterialPropertyData::from_sys(p) }?;
+        d.read_ne_f64_array::<N>(0)
     }
 
     /// Read a `Vec2` when stored as `Float` and the payload has at least 2 floats.
@@ -1378,28 +1367,26 @@ impl MaterialPropertyRef {
     }
 
     fn data_cast_slice_opt<T>(&self) -> Option<&[T]> {
-        unsafe {
-            let p = &*self.prop_ptr.as_ptr();
-            let len = p.mDataLength as usize;
-            let size = std::mem::size_of::<T>();
-            let align = std::mem::align_of::<T>();
+        let p = self.raw();
+        let len = p.mDataLength as usize;
+        let size = std::mem::size_of::<T>();
+        let align = std::mem::align_of::<T>();
 
-            if len == 0 {
-                return Some(&[]);
-            }
-            if p.mData.is_null() {
-                return None;
-            }
-
-            let ptr = p.mData as *const u8;
-            if size == 0 {
-                return Some(&[]);
-            }
-            if (ptr as usize) % align != 0 || len % size != 0 {
-                return None;
-            }
-            Some(ffi::slice_from_ptr_len(self, ptr as *const T, len / size))
+        if len == 0 {
+            return Some(&[]);
         }
+        if p.mData.is_null() {
+            return None;
+        }
+
+        let ptr = p.mData as *const u8;
+        if size == 0 {
+            return Some(&[]);
+        }
+        if (ptr as usize) % align != 0 || len % size != 0 {
+            return None;
+        }
+        Some(unsafe { ffi::slice_from_ptr_len(self, ptr as *const T, len / size) })
     }
 
     fn into_info(self) -> MaterialPropertyInfo {
