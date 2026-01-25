@@ -149,12 +149,17 @@ impl Texture {
         self.as_raw_sys()
     }
 
+    #[inline]
+    fn raw(&self) -> &sys::aiTexture {
+        unsafe { &*self.texture_ptr.as_ptr() }
+    }
+
     /// Get the width of the texture
     ///
     /// For uncompressed textures, this is the width in pixels.
     /// For compressed textures, this is the size of the compressed data in bytes.
     pub fn width(&self) -> u32 {
-        unsafe { (*self.texture_ptr.as_ptr()).mWidth }
+        self.raw().mWidth
     }
 
     /// Get the height of the texture
@@ -162,7 +167,7 @@ impl Texture {
     /// For uncompressed textures, this is the height in pixels.
     /// For compressed textures, this is 0.
     pub fn height(&self) -> u32 {
-        unsafe { (*self.texture_ptr.as_ptr()).mHeight }
+        self.raw().mHeight
     }
 
     /// Check if this is a compressed texture
@@ -177,34 +182,32 @@ impl Texture {
 
     /// Get a borrowed view of the texture data (zero-copy).
     pub fn data_ref(&self) -> Result<TextureDataRef<'_>> {
-        unsafe {
-            let texture = &*self.texture_ptr.as_ptr();
-            if self.is_compressed() {
-                let size = self.width() as usize;
-                if size == 0 {
-                    return Ok(TextureDataRef::Compressed(&[]));
-                }
-                let data_ptr = texture.pcData as *const u8;
-                let Some(bytes) = ffi::slice_from_ptr_len_opt(self, data_ptr, size) else {
-                    return Err(Error::invalid_scene("Texture data is null"));
-                };
-                Ok(TextureDataRef::Compressed(bytes))
-            } else {
-                let width = self.width() as usize;
-                let height = self.height() as usize;
-                let Some(size) = width.checked_mul(height) else {
-                    return Err(Error::invalid_scene("Texture dimensions overflow"));
-                };
-                if size == 0 {
-                    return Ok(TextureDataRef::Texels(&[]));
-                }
-                let Some(texels) =
-                    ffi::slice_from_ptr_len_opt(self, texture.pcData as *const Texel, size)
-                else {
-                    return Err(Error::invalid_scene("Texture data is null"));
-                };
-                Ok(TextureDataRef::Texels(texels))
+        let texture = self.raw();
+        if self.is_compressed() {
+            let size = self.width() as usize;
+            if size == 0 {
+                return Ok(TextureDataRef::Compressed(&[]));
             }
+            let data_ptr = texture.pcData as *const u8;
+            let Some(bytes) = (unsafe { ffi::slice_from_ptr_len_opt(self, data_ptr, size) }) else {
+                return Err(Error::invalid_scene("Texture data is null"));
+            };
+            Ok(TextureDataRef::Compressed(bytes))
+        } else {
+            let width = self.width() as usize;
+            let height = self.height() as usize;
+            let Some(size) = width.checked_mul(height) else {
+                return Err(Error::invalid_scene("Texture dimensions overflow"));
+            };
+            if size == 0 {
+                return Ok(TextureDataRef::Texels(&[]));
+            }
+            let Some(texels) = (unsafe {
+                ffi::slice_from_ptr_len_opt(self, texture.pcData as *const Texel, size)
+            }) else {
+                return Err(Error::invalid_scene("Texture data is null"));
+            };
+            Ok(TextureDataRef::Texels(texels))
         }
     }
 
@@ -225,12 +228,10 @@ impl Texture {
     /// For uncompressed textures, this describes the channel layout (e.g., "rgba8888").
     /// For compressed textures, this is the file extension (e.g., "jpg", "png").
     pub fn format_hint_bytes(&self) -> &[u8] {
-        unsafe {
-            let hint = &(*self.texture_ptr.as_ptr()).achFormatHint;
-            // Find the null terminator
-            let len = hint.iter().position(|&c| c == 0).unwrap_or(hint.len());
-            ffi::slice_from_ptr_len(self, hint.as_ptr() as *const u8, len)
-        }
+        let hint = &self.raw().achFormatHint;
+        // Find the null terminator
+        let len = hint.iter().position(|&c| c == 0).unwrap_or(hint.len());
+        unsafe { ffi::slice_from_ptr_len(self, hint.as_ptr() as *const u8, len) }
     }
 
     /// Get the format hint as UTF-8 (lossy) without allocation.
@@ -247,21 +248,17 @@ impl Texture {
 
     /// Get the original filename of the texture
     pub fn filename(&self) -> Option<String> {
-        unsafe {
-            let ai_string = &(*self.texture_ptr.as_ptr()).mFilename;
-            if ai_string.length == 0 {
-                return None;
-            }
-            Some(ai_string_to_string(ai_string))
+        let ai_string = &self.raw().mFilename;
+        if ai_string.length == 0 {
+            return None;
         }
+        Some(ai_string_to_string(ai_string))
     }
 
     /// Get the original filename of the texture as UTF-8 (lossy) without allocation.
     pub fn filename_str(&self) -> Option<Cow<'_, str>> {
-        unsafe {
-            let ai_string = &(*self.texture_ptr.as_ptr()).mFilename;
-            (ai_string.length != 0).then(|| crate::types::ai_string_to_str(ai_string))
-        }
+        let ai_string = &self.raw().mFilename;
+        (ai_string.length != 0).then(|| crate::types::ai_string_to_str(ai_string))
     }
 
     /// Check if the texture format matches a given string
