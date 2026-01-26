@@ -534,18 +534,24 @@ extern "C" fn file_open_proc(
 
 /// C callback for closing files
 extern "C" fn file_close_proc(_file_io: *mut sys::aiFileIO, file: *mut sys::aiFile) {
-    if !file.is_null() {
-        let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| unsafe {
-            // Clean up the file wrapper
-            let wrapper_ptr = (*file).UserData as *mut FileWrapper;
-            if !wrapper_ptr.is_null() {
-                let _ = Box::from_raw(wrapper_ptr);
-            }
-
-            // Clean up the aiFile
-            let _ = Box::from_raw(file);
-        }));
+    if file.is_null() {
+        return;
     }
+
+    let align = std::mem::align_of::<sys::aiFile>();
+    if align > 1 && (file as usize) % align != 0 {
+        return;
+    }
+
+    let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| unsafe {
+        // Clean up the file wrapper
+        if let Some(wrapper_ptr) = file_wrapper_ptr(file) {
+            let _ = Box::from_raw(wrapper_ptr as *mut FileWrapper);
+        }
+
+        // Clean up the aiFile
+        let _ = Box::from_raw(file);
+    }));
 }
 
 /// C callback for reading from files
@@ -693,6 +699,9 @@ mod tests {
 
         let unaligned_file = unsafe { (buf.as_ptr() as *const u8).add(1) } as *mut sys::aiFile;
         assert!(unsafe { file_wrapper_ptr(unaligned_file) }.is_none());
+
+        // Hardening: close callback should not touch unaligned pointers.
+        file_close_proc(std::ptr::null_mut(), unaligned_file);
     }
 
     #[test]

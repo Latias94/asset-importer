@@ -238,7 +238,8 @@ impl ExportBuilder {
         if blob_ptr.is_null() {
             Err(Error::from_assimp())
         } else {
-            Ok(ExportBlob::from_raw(blob_ptr))
+            ExportBlob::from_sys_ptr(blob_ptr)
+                .ok_or_else(|| Error::invalid_scene("Invalid export blob pointer"))
         }
     }
 }
@@ -251,12 +252,11 @@ pub struct ExportBlob {
 
 impl ExportBlob {
     /// Create an ExportBlob from a raw Assimp blob pointer
-    fn from_raw(blob_ptr: *const sys::aiExportDataBlob) -> Self {
-        debug_assert!(!blob_ptr.is_null());
-        let blob_ptr = unsafe { SharedPtr::new_unchecked(blob_ptr) };
-        Self {
+    fn from_sys_ptr(blob_ptr: *const sys::aiExportDataBlob) -> Option<Self> {
+        let blob_ptr = SharedPtr::new(blob_ptr)?;
+        Some(Self {
             inner: Arc::new(ExportBlobInner { root: blob_ptr }),
-        }
+        })
     }
 
     /// Create a view of the root blob in the chain.
@@ -499,6 +499,14 @@ mod tests {
     fn test_exporter_creation() {
         let exporter = Exporter::new();
         let _builder = exporter.export_scene(formats::OBJ);
+    }
+
+    #[test]
+    fn export_blob_rejects_unaligned_pointers() {
+        let buf = [0u64; 8];
+        let unaligned =
+            unsafe { (buf.as_ptr() as *const u8).add(1) } as *const sys::aiExportDataBlob;
+        assert!(ExportBlob::from_sys_ptr(unaligned).is_none());
     }
 
     #[test]

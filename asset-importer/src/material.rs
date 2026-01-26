@@ -538,14 +538,12 @@ impl Material {
         index: u32,
     ) -> Option<&[u8]> {
         let prop_ptr = self.property_ptr(key, semantic, index)?;
-        unsafe {
-            let prop = &*prop_ptr;
-            Some(ffi::slice_from_ptr_len(
-                self,
-                prop.mData as *const u8,
-                prop.mDataLength as usize,
-            ))
-        }
+        let prop = ffi::ref_from_ptr(self, prop_ptr)?;
+        Some(ffi::slice_from_ptr_len(
+            self,
+            prop.mData as *const u8,
+            prop.mDataLength as usize,
+        ))
     }
 
     /// Get the raw bytes of a property (as stored by Assimp, allocates).
@@ -856,11 +854,14 @@ impl Material {
                     index as u32,
                     &mut prop_ptr,
                 ) == sys::aiReturn::aiReturn_SUCCESS;
-                if ok && !prop_ptr.is_null() {
-                    let prop = &*prop_ptr;
-                    MaterialPropertyData::from_sys(prop)
-                        .and_then(|d| d.read_ne_f32_array::<3>(0))
-                        .map(|[x, y, z]| Vector3D::new(x, y, z))
+                if ok {
+                    if let Some(prop) = ffi::ref_from_ptr(self, prop_ptr) {
+                        MaterialPropertyData::from_sys(prop)
+                            .and_then(|d| d.read_ne_f32_array::<3>(0))
+                            .map(|[x, y, z]| Vector3D::new(x, y, z))
+                    } else {
+                        None
+                    }
                 } else {
                     None
                 }

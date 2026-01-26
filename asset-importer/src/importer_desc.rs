@@ -5,7 +5,7 @@
 
 #![allow(clippy::unnecessary_cast)]
 
-use crate::{error::c_str_to_string_or_empty, sys};
+use crate::{error::c_str_to_string_or_empty, ffi, sys};
 use std::ffi::CString;
 
 /// Flags indicating features common to many importers
@@ -173,11 +173,7 @@ pub fn get_importer_desc(extension: &str) -> crate::Result<Option<ImporterDesc>>
 
     unsafe {
         let desc_ptr = sys::aiGetImporterDesc(c_extension.as_ptr());
-        if desc_ptr.is_null() {
-            Ok(None)
-        } else {
-            Ok(Some(ImporterDesc::from_raw(&*desc_ptr)))
-        }
+        Ok(ffi::ref_from_ptr(&c_extension, desc_ptr).map(ImporterDesc::from_raw))
     }
 }
 
@@ -185,11 +181,7 @@ pub fn get_importer_desc(extension: &str) -> crate::Result<Option<ImporterDesc>>
 pub fn get_importer_desc_cstr(extension: &std::ffi::CStr) -> Option<ImporterDesc> {
     unsafe {
         let desc_ptr = sys::aiGetImporterDesc(extension.as_ptr());
-        if desc_ptr.is_null() {
-            None
-        } else {
-            Some(ImporterDesc::from_raw(&*desc_ptr))
-        }
+        ffi::ref_from_ptr(extension, desc_ptr).map(ImporterDesc::from_raw)
     }
 }
 
@@ -239,10 +231,9 @@ impl Iterator for ImporterDescIterator {
             self.index += 1;
             unsafe {
                 let ptr = sys::aiGetImportFormatDescription(i);
-                if ptr.is_null() {
-                    continue;
+                if let Some(desc) = ffi::ref_from_ptr(self, ptr).map(ImporterDesc::from_raw) {
+                    return Some(desc);
                 }
-                return Some(ImporterDesc::from_raw(&*ptr));
             }
         }
         None

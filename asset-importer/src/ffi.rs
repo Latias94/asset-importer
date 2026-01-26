@@ -74,6 +74,28 @@ pub(crate) fn ptr_array_get<O: ?Sized, T>(
     if ptr.is_null() { None } else { Some(ptr) }
 }
 
+/// Borrow a reference from a raw pointer.
+///
+/// Returns `None` when `ptr` is null or not properly aligned for `T`.
+///
+/// # Assumptions
+/// This crate assumes Assimp returns valid pointers for scene-backed data. This helper ties the
+/// returned reference lifetime to `owner` so it cannot outlive the safe wrapper type.
+pub(crate) fn ref_from_ptr<O: ?Sized, T>(owner: &O, ptr: *const T) -> Option<&T> {
+    let _ = owner;
+    if ptr.is_null() {
+        return None;
+    }
+
+    let align = std::mem::align_of::<T>();
+    if align > 1 && (ptr as usize) % align != 0 {
+        return None;
+    }
+
+    // SAFETY: The crate assumes pointers returned by Assimp are valid for `T`.
+    Some(unsafe { &*ptr })
+}
+
 /// Mutably borrow a slice from a raw pointer and element count.
 ///
 /// Returns an empty slice when `ptr` is null or `len == 0`.
@@ -199,5 +221,17 @@ mod tests {
             ptr_array_get(owner, std::ptr::null::<*mut u32>(), 10, 0),
             None
         );
+    }
+
+    #[test]
+    fn ref_from_ptr_rejects_null_and_unaligned_pointers() {
+        let owner = &();
+        assert!(ref_from_ptr::<_, u32>(owner, std::ptr::null()).is_none());
+
+        let buf = [0u32; 2];
+        let unaligned = unsafe { (buf.as_ptr() as *const u8).add(1) } as *const u32;
+        assert!(ref_from_ptr(owner, unaligned).is_none());
+
+        assert!(ref_from_ptr(owner, buf.as_ptr()).is_some());
     }
 }

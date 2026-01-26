@@ -346,7 +346,10 @@ impl Iterator for ExportFormatDescIterator {
                 if desc_ptr.is_null() {
                     continue;
                 }
-                let desc = crate::exporter::ExportFormatDesc::from_raw(&*desc_ptr);
+                let Some(desc_ref) = crate::ffi::ref_from_ptr(self, desc_ptr) else {
+                    continue;
+                };
+                let desc = crate::exporter::ExportFormatDesc::from_raw(desc_ref);
                 sys::aiReleaseExportFormatDescription(desc_ptr);
                 return Some(desc);
             }
