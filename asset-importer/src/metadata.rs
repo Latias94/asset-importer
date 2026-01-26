@@ -307,6 +307,11 @@ impl Metadata {
             return Ok(Self::new());
         }
 
+        let align = std::mem::align_of::<sys::aiMetadata>();
+        if align > 1 && (metadata_ptr as usize) % align != 0 {
+            return Ok(Self::new());
+        }
+
         let metadata = unsafe { &*metadata_ptr };
         if metadata.mNumProperties > 0 && (metadata.mKeys.is_null() || metadata.mValues.is_null()) {
             return Ok(Self::new());
@@ -526,6 +531,14 @@ mod tests {
             unsafe { Metadata::parse_metadata_entry(&entry2) }.unwrap(),
             MetadataEntry::Bool(true)
         ));
+    }
+
+    #[test]
+    fn from_raw_sys_rejects_unaligned_pointers() {
+        let buf = [0u64; 8];
+        let unaligned = unsafe { (buf.as_ptr() as *const u8).add(1) } as *const sys::aiMetadata;
+        let meta = unsafe { Metadata::from_raw_sys(unaligned) }.unwrap();
+        assert!(meta.is_empty());
     }
 
     #[test]
