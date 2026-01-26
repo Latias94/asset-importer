@@ -30,6 +30,7 @@ mod async_tests {
         assert_send_sync::<asset_importer::animation::MeshAnimation>();
         assert_send_sync::<asset_importer::animation::MorphMeshAnimation>();
         assert_send_sync::<asset_importer::Texture>();
+        #[cfg(feature = "export")]
         assert_send_sync::<asset_importer::exporter::ExportBlob>();
 
         println!("✅ All core types implement Send + Sync!");
