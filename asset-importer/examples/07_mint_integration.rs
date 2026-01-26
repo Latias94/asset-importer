@@ -152,11 +152,12 @@ fn run_mint_demo() -> Result<(), Box<dyn Error>> {
 
 fn print_matrix4x4(matrix: &Matrix4x4) {
     let cols = matrix.to_cols_array_2d();
-    for row in 0..4 {
-        println!(
-            "  [{:8.3} {:8.3} {:8.3} {:8.3}]",
-            cols[0][row], cols[1][row], cols[2][row], cols[3][row]
-        );
+    for ((&c0, &c1), (&c2, &c3)) in cols[0]
+        .iter()
+        .zip(cols[1].iter())
+        .zip(cols[2].iter().zip(cols[3].iter()))
+    {
+        println!("  [{:8.3} {:8.3} {:8.3} {:8.3}]", c0, c1, c2, c3);
     }
 }
 

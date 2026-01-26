@@ -342,6 +342,11 @@ impl Metadata {
 
     /// Create metadata from a raw Assimp metadata pointer (requires `raw-sys`).
     #[cfg(feature = "raw-sys")]
+    ///
+    /// # Safety
+    /// `metadata_ptr` must be either null or point to a valid `aiMetadata` value provided by
+    /// Assimp. The pointee (and any referenced key/value arrays) must remain valid for the
+    /// duration of this call.
     pub unsafe fn from_raw(metadata_ptr: *const sys::aiMetadata) -> Result<Self> {
         unsafe { Self::from_raw_sys(metadata_ptr) }
     }
