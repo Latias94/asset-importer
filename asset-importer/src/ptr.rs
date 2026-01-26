@@ -101,6 +101,11 @@ impl<T> SharedPtr<T> {
     }
 }
 
+// Safety: only allow cross-thread sharing for targets explicitly marked as safe to share
+// as read-only through this crate's API.
+unsafe impl<T: SharedPtrTarget> Send for SharedPtr<T> {}
+unsafe impl<T: SharedPtrTarget> Sync for SharedPtr<T> {}
+
 #[cfg(test)]
 mod tests {
     use super::SharedPtr;
@@ -116,8 +121,3 @@ mod tests {
         assert!(SharedPtr::new(buf.as_ptr()).is_some());
     }
 }
-
-// Safety: only allow cross-thread sharing for targets explicitly marked as safe to share
-// as read-only through this crate's API.
-unsafe impl<T: SharedPtrTarget> Send for SharedPtr<T> {}
-unsafe impl<T: SharedPtrTarget> Sync for SharedPtr<T> {}

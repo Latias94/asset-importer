@@ -142,8 +142,8 @@ mod tests {
 
         // These pointers are intentionally invalid, but the helpers must not dereference them when
         // the length is clearly impossible for `from_raw_parts{,_mut}`.
-        let p = 1usize as *const u8;
-        let mut_p = 1usize as *mut u8;
+        let p = std::ptr::dangling::<u8>();
+        let mut_p = std::ptr::dangling_mut::<u8>();
 
         let owner = &();
         let s = slice_from_ptr_len(owner, p, too_large);

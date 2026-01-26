@@ -1505,9 +1505,11 @@ mod material_property_data_tests {
     use super::*;
 
     fn make_prop_with_data(mut data: Vec<u8>) -> (sys::aiMaterialProperty, Vec<u8>) {
-        let mut prop = sys::aiMaterialProperty::default();
-        prop.mDataLength = data.len() as u32;
-        prop.mData = data.as_mut_ptr().cast::<std::os::raw::c_char>();
+        let prop = sys::aiMaterialProperty {
+            mDataLength: data.len() as u32,
+            mData: data.as_mut_ptr().cast::<std::os::raw::c_char>(),
+            ..Default::default()
+        };
         (prop, data)
     }
 
