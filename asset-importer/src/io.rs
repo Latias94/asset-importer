@@ -18,8 +18,21 @@ unsafe fn file_system_ptr(file_io: *mut sys::aiFileIO) -> Option<*const FileSyst
     if file_io.is_null() {
         return None;
     }
+    let align = std::mem::align_of::<sys::aiFileIO>();
+    if align > 1 && (file_io as usize) % align != 0 {
+        return None;
+    }
     let ptr = unsafe { (*file_io).UserData as *mut FileSystemHandle };
-    if ptr.is_null() { None } else { Some(ptr) }
+    if ptr.is_null() {
+        return None;
+    }
+
+    let align = std::mem::align_of::<FileSystemHandle>();
+    if align > 1 && (ptr as usize) % align != 0 {
+        return None;
+    }
+
+    Some(ptr)
 }
 
 #[inline]
@@ -431,8 +444,21 @@ unsafe fn file_wrapper_ptr(file: *mut sys::aiFile) -> Option<*const FileWrapper>
     if file.is_null() {
         return None;
     }
+    let align = std::mem::align_of::<sys::aiFile>();
+    if align > 1 && (file as usize) % align != 0 {
+        return None;
+    }
     let ptr = unsafe { (*file).UserData as *mut FileWrapper };
-    if ptr.is_null() { None } else { Some(ptr) }
+    if ptr.is_null() {
+        return None;
+    }
+
+    let align = std::mem::align_of::<FileWrapper>();
+    if align > 1 && (ptr as usize) % align != 0 {
+        return None;
+    }
+
+    Some(ptr)
 }
 
 #[inline]
@@ -658,6 +684,16 @@ extern "C" fn file_flush_proc(_file: *mut sys::aiFile) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn io_callbacks_reject_unaligned_pointers() {
+        let buf = [0u64; 8];
+        let unaligned_io = unsafe { (buf.as_ptr() as *const u8).add(1) } as *mut sys::aiFileIO;
+        assert!(unsafe { file_system_ptr(unaligned_io) }.is_none());
+
+        let unaligned_file = unsafe { (buf.as_ptr() as *const u8).add(1) } as *mut sys::aiFile;
+        assert!(unsafe { file_wrapper_ptr(unaligned_file) }.is_none());
+    }
 
     #[test]
     fn test_memory_file_system() {

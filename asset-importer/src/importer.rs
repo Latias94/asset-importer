@@ -49,6 +49,12 @@ extern "C" fn progress_cb(percentage: f32, message: *const c_char, user: *mut c_
         return true;
     }
 
+    let user_ptr = user as *const ProgressMutex;
+    let align = std::mem::align_of::<ProgressMutex>();
+    if align > 1 && (user_ptr as usize) % align != 0 {
+        return true;
+    }
+
     let msg_opt = if message.is_null() {
         None
     } else {
@@ -56,7 +62,7 @@ extern "C" fn progress_cb(percentage: f32, message: *const c_char, user: *mut c_
     };
 
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        let mutex = unsafe { &*(user as *const ProgressMutex) };
+        let mutex = unsafe { &*user_ptr };
         let Ok(mut handler) = mutex.lock() else {
             return false;
         };
@@ -960,6 +966,13 @@ impl Default for Importer {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn progress_cb_rejects_unaligned_user_pointers() {
+        let buf = [0u64; 8];
+        let unaligned = unsafe { (buf.as_ptr() as *const u8).add(1) } as *mut c_void;
+        assert!(progress_cb(0.5, std::ptr::null(), unaligned));
+    }
 
     #[test]
     fn test_importer_creation() {
