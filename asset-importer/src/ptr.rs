@@ -58,7 +58,16 @@ unsafe impl<T: SharedPtrTarget> SharedPtrTarget for *const T {}
 impl<T> SharedPtr<T> {
     /// Creates a new `SharedPtr` if `ptr` is non-null.
     pub(crate) fn new(ptr: *const T) -> Option<Self> {
-        if ptr.is_null() { None } else { Some(Self(ptr)) }
+        if ptr.is_null() {
+            return None;
+        }
+
+        let align = std::mem::align_of::<T>();
+        if align > 1 && (ptr as usize) % align != 0 {
+            return None;
+        }
+
+        Some(Self(ptr))
     }
 
     /// Creates a new `SharedPtr` without checking for null.
@@ -67,6 +76,9 @@ impl<T> SharedPtr<T> {
     /// The caller must ensure `ptr` is non-null.
     pub(crate) unsafe fn new_unchecked(ptr: *const T) -> Self {
         debug_assert!(!ptr.is_null());
+        debug_assert!(
+            std::mem::align_of::<T>() <= 1 || (ptr as usize) % std::mem::align_of::<T>() == 0
+        );
         Self(ptr)
     }
 
@@ -80,9 +92,28 @@ impl<T> SharedPtr<T> {
     /// This is safe because `SharedPtr` is only constructed from pointers that are guaranteed
     /// to remain valid for the lifetime of the owning safe wrapper type.
     pub(crate) fn as_ref(&self) -> &T {
+        debug_assert!(
+            std::mem::align_of::<T>() <= 1 || (self.0 as usize) % std::mem::align_of::<T>() == 0
+        );
         // SAFETY: The crate only constructs `SharedPtr` from pointers that remain valid for the
         // lifetime of the owning wrapper, and the safe API treats Assimp scene data as read-only.
         unsafe { &*self.0 }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::SharedPtr;
+
+    #[test]
+    fn new_rejects_null_and_unaligned_pointers() {
+        assert!(SharedPtr::<u32>::new(std::ptr::null()).is_none());
+
+        let buf = [0u32; 2];
+        let unaligned = unsafe { (buf.as_ptr() as *const u8).add(1) } as *const u32;
+        assert!(SharedPtr::new(unaligned).is_none());
+
+        assert!(SharedPtr::new(buf.as_ptr()).is_some());
     }
 }
 
