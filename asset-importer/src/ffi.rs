@@ -17,6 +17,14 @@ pub(crate) fn slice_from_ptr_len<O: ?Sized, T>(owner: &O, ptr: *const T, len: us
     if ptr.is_null() || len == 0 {
         &[]
     } else {
+        // `from_raw_parts` requires proper alignment for `T`. Assimp should return aligned
+        // pointers for its allocations, but reject unaligned pointers to avoid UB when a
+        // corrupted/malicious scene reports bogus addresses.
+        let align = std::mem::align_of::<T>();
+        if align > 1 && (ptr as usize) % align != 0 {
+            return &[];
+        }
+
         // `from_raw_parts` requires `len * size_of::<T>() <= isize::MAX`.
         // Assimp scenes should satisfy this, but we defensively clamp to avoid UB
         // if a corrupted/malicious scene ever reports an insane length.
@@ -83,6 +91,13 @@ pub(crate) unsafe fn slice_from_mut_ptr_len<O: ?Sized, T>(
     if ptr.is_null() || len == 0 {
         &mut []
     } else {
+        // `from_raw_parts_mut` requires proper alignment for `T`. Reject unaligned pointers to
+        // avoid UB on corrupted/malicious inputs.
+        let align = std::mem::align_of::<T>();
+        if align > 1 && (ptr as usize) % align != 0 {
+            return &mut [];
+        }
+
         // `from_raw_parts_mut` requires `len * size_of::<T>() <= isize::MAX`.
         // As with immutable slices, clamp to avoid UB if a corrupted/malicious
         // scene ever reports an insane length.
@@ -136,6 +151,29 @@ mod tests {
             slice_from_ptr_len_opt(owner, std::ptr::null::<u8>(), 2),
             None
         );
+    }
+
+    #[test]
+    fn slice_from_ptr_len_rejects_unaligned_pointers() {
+        let owner = &();
+        let buf = [0u32; 2];
+        let unaligned = unsafe { (buf.as_ptr() as *const u8).add(1) } as *const u32;
+
+        let got = slice_from_ptr_len(owner, unaligned, 1);
+        assert!(got.is_empty());
+
+        let got_opt = slice_from_ptr_len_opt(owner, unaligned, 1).unwrap();
+        assert!(got_opt.is_empty());
+    }
+
+    #[test]
+    fn slice_from_mut_ptr_len_rejects_unaligned_pointers() {
+        let mut owner = ();
+        let mut buf = [0u32; 2];
+        let unaligned = unsafe { (buf.as_mut_ptr() as *mut u8).add(1) } as *mut u32;
+
+        let got = unsafe { slice_from_mut_ptr_len(&mut owner, unaligned, 1) };
+        assert!(got.is_empty());
     }
 
     #[test]
