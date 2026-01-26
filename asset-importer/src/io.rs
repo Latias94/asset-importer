@@ -415,7 +415,10 @@ impl Drop for OwnedAiFileIO {
         unsafe {
             let ptr = self.file_io.UserData as *mut Arc<Mutex<dyn FileSystem>>;
             if !ptr.is_null() {
-                drop(Box::from_raw(ptr));
+                let align = std::mem::align_of::<Arc<Mutex<dyn FileSystem>>>();
+                if align <= 1 || (ptr as usize) % align == 0 {
+                    drop(Box::from_raw(ptr));
+                }
                 self.file_io.UserData = ptr::null_mut();
             }
         }
@@ -702,6 +705,24 @@ mod tests {
 
         // Hardening: close callback should not touch unaligned pointers.
         file_close_proc(std::ptr::null_mut(), unaligned_file);
+    }
+
+    #[test]
+    fn owned_file_io_drop_rejects_unaligned_userdata_pointers() {
+        let fs: Arc<Mutex<dyn FileSystem>> = Arc::new(Mutex::new(DefaultFileSystem));
+        let mut owned = OwnedAiFileIO::new(fs);
+
+        // Free the real userdata first to avoid a leak, then poison it with an unaligned pointer
+        // and ensure Drop does not attempt to `Box::from_raw` it.
+        let ptr = owned.file_io.UserData as *mut Arc<Mutex<dyn FileSystem>>;
+        unsafe {
+            drop(Box::from_raw(ptr));
+        }
+
+        let buf = [0u64; 8];
+        owned.file_io.UserData =
+            unsafe { (buf.as_ptr() as *const u8).add(1) } as *mut std::os::raw::c_char;
+        drop(owned);
     }
 
     #[test]
