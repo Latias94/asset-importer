@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - **Property key constants**: `import_properties::*` and `export_properties::*` now match Assimp's expected property keys (macro values), so `PropertyStore` settings reliably take effect.
+- **FFI hardening**: Unaligned pointers from Assimp (scene/metadata/slices and callback userdata) are now rejected to avoid potential undefined behavior.
 
 ## [0.6.0] - 2026-01-20
 
