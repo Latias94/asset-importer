@@ -21,14 +21,9 @@ pub struct Mesh {
 }
 
 impl Mesh {
-    /// Create a Mesh from a raw Assimp mesh pointer
-    ///
-    /// # Safety
-    /// Caller must ensure `mesh_ptr` is non-null and points into a live `aiScene`.
-    pub(crate) unsafe fn from_raw(scene: Scene, mesh_ptr: *const sys::aiMesh) -> Self {
-        debug_assert!(!mesh_ptr.is_null());
-        let mesh_ptr = unsafe { SharedPtr::new_unchecked(mesh_ptr) };
-        Self { scene, mesh_ptr }
+    pub(crate) fn from_sys_ptr(scene: Scene, mesh_ptr: *mut sys::aiMesh) -> Option<Self> {
+        let mesh_ptr = SharedPtr::new(mesh_ptr as *const sys::aiMesh)?;
+        Some(Self { scene, mesh_ptr })
     }
 
     #[allow(dead_code)]
@@ -584,13 +579,13 @@ impl Mesh {
 
         let mesh = self.raw();
         let bone_ptr = ffi::ptr_array_get(self, mesh.mBones, mesh.mNumBones as usize, index)?;
-        unsafe { Bone::from_raw(self.scene.clone(), bone_ptr as *const sys::aiBone) }.ok()
+        Bone::from_sys_ptr(self.scene.clone(), bone_ptr).ok()
     }
 
     /// Get an iterator over all bones in the mesh
     pub fn bones(&self) -> BoneIterator {
         let mesh = self.raw();
-        unsafe { BoneIterator::new(self.scene.clone(), mesh.mBones, self.num_bones()) }
+        BoneIterator::new(self.scene.clone(), mesh.mBones, self.num_bones())
     }
 
     /// Check if the mesh has bones (is rigged for skeletal animation)

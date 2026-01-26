@@ -76,15 +76,9 @@ pub struct Bone {
 }
 
 impl Bone {
-    /// Create a bone wrapper from a raw Assimp bone pointer
-    ///
-    /// # Safety
-    /// The caller must ensure that the pointer is valid and that the bone
-    /// will not be freed while this Bone instance exists.
-    pub(crate) unsafe fn from_raw(scene: Scene, bone_ptr: *const sys::aiBone) -> Result<Self> {
-        let bone_ptr =
-            SharedPtr::new(bone_ptr).ok_or_else(|| Error::invalid_scene("Bone pointer is null"))?;
-
+    pub(crate) fn from_sys_ptr(scene: Scene, bone_ptr: *mut sys::aiBone) -> Result<Self> {
+        let bone_ptr = SharedPtr::new(bone_ptr as *const sys::aiBone)
+            .ok_or_else(|| Error::invalid_scene("Bone pointer is null"))?;
         Ok(Self { scene, bone_ptr })
     }
 
@@ -270,10 +264,7 @@ pub struct BoneIterator {
 
 impl BoneIterator {
     /// Create a new bone iterator
-    ///
-    /// # Safety
-    /// The caller must ensure that the bones pointer and count are valid.
-    pub(crate) unsafe fn new(scene: Scene, bones: *mut *mut sys::aiBone, count: usize) -> Self {
+    pub(crate) fn new(scene: Scene, bones: *mut *mut sys::aiBone, count: usize) -> Self {
         let bones_ptr = SharedPtr::new(bones as *const *const sys::aiBone);
         let count = if bones_ptr.is_some() { count } else { 0 };
         Self {
@@ -297,7 +288,7 @@ impl Iterator for BoneIterator {
             if bone_ptr.is_null() {
                 continue;
             }
-            if let Ok(bone) = unsafe { Bone::from_raw(self.scene.clone(), bone_ptr) } {
+            if let Ok(bone) = Bone::from_sys_ptr(self.scene.clone(), bone_ptr as *mut sys::aiBone) {
                 return Some(bone);
             }
         }

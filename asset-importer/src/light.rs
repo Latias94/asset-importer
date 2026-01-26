@@ -19,14 +19,9 @@ pub struct Light {
 }
 
 impl Light {
-    /// Create a Light from a raw Assimp light pointer
-    ///
-    /// # Safety
-    /// Caller must ensure `light_ptr` is non-null and points into a live `aiScene`.
-    pub(crate) unsafe fn from_raw(scene: Scene, light_ptr: *const sys::aiLight) -> Self {
-        debug_assert!(!light_ptr.is_null());
-        let light_ptr = unsafe { SharedPtr::new_unchecked(light_ptr) };
-        Self { scene, light_ptr }
+    pub(crate) fn from_sys_ptr(scene: Scene, light_ptr: *mut sys::aiLight) -> Option<Self> {
+        let light_ptr = SharedPtr::new(light_ptr as *const sys::aiLight)?;
+        Some(Self { scene, light_ptr })
     }
 
     #[allow(dead_code)]

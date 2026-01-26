@@ -16,14 +16,9 @@ pub struct Camera {
 }
 
 impl Camera {
-    /// Create a Camera from a raw Assimp camera pointer
-    ///
-    /// # Safety
-    /// Caller must ensure `camera_ptr` is non-null and points into a live `aiScene`.
-    pub(crate) unsafe fn from_raw(scene: Scene, camera_ptr: *const sys::aiCamera) -> Self {
-        debug_assert!(!camera_ptr.is_null());
-        let camera_ptr = unsafe { SharedPtr::new_unchecked(camera_ptr) };
-        Self { scene, camera_ptr }
+    pub(crate) fn from_sys_ptr(scene: Scene, camera_ptr: *mut sys::aiCamera) -> Option<Self> {
+        let camera_ptr = SharedPtr::new(camera_ptr as *const sys::aiCamera)?;
+        Some(Self { scene, camera_ptr })
     }
 
     #[allow(dead_code)]

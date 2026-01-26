@@ -140,17 +140,12 @@ impl std::fmt::Display for MaterialStringRef {
 }
 
 impl Material {
-    /// Create a Material from a raw Assimp material pointer
-    ///
-    /// # Safety
-    /// Caller must ensure `material_ptr` is non-null and points into a live `aiScene`.
-    pub(crate) unsafe fn from_raw(scene: Scene, material_ptr: *const sys::aiMaterial) -> Self {
-        debug_assert!(!material_ptr.is_null());
-        let material_ptr = unsafe { SharedPtr::new_unchecked(material_ptr) };
-        Self {
+    pub(crate) fn from_sys_ptr(scene: Scene, material_ptr: *mut sys::aiMaterial) -> Option<Self> {
+        let material_ptr = SharedPtr::new(material_ptr as *const sys::aiMaterial)?;
+        Some(Self {
             scene,
             material_ptr,
-        }
+        })
     }
 
     #[allow(dead_code)]

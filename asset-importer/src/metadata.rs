@@ -330,6 +330,11 @@ impl Metadata {
         Ok(Self { entries })
     }
 
+    pub(crate) fn from_sys_ptr(metadata_ptr: *const sys::aiMetadata) -> Result<Self> {
+        // SAFETY: The crate only calls this with pointers coming from an Assimp-owned scene.
+        unsafe { Self::from_raw_sys(metadata_ptr) }
+    }
+
     /// Create metadata from a raw Assimp metadata pointer (requires `raw-sys`).
     #[cfg(feature = "raw-sys")]
     pub unsafe fn from_raw(metadata_ptr: *const sys::aiMetadata) -> Result<Self> {
@@ -368,8 +373,7 @@ impl Metadata {
                 Ok(MetadataEntry::Vector3D(unsafe { data.read_vector3d() }))
             }
             sys::aiMetadataType::AI_AIMETADATA => {
-                let nested_metadata =
-                    unsafe { Self::from_raw_sys(entry.mData as *const sys::aiMetadata)? };
+                let nested_metadata = Self::from_sys_ptr(entry.mData as *const sys::aiMetadata)?;
                 Ok(MetadataEntry::Metadata(nested_metadata))
             }
             sys::aiMetadataType::AI_INT64 => {

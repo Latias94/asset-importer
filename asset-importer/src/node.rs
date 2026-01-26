@@ -18,14 +18,9 @@ pub struct Node {
 }
 
 impl Node {
-    /// Create a Node from a raw Assimp node pointer
-    ///
-    /// # Safety
-    /// Caller must ensure `node_ptr` is non-null and points into a live `aiScene`.
-    pub(crate) unsafe fn from_raw(scene: Scene, node_ptr: *const sys::aiNode) -> Self {
-        debug_assert!(!node_ptr.is_null());
-        let node_ptr = unsafe { SharedPtr::new_unchecked(node_ptr) };
-        Self { scene, node_ptr }
+    pub(crate) fn from_sys_ptr(scene: Scene, node_ptr: *mut sys::aiNode) -> Option<Self> {
+        let node_ptr = SharedPtr::new(node_ptr as *const sys::aiNode)?;
+        Some(Self { scene, node_ptr })
     }
 
     #[allow(dead_code)]
@@ -62,11 +57,7 @@ impl Node {
     /// Get the parent node
     pub fn parent(&self) -> Option<Node> {
         let node = self.raw();
-        if node.mParent.is_null() {
-            None
-        } else {
-            Some(unsafe { Node::from_raw(self.scene.clone(), node.mParent) })
-        }
+        Node::from_sys_ptr(self.scene.clone(), node.mParent)
     }
 
     /// Get the number of child nodes
@@ -88,7 +79,7 @@ impl Node {
         let node = self.raw();
         let child_ptr =
             ffi::ptr_array_get(self, node.mChildren, node.mNumChildren as usize, index)?;
-        Some(unsafe { Node::from_raw(self.scene.clone(), child_ptr as *const sys::aiNode) })
+        Node::from_sys_ptr(self.scene.clone(), child_ptr)
     }
 
     /// Get an iterator over all child nodes
@@ -190,9 +181,7 @@ impl Iterator for NodeIterator {
             if child_ptr.is_null() {
                 continue;
             }
-            return Some(unsafe {
-                Node::from_raw(self.scene.clone(), child_ptr as *const sys::aiNode)
-            });
+            return Node::from_sys_ptr(self.scene.clone(), child_ptr);
         }
         None
     }
@@ -260,6 +249,6 @@ impl ExactSizeIterator for MeshIndexIterator {}
 impl Node {
     /// Get node metadata
     pub fn metadata(&self) -> Result<Metadata> {
-        unsafe { Metadata::from_raw_sys(self.raw().mMetaData) }
+        Metadata::from_sys_ptr(self.raw().mMetaData)
     }
 }

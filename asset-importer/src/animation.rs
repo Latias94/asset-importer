@@ -17,17 +17,12 @@ pub struct Animation {
 }
 
 impl Animation {
-    /// Create an Animation from a raw Assimp animation pointer
-    ///
-    /// # Safety
-    /// Caller must ensure `animation_ptr` is non-null and points into a live `aiScene`.
-    pub(crate) unsafe fn from_raw(scene: Scene, animation_ptr: *const sys::aiAnimation) -> Self {
-        debug_assert!(!animation_ptr.is_null());
-        let animation_ptr = unsafe { SharedPtr::new_unchecked(animation_ptr) };
-        Self {
+    pub(crate) fn from_sys_ptr(scene: Scene, animation_ptr: *mut sys::aiAnimation) -> Option<Self> {
+        let animation_ptr = SharedPtr::new(animation_ptr as *const sys::aiAnimation)?;
+        Some(Self {
             scene,
             animation_ptr,
-        }
+        })
     }
 
     #[allow(dead_code)]
@@ -115,7 +110,7 @@ impl Animation {
         }
 
         let channel_ptr = self.channel_ptr(index)?;
-        Some(unsafe { NodeAnimation::from_raw(self.scene.clone(), channel_ptr) })
+        NodeAnimation::from_ptr(self.scene.clone(), channel_ptr)
     }
 
     /// Get an iterator over all node animation channels
@@ -143,7 +138,7 @@ impl Animation {
             return None;
         }
         let ptr = self.mesh_channel_ptr(index)?;
-        Some(unsafe { MeshAnimation::from_raw(self.scene.clone(), ptr) })
+        MeshAnimation::from_ptr(self.scene.clone(), ptr)
     }
 
     /// Iterate mesh animation channels
@@ -171,7 +166,7 @@ impl Animation {
             return None;
         }
         let ptr = self.morph_mesh_channel_ptr(index)?;
-        Some(unsafe { MorphMeshAnimation::from_raw(self.scene.clone(), ptr) })
+        MorphMeshAnimation::from_ptr(self.scene.clone(), ptr)
     }
 
     /// Iterate morph mesh animation channels
@@ -193,14 +188,9 @@ pub struct NodeAnimation {
 }
 
 impl NodeAnimation {
-    /// Create a NodeAnimation from a raw Assimp node animation pointer
-    ///
-    /// # Safety
-    /// Caller must ensure `channel_ptr` is non-null and points into a live `aiScene`.
-    pub(crate) unsafe fn from_raw(scene: Scene, channel_ptr: *const sys::aiNodeAnim) -> Self {
-        debug_assert!(!channel_ptr.is_null());
-        let channel_ptr = unsafe { SharedPtr::new_unchecked(channel_ptr) };
-        Self { scene, channel_ptr }
+    pub(crate) fn from_ptr(scene: Scene, channel_ptr: *const sys::aiNodeAnim) -> Option<Self> {
+        let channel_ptr = SharedPtr::new(channel_ptr)?;
+        Some(Self { scene, channel_ptr })
     }
 
     #[allow(dead_code)]
@@ -455,9 +445,10 @@ impl Iterator for NodeAnimationIterator {
             if channel_ptr.is_null() {
                 continue;
             }
-            return Some(unsafe {
-                NodeAnimation::from_raw(self.scene.clone(), channel_ptr as *const sys::aiNodeAnim)
-            });
+            return NodeAnimation::from_ptr(
+                self.scene.clone(),
+                channel_ptr as *const sys::aiNodeAnim,
+            );
         }
         None
     }
@@ -491,12 +482,9 @@ pub struct MeshAnimation {
 }
 
 impl MeshAnimation {
-    /// # Safety
-    /// Caller must ensure `channel_ptr` is non-null and points into a live `aiScene`.
-    unsafe fn from_raw(scene: Scene, channel_ptr: *const sys::aiMeshAnim) -> Self {
-        debug_assert!(!channel_ptr.is_null());
-        let channel_ptr = unsafe { SharedPtr::new_unchecked(channel_ptr) };
-        Self { scene, channel_ptr }
+    fn from_ptr(scene: Scene, channel_ptr: *const sys::aiMeshAnim) -> Option<Self> {
+        let channel_ptr = SharedPtr::new(channel_ptr)?;
+        Some(Self { scene, channel_ptr })
     }
 
     #[inline]
@@ -560,9 +548,7 @@ impl Iterator for MeshAnimationIterator {
             if ptr.is_null() {
                 continue;
             }
-            return Some(unsafe {
-                MeshAnimation::from_raw(self.scene.clone(), ptr as *const sys::aiMeshAnim)
-            });
+            return MeshAnimation::from_ptr(self.scene.clone(), ptr as *const sys::aiMeshAnim);
         }
         None
     }
@@ -631,12 +617,9 @@ pub struct MorphMeshAnimation {
 }
 
 impl MorphMeshAnimation {
-    /// # Safety
-    /// Caller must ensure `channel_ptr` is non-null and points into a live `aiScene`.
-    unsafe fn from_raw(scene: Scene, channel_ptr: *const sys::aiMeshMorphAnim) -> Self {
-        debug_assert!(!channel_ptr.is_null());
-        let channel_ptr = unsafe { SharedPtr::new_unchecked(channel_ptr) };
-        Self { scene, channel_ptr }
+    fn from_ptr(scene: Scene, channel_ptr: *const sys::aiMeshMorphAnim) -> Option<Self> {
+        let channel_ptr = SharedPtr::new(channel_ptr)?;
+        Some(Self { scene, channel_ptr })
     }
 
     #[inline]
@@ -716,9 +699,10 @@ impl Iterator for MorphMeshAnimationIterator {
             if ptr.is_null() {
                 continue;
             }
-            return Some(unsafe {
-                MorphMeshAnimation::from_raw(self.scene.clone(), ptr as *const sys::aiMeshMorphAnim)
-            });
+            return MorphMeshAnimation::from_ptr(
+                self.scene.clone(),
+                ptr as *const sys::aiMeshMorphAnim,
+            );
         }
         None
     }

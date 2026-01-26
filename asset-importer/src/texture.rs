@@ -123,18 +123,9 @@ pub struct Texture {
 }
 
 impl Texture {
-    /// Create a texture wrapper from a raw Assimp texture pointer
-    ///
-    /// # Safety
-    /// The caller must ensure that the pointer is valid and that the texture
-    /// will not be freed while this Texture instance exists.
-    pub(crate) unsafe fn from_raw(
-        scene: Scene,
-        texture_ptr: *const sys::aiTexture,
-    ) -> Result<Self> {
+    pub(crate) fn from_sys_ptr(scene: Scene, texture_ptr: *const sys::aiTexture) -> Result<Self> {
         let texture_ptr = SharedPtr::new(texture_ptr)
             .ok_or_else(|| Error::invalid_scene("Texture pointer is null"))?;
-
         Ok(Self { scene, texture_ptr })
     }
 
@@ -332,14 +323,7 @@ pub struct TextureIterator {
 
 impl TextureIterator {
     /// Create a new texture iterator
-    ///
-    /// # Safety
-    /// The caller must ensure that the textures pointer and count are valid.
-    pub(crate) unsafe fn new(
-        scene: Scene,
-        textures: *mut *mut sys::aiTexture,
-        count: usize,
-    ) -> Self {
+    pub(crate) fn new(scene: Scene, textures: *mut *mut sys::aiTexture, count: usize) -> Self {
         let textures_ptr = SharedPtr::new(textures as *const *const sys::aiTexture);
         Self {
             scene,
@@ -362,8 +346,8 @@ impl Iterator for TextureIterator {
             if texture_ptr.is_null() {
                 continue;
             }
-            // `from_raw` only fails on null pointers; keep the iterator robust anyway.
-            if let Ok(tex) = unsafe { Texture::from_raw(self.scene.clone(), texture_ptr) } {
+            // `from_sys_ptr` only fails on null pointers; keep the iterator robust anyway.
+            if let Ok(tex) = Texture::from_sys_ptr(self.scene.clone(), texture_ptr) {
                 return Some(tex);
             }
         }
