@@ -14,6 +14,8 @@ pub struct BuildConfig {
     pub verbose: bool,
     /// Force building Assimp from source even when `prebuilt` is enabled.
     pub force_build: bool,
+    /// Force regenerating bindings even when pregenerated bindings are present.
+    pub force_generate_bindings: bool,
     #[cfg_attr(not(feature = "prebuilt"), allow(dead_code))]
     pub offline: bool,
 }
@@ -24,6 +26,8 @@ impl BuildConfig {
         let offline = env::var("ASSET_IMPORTER_OFFLINE").is_ok()
             || env::var("CARGO_NET_OFFLINE").is_ok_and(|v| v == "true");
         let force_build = matches!(env::var("ASSET_IMPORTER_FORCE_BUILD"), Ok(v) if !v.is_empty());
+        let force_generate_bindings =
+            matches!(env::var("ASSET_IMPORTER_FORCE_GENERATE_BINDINGS"), Ok(v) if !v.is_empty());
 
         Self {
             manifest_dir: PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap()),
@@ -36,6 +40,7 @@ impl BuildConfig {
             docs_rs: env::var("DOCS_RS").is_ok(),
             verbose: env::var("ASSET_IMPORTER_VERBOSE").is_ok(),
             force_build,
+            force_generate_bindings,
             offline,
         }
     }
@@ -110,6 +115,7 @@ impl BuildConfig {
         println!("cargo:rerun-if-env-changed=ASSET_IMPORTER_CACHE_DIR");
         println!("cargo:rerun-if-env-changed=ASSET_IMPORTER_OFFLINE");
         println!("cargo:rerun-if-env-changed=ASSET_IMPORTER_FORCE_BUILD");
+        println!("cargo:rerun-if-env-changed=ASSET_IMPORTER_FORCE_GENERATE_BINDINGS");
         println!("cargo:rerun-if-env-changed=ASSET_IMPORTER_VERBOSE");
         println!("cargo:rerun-if-env-changed=CARGO_TARGET_DIR");
         println!("cargo:rerun-if-env-changed=CARGO_NET_OFFLINE");

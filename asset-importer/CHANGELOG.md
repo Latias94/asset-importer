@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Bundled Assimp updated**: Vendored Assimp (via `asset-importer-sys`) is now pinned to `v6.0.5`.
+- **Default build mode (breaking)**: Default features are now empty and the crate builds bundled Assimp from source unless `prebuilt` or `system` is explicitly enabled. This matches the `asset-importer-sys` default and prevents stale prebuilt release artifacts from breaking normal builds.
+- **Prebuilt binaries are opt-in**: Enable `features = ["prebuilt"]` when you want to use release artifacts; stale packages are rejected by the sys crate version gate.
+
 ## [0.7.0] - 2026-01-25
 
 ### Changed

@@ -50,7 +50,7 @@ pub fn run(cfg: &BuildConfig, plan: &BuildPlan) {
 
     // For non-system builds we strongly prefer the shipped pregenerated bindings, so builds are
     // fast, deterministic, and do not require libclang.
-    if !is_system && copy_pregenerated_bindings(cfg) {
+    if !is_system && !cfg.force_generate_bindings && copy_pregenerated_bindings(cfg) {
         return;
     }
 
@@ -185,7 +185,7 @@ fn run_bindgen(cfg: &BuildConfig, plan: &BuildPlan) {
             panic!(
                 "System Assimp headers appear to be too old for this crate.\n\
                  Missing required symbols in generated bindings: {:?}\n\
-                 Hint: install Assimp >= 6 (matching this crate's vendored version), or use `--no-default-features --features build-assimp` (vendored build) / `--no-default-features --features prebuilt`.",
+                 Hint: install Assimp >= 6 (matching this crate's vendored version), use the default vendored build, or enable `prebuilt` with matching artifacts.",
                 missing
             );
         }

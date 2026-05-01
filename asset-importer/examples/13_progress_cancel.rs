@@ -5,7 +5,7 @@
 //!   want to reliably observe multiple updates.
 //!
 //! Usage:
-//!   cargo run -p asset-importer --example 13_progress_cancel --no-default-features --features build-assimp -- <model>
+//!   cargo run -p asset-importer --example 13_progress_cancel -- <model>
 
 #[path = "common/mod.rs"]
 mod common;

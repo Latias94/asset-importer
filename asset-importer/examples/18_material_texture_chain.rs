@@ -6,7 +6,7 @@
 //! - `Scene::embedded_texture_by_name` + `Texture::data_ref()` for zero-copy access
 //!
 //! Usage:
-//!   cargo run -p asset-importer --example 18_material_texture_chain --no-default-features --features build-assimp -- <model>
+//!   cargo run -p asset-importer --example 18_material_texture_chain -- <model>
 
 #[path = "common/mod.rs"]
 mod common;

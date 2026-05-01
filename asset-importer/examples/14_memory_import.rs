@@ -3,10 +3,10 @@
 //! This is useful for pipelines that download/decompress assets into memory before importing.
 //!
 //! Usage:
-//!   cargo run -p asset-importer --example 14_memory_import --no-default-features --features build-assimp -- <model> [hint]
+//!   cargo run -p asset-importer --example 14_memory_import -- <model> [hint]
 //!
 //! Examples:
-//!   cargo run -p asset-importer --example 14_memory_import --no-default-features --features build-assimp -- asset-importer/examples/models/box.obj obj
+//!   cargo run -p asset-importer --example 14_memory_import -- asset-importer/examples/models/box.obj obj
 
 #[path = "common/mod.rs"]
 mod common;

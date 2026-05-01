@@ -6,7 +6,7 @@ use std::{
 
 use flate2::{Compression, write::GzEncoder};
 
-const VENDORED_ASSIMP_VERSION: &str = "6.0.4";
+const VENDORED_ASSIMP_VERSION: &str = "6.0.5";
 
 fn target_os_from_triple(target: &str) -> &'static str {
     if target.contains("-windows-") {

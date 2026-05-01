@@ -7,7 +7,7 @@
 //! - how to transform a mesh AABB into world space (8-corner transform)
 //!
 //! Usage:
-//!   cargo run -p asset-importer --example 17_node_world_transforms --no-default-features --features build-assimp -- <model>
+//!   cargo run -p asset-importer --example 17_node_world_transforms -- <model>
 
 #[path = "common/mod.rs"]
 mod common;

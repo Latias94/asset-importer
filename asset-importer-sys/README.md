@@ -5,7 +5,7 @@
 
 Low-level FFI bindings for the [Assimp](https://github.com/assimp/assimp) 3D asset import library.
 
-This crate provides unsafe Rust FFI bindings for **Assimp v6.0.4**, implementing the vast majority of the C API functions, types, and constants.
+This crate provides unsafe Rust FFI bindings for **Assimp v6.0.5**, implementing the vast majority of the C API functions, types, and constants.
 
 ## Status
 
@@ -13,7 +13,7 @@ This crate provides unsafe Rust FFI bindings for **Assimp v6.0.4**, implementing
 
 ## Overview
 
-This crate provides unsafe Rust bindings to the [Assimp v6.0.4](https://github.com/assimp/assimp/releases/tag/v6.0.4) C API, implementing the vast majority of functions, types, and constants. For a safe, high-level API, use the [`asset-importer`](../asset-importer/) crate instead.
+This crate provides unsafe Rust bindings to the [Assimp v6.0.5](https://github.com/assimp/assimp/releases/tag/v6.0.5) C API, implementing the vast majority of functions, types, and constants. For a safe, high-level API, use the [`asset-importer`](../asset-importer/) crate instead.
 
 ### API Coverage
 
@@ -29,9 +29,20 @@ The bindings include:
 
 **Default**: Builds Assimp from the bundled source (vendored) for maximum compatibility.
 
-If you want the fastest builds without compiling native code, prefer the high-level
-[`asset-importer`](../asset-importer/) crate (it enables prebuilt binaries by default), or enable
-`prebuilt` here.
+The high-level [`asset-importer`](../asset-importer/) crate follows the same default source-build
+policy. Enable `prebuilt` only when you explicitly want matching release artifacts.
+
+### Build from Source
+```toml
+[dependencies]
+asset-importer-sys = "0.7"
+
+# Equivalent explicit source-build mode:
+asset-importer-sys = { version = "0.7", features = ["build-assimp"] }
+```
+- Builds Assimp from bundled source
+- Requires: CMake, C++ compiler, Git
+- Best compatibility across platforms
 
 ### Prebuilt Binaries
 ```toml
@@ -41,19 +52,11 @@ asset-importer-sys = { version = "0.7", features = ["prebuilt"] }
 - Downloads prebuilt libraries from GitHub releases
 - No build dependencies required
 - Fastest option for development
-
-### Build from Source
-```toml
-asset-importer-sys = { version = "0.7", features = ["build-assimp"] }
-```
-- Builds assimp from bundled source
-- Requires: CMake, C++ compiler, Git
-- Full control over build configuration
-- Best compatibility across platforms
+- Requires a package whose manifest matches the bundled Assimp version
 
 ### System Library
 ```toml
-asset-importer-sys = { version = "0.7", features = ["system"] }
+asset-importer-sys = { version = "0.7", features = ["system", "generate-bindings"] }
 ```
 Uses system-installed assimp. Install via package manager:
 - **macOS**: `brew install assimp`
@@ -102,6 +105,7 @@ asset-importer-sys = {
 - `ASSIMP_DIR`: Path to an Assimp source tree to use when the `assimp` submodule is not present (builds from this directory).
 - `ASSET_IMPORTER_PACKAGE_DIR`: Use local prebuilt packages
   - On Windows we publish both `-md` and `-mt` suffixed archives; the build script selects the right one automatically and falls back to the old name if not found.
+- `ASSET_IMPORTER_FORCE_GENERATE_BINDINGS=1`: Maintainer override to regenerate vendored bindings when `generate-bindings` is enabled.
 - `CMAKE_GENERATOR`: Override CMake generator (e.g., "Ninja")
 
 ## Platform Support
@@ -115,8 +119,9 @@ asset-importer-sys = {
 
 | Feature | Requirements |
 |---------|-------------|
+| Default vendored source | CMake (≥3.10), C++ compiler, Git |
 | `prebuilt` | None |
-| `system` | System assimp installation |
+| `system` | System assimp installation, libclang/bindgen |
 | `build-assimp` | CMake (≥3.10), C++ compiler, Git |
 
 #### Detailed Requirements for Source Build

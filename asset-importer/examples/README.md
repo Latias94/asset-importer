@@ -8,14 +8,19 @@ This directory contains practical examples demonstrating how to use the asset-im
 cargo run -p asset-importer --example <name> -- <args>
 ```
 
-Build modes (choose exactly one):
+Build modes:
 
-- Prebuilt (default):
+- Default source build:
   - `cargo run -p asset-importer --example 01_quickstart -- <model>`
-- Build from source:
-  - `cargo run -p asset-importer --example 01_quickstart --no-default-features --features build-assimp -- <model>`
+- Explicit source build:
+  - `cargo run -p asset-importer --example 01_quickstart --features build-assimp -- <model>`
+- Prebuilt package:
+  - `cargo run -p asset-importer --example 01_quickstart --features prebuilt -- <model>`
 - System Assimp (pkg-config/vcpkg + libclang/bindgen required):
-  - `cargo run -p asset-importer --example 01_quickstart --no-default-features --features system -- <model>`
+  - `cargo run -p asset-importer --example 01_quickstart --features system -- <model>`
+
+The build-mode features `build-assimp`, `prebuilt`, and `system` are mutually exclusive. Omitting
+all of them builds the bundled Assimp source.
 
 Tips:
 - Set `AI_EX_VERBOSE=1` to enable verbose Assimp logging.
@@ -82,22 +87,22 @@ The `models/` directory contains simple test models for experimentation:
 
 Load and inspect a model:
 ```
-cargo run -p asset-importer --example 01_quickstart --no-default-features --features build-assimp -- path/to/model.fbx
+cargo run -p asset-importer --example 01_quickstart -- path/to/model.fbx
 ```
 
 Convert formats:
 ```
-cargo run -p asset-importer --example 06_convert --no-default-features --features "build-assimp,export" -- model.dae model.obj
+cargo run -p asset-importer --example 06_convert --features export -- model.dae model.obj
 ```
 
 Check supported formats:
 ```
-cargo run -p asset-importer --example 02_formats --no-default-features --features build-assimp
+cargo run -p asset-importer --example 02_formats
 ```
 
 Test mint math library integration:
 ```
-cargo run -p asset-importer --example 07_mint_integration --no-default-features --features "build-assimp,mint"
+cargo run -p asset-importer --example 07_mint_integration --features mint
 ```
 
 ## Conventions

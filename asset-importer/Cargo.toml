@@ -51,7 +51,7 @@ bytemuck = { version = "1.24.0", features = ["derive"], optional = true }
 tokio = { version = "1.49.0", features = ["full"], optional = true }
 
 [features]
-default = ["prebuilt"]
+default = []
 
 # Expose the raw `asset-importer-sys` bindings as `asset_importer::sys`.
 # Keeping this opt-in reduces the chance of users accidentally violating the safe API's immutability/threading contract.
@@ -67,9 +67,10 @@ export = ["asset-importer-sys/export"]
 type-extensions = ["asset-importer-sys/type-extensions"]
 
 # Build method features (mutually exclusive)
-# Use prebuilt binaries (default, fastest)
+# Default (no build-mode feature): build bundled Assimp from source.
+# Use prebuilt binaries only when explicitly requested and matching release artifacts exist.
 prebuilt = ["asset-importer-sys/prebuilt"]
-# Build assimp from source (slower but most compatible)
+# Explicitly build Assimp from source (same backend as the default).
 build-assimp = ["asset-importer-sys/build-assimp"]
 # Use system-installed assimp
 system = ["asset-importer-sys/system", "asset-importer-sys/generate-bindings"]

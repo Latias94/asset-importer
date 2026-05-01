@@ -1,7 +1,7 @@
 //! Multithreading (practical): process meshes in parallel and compute stats + AABB (zero-copy).
 //!
 //! Usage:
-//!   cargo run -p asset-importer --example 12_parallel_mesh_stats --no-default-features --features build-assimp -- <model> [workers]
+//!   cargo run -p asset-importer --example 12_parallel_mesh_stats -- <model> [workers]
 
 #[path = "common/mod.rs"]
 mod common;

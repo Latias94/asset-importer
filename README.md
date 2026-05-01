@@ -12,7 +12,7 @@
 
 A comprehensive Rust binding for the latest [Assimp](https://github.com/assimp/assimp) 3D asset import library.
 
-This crate provides safe, high-level Rust bindings for **Assimp v6.0.4**, implementing the vast majority of the C API with idiomatic Rust interfaces.
+This crate provides safe, high-level Rust bindings for **Assimp v6.0.5**, implementing the vast majority of the C API with idiomatic Rust interfaces.
 
 ## Example Application
 
@@ -24,7 +24,7 @@ See **[Model Viewer](https://github.com/Latias94/model-viewer)** (asset-importer
 
 ## Features
 
-- **Comprehensive API Coverage**: Implements the vast majority of [Assimp v6.0.4](https://github.com/assimp/assimp/releases/tag/v6.0.4) C API
+- **Comprehensive API Coverage**: Implements the vast majority of [Assimp v6.0.5](https://github.com/assimp/assimp/releases/tag/v6.0.5) C API
 - **Import Support**: 71+ 3D file formats (OBJ, FBX, glTF, DAE, etc.)
 - **Export Support**: 22+ output formats (optional)
 - **Memory Safe**: Safe Rust API over unsafe FFI bindings
@@ -38,14 +38,17 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-# Default – Use prebuilt binaries (fastest)
+# Default: build bundled Assimp from source (most reliable)
 asset-importer = "0.7"
 
-# Or build from source (best compatibility; mutually exclusive build mode)
-asset-importer = { version = "0.7", default-features = false, features = ["build-assimp"] }
+# Or explicitly select the source build mode
+asset-importer = { version = "0.7", features = ["build-assimp"] }
+
+# Or use prebuilt binaries (fastest, but requires matching release artifacts)
+asset-importer = { version = "0.7", features = ["prebuilt"] }
 
 # Or link a system-installed Assimp (requires libclang/bindgen; mutually exclusive build mode)
-asset-importer = { version = "0.7", default-features = false, features = ["system"] }
+asset-importer = { version = "0.7", features = ["system"] }
 ```
 
 Basic usage:
@@ -102,31 +105,37 @@ Practical guidance:
 
 ## Build Options
 
-### Default: Prebuilt Binaries (Recommended)
+### Default: Build from Source (Recommended)
 
 ```toml
 asset-importer = "0.7"
 ```
 
-- **Fastest**: No compilation time
-- **Convenient**: No native toolchain required
-- **Requires**: Available release artifacts from GitHub releases
-- **Note**: Only available for released versions
+- **Most reliable**: Uses the bundled Assimp source that matches this crate
+- **Release independent**: Does not depend on prebuilt GitHub release artifacts
+- **Requires**: CMake, a C++ compiler, and Git
 
-### Build from Source
+You can also select the same vendored source build explicitly:
 
 ```toml
-asset-importer = { version = "0.7", default-features = false, features = ["build-assimp"] }
+asset-importer = { version = "0.7", features = ["build-assimp"] }
 ```
 
-- **Best compatibility**: Works on all platforms
-- **Full control**: Latest Assimp version with all features
-- **Requires**: CMake, C++ compiler (automatically handled by Cargo)
+### Prebuilt Binaries (Opt-in)
+
+```toml
+asset-importer = { version = "0.7", features = ["prebuilt"] }
+```
+
+- **Fastest**: No native Assimp compilation
+- **Convenient**: No native toolchain required when a matching package exists
+- **Requires**: Matching release artifacts from GitHub releases
+- **Version checked**: Stale packages are rejected if their manifest does not match the bundled Assimp version
 
 ### System Library
 
 ```toml
-asset-importer = { version = "0.7", default-features = false, features = ["system"] }
+asset-importer = { version = "0.7", features = ["system"] }
 ```
 
 - **Lightweight**: Uses existing system installation
@@ -138,9 +147,8 @@ asset-importer = { version = "0.7", default-features = false, features = ["syste
 ```toml
 asset-importer = {
     version = "0.7",
-    default-features = false,
     features = [
-        "build-assimp",    # Choose exactly one build mode (or use default prebuilt)
+        "build-assimp",    # Optional explicit source build mode; omit for the default source build
         "export",          # Enable export functionality
         "type-extensions", # Enable convenience methods on types
         "raw-sys",         # Expose raw bindings as `asset_importer::sys` (unsafe contract)
@@ -162,7 +170,7 @@ commands for each build mode.
 
 ### Source Build Dependencies
 
-When building from source (`build-assimp` feature), you'll need:
+When using the default source build or the explicit `build-assimp` feature, you'll need:
 
 - **CMake** (3.10 or later)
 - **C++ Compiler** (MSVC on Windows, GCC/Clang on Linux/macOS)
@@ -204,28 +212,26 @@ RUSTFLAGS="-C target-feature=+crt-static" cargo build --release
   - Install: `vcpkg install assimp:x64-windows` or `assimp:x64-windows-static`.
   - If using the static triplet, also enable `crt-static` to avoid LNK2038.
 
-## Why prebuilt binaries by default?
+## When to use prebuilt binaries
 
-- **Fast builds**: No compilation time for Assimp
-- **Easy setup**: No native toolchain required
-- **CI/CD friendly**: Faster builds in continuous integration
-- **Consistent**: Same binary across environments
+Prebuilt binaries are useful when:
 
-If you need more control or compatibility, use:
+- You are using a released crate version with matching published artifacts for your target.
+- You want faster local or CI builds and accept a downloaded native binary package.
+- You do not want to install CMake or a C++ compiler on that machine.
 
-- `--no-default-features --features build-assimp` to build from source (best compatibility)
-- `--no-default-features --features system` to link an existing installation
+For maximum compatibility, keep the default source build. For a system package, use `--features system`.
 
 ## Development and Testing
 
-For development work or when prebuilt binaries are not available:
+For development work, the default source build is recommended:
 
 ```toml
-# Use this for development
-asset-importer = { version = "0.7", default-features = false, features = ["build-assimp"] }
+asset-importer = "0.7"
 ```
 
-This ensures you can always build from source regardless of release availability.
+This ensures local builds do not depend on release artifact availability. Use `features = ["prebuilt"]`
+only when you want to validate the prebuilt packaging path.
 
 ## Memory Import Notes
 

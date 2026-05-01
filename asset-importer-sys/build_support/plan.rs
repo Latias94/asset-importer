@@ -85,8 +85,7 @@ pub fn resolve(cfg: &BuildConfig) -> BuildPlan {
         return crate::build_support::vendored::build(cfg, link_kind);
     }
 
-    // If build-from-source is explicitly requested, it always wins over prebuilt (even if prebuilt is enabled
-    // through default features in the high-level crate).
+    // If build-from-source is explicitly requested, use the vendored source path.
     if cfg!(feature = "build-assimp") {
         return crate::build_support::vendored::build(cfg, link_kind);
     }

@@ -10,7 +10,7 @@ use flate2::read::GzDecoder;
 use tar::Archive;
 
 const PACKAGE_PREFIX: &str = "asset-importer";
-const VENDORED_ASSIMP_VERSION: &str = "6.0.4";
+const VENDORED_ASSIMP_VERSION: &str = "6.0.5";
 
 pub fn prepare(cfg: &BuildConfig, link_kind: LinkKind) -> BuildPlan {
     let crate_version = env::var("CARGO_PKG_VERSION").unwrap();
@@ -67,7 +67,7 @@ pub fn prepare(cfg: &BuildConfig, link_kind: LinkKind) -> BuildPlan {
         );
     }
 
-    validate_prebuilt_headers(&include_dir);
+    validate_prebuilt_package(&extract_dir, &include_dir);
 
     let lib_name = if cfg.is_windows() {
         detect_windows_import_lib(&lib_dir).unwrap_or_else(|| "assimp".to_string())
@@ -100,6 +100,32 @@ pub fn prepare(cfg: &BuildConfig, link_kind: LinkKind) -> BuildPlan {
     }
 }
 
+fn validate_prebuilt_package(extract_dir: &std::path::Path, include_dir: &std::path::Path) {
+    let manifest_path = extract_dir.join("manifest.txt");
+    if manifest_path.exists() {
+        let contents = std::fs::read_to_string(&manifest_path).unwrap_or_else(|e| {
+            panic!(
+                "failed to read prebuilt package manifest {}: {}\n\
+                 Hint: rebuild and upload the prebuilt package.",
+                manifest_path.display(),
+                e
+            )
+        });
+
+        if let Some(version) = parse_manifest_value(&contents, "assimp_version") {
+            require_prebuilt_assimp_version(version);
+            return;
+        }
+
+        util::warn(format!(
+            "prebuilt package manifest {} has no assimp_version entry; falling back to header version check",
+            manifest_path.display()
+        ));
+    }
+
+    validate_prebuilt_headers(include_dir);
+}
+
 fn validate_prebuilt_headers(include_dir: &std::path::Path) {
     // Prefer revision.h because it contains numeric version defines (VER_MAJOR/MINOR/PATCH)
     // in installed/package headers. Fall back to version.h for older/custom layouts.
@@ -128,13 +154,26 @@ fn validate_prebuilt_headers(include_dir: &std::path::Path) {
         return;
     };
 
-    if version != VENDORED_ASSIMP_VERSION {
-        panic!(
-            "prebuilt Assimp headers are version {}, but this crate expects {}.\n\
-             Hint: rebuild the prebuilt package for this crate version, or use `--features build-assimp` / `--features system`.",
-            version, VENDORED_ASSIMP_VERSION
-        );
+    require_prebuilt_assimp_version(&version);
+}
+
+fn parse_manifest_value<'a>(contents: &'a str, key: &str) -> Option<&'a str> {
+    contents.lines().find_map(|line| {
+        let (k, v) = line.split_once('=')?;
+        (k.trim() == key).then(|| v.trim())
+    })
+}
+
+fn require_prebuilt_assimp_version(version: &str) {
+    if version == VENDORED_ASSIMP_VERSION {
+        return;
     }
+
+    panic!(
+        "prebuilt Assimp package is version {}, but this crate expects {}.\n\
+         Hint: rebuild the prebuilt package for this crate version, remove `prebuilt` to use the default vendored build, or use `--features system`.",
+        version, VENDORED_ASSIMP_VERSION
+    );
 }
 
 fn parse_assimp_version_from_header(contents: &str) -> Option<String> {

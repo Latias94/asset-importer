@@ -6,7 +6,7 @@
 //! - vertices whose weight sum deviates from 1.0 (common data issue)
 //!
 //! Usage:
-//!   cargo run -p asset-importer --example 16_skinning_weights --no-default-features --features build-assimp -- <rigged_model>
+//!   cargo run -p asset-importer --example 16_skinning_weights -- <rigged_model>
 
 #[path = "common/mod.rs"]
 mod common;

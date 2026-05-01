@@ -1,7 +1,7 @@
 //! Embedded textures: iterate compressed/uncompressed textures and dump compressed ones to disk.
 //!
 //! Usage:
-//!   cargo run -p asset-importer --example 15_embedded_textures --no-default-features --features build-assimp -- <model>
+//!   cargo run -p asset-importer --example 15_embedded_textures -- <model>
 
 #[path = "common/mod.rs"]
 mod common;

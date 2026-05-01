@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Maintainer binding regeneration override**: Added `ASSET_IMPORTER_FORCE_GENERATE_BINDINGS=1` so vendored binding refreshes can run bindgen without temporarily removing pregenerated bindings.
+
+### Changed
+- **Bundled Assimp updated**: Updated the `assimp` submodule to `v6.0.5` (`392a658f9c271be965271f45e7521a1b80ea4392`).
+- **Prebuilt/package version gate**: Updated expected prebuilt Assimp metadata to `6.0.5`.
+- **Source-build-first docs**: Clarified that the default sys crate path builds bundled Assimp from source and that `prebuilt` is an explicit opt-in mode requiring matching release artifacts.
+
+### Fixed
+- **Prebuilt version validation**: Prebuilt packages are now validated against `manifest.txt` before falling back to headers, preventing stale packages whose installed headers do not expose version macros from being accepted silently.
+
 ## [0.7.0] - 2026-01-25
 
 ### Changed

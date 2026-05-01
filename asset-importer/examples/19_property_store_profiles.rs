@@ -1,7 +1,7 @@
 //! PropertyStore profiles: show a few common import-property recipes.
 //!
 //! Usage:
-//!   cargo run -p asset-importer --example 19_property_store_profiles --no-default-features --features build-assimp -- <model> [profile]
+//!   cargo run -p asset-importer --example 19_property_store_profiles -- <model> [profile]
 //!
 //! Profiles:
 //! - `preview` (default): faster, minimal work
