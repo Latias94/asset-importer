@@ -60,6 +60,10 @@ pub mod material_keys {
     pub const BLEND_FUNC: &CStr = cstr!("$mat.blend");
     /// Two sided
     pub const TWOSIDED: &CStr = cstr!("$mat.twosided");
+    /// glTF texture scale key, used by normal textures.
+    pub const TEXTURE_SCALE: &CStr = cstr!("$tex.scale");
+    /// glTF texture strength key, used by occlusion textures.
+    pub const TEXTURE_STRENGTH: &CStr = cstr!("$tex.strength");
 
     // PBR-related keys (from material.h)
     /// Base color factor (RGBA)
@@ -475,7 +479,8 @@ impl Material {
         index: u32,
     ) -> Option<MaterialPropertyInfo> {
         let prop_ptr = self.property_ptr(key, semantic, index)?;
-        Some(MaterialPropertyRef::from_ptr(self.scene.clone(), prop_ptr).into_info())
+        MaterialPropertyRef::from_ptr(self.scene.clone(), prop_ptr)
+            .map(MaterialPropertyRef::into_info)
     }
 
     /// Get raw information about a material property by key/semantic/index (allocates, convenience).
@@ -522,7 +527,7 @@ impl Material {
             sys::aiGetMaterialProperty(
                 self.as_raw_sys(),
                 key.as_ptr(),
-                semantic.map(|t| t.to_sys() as u32).unwrap_or(0),
+                semantic.map(TextureType::to_semantic).unwrap_or(0),
                 index,
                 &mut prop_ptr,
             ) == sys::aiReturn::aiReturn_SUCCESS
@@ -593,7 +598,7 @@ impl Material {
             sys::aiGetMaterialIntegerArray(
                 self.as_raw_sys(),
                 key.as_ptr(),
-                semantic.map(|t| t.to_sys() as u32).unwrap_or(0),
+                semantic.map(TextureType::to_semantic).unwrap_or(0),
                 index,
                 out.as_mut_ptr(),
                 &mut max,
@@ -643,7 +648,7 @@ impl Material {
                     sys::aiGetMaterialFloatArray(
                         self.as_raw_sys(),
                         key.as_ptr(),
-                        semantic.map(|t| t.to_sys() as u32).unwrap_or(0),
+                        semantic.map(TextureType::to_semantic).unwrap_or(0),
                         index,
                         out.as_mut_ptr(),
                         &mut max,
@@ -776,6 +781,64 @@ impl Material {
             .map(|v| BlendMode::from_raw(v as u32))
     }
 
+    /// Get a texture-scoped float property from the material.
+    ///
+    /// This is useful for texture extension metadata such as glTF normal texture scale and
+    /// occlusion texture strength.
+    pub fn get_texture_float_property(
+        &self,
+        key: &CStr,
+        texture_type: TextureType,
+        index: usize,
+    ) -> Option<f32> {
+        let index = u32::try_from(index).ok()?;
+        let mut value = 0.0f32;
+        let mut max = 1u32;
+
+        let result = unsafe {
+            sys::aiGetMaterialFloatArray(
+                self.as_raw_sys(),
+                key.as_ptr(),
+                texture_type.to_semantic(),
+                index,
+                &mut value,
+                &mut max,
+            )
+        };
+
+        if result == sys::aiReturn::aiReturn_SUCCESS && max > 0 {
+            Some(value)
+        } else {
+            None
+        }
+    }
+
+    /// Get the glTF texture scale value for a texture slot.
+    ///
+    /// Assimp stores this as `AI_MATKEY_GLTF_TEXTURE_SCALE(type, index)`. In glTF this is mainly
+    /// used by `normalTexture.scale`.
+    pub fn texture_scale(&self, texture_type: TextureType, index: usize) -> Option<f32> {
+        self.get_texture_float_property(material_keys::TEXTURE_SCALE, texture_type, index)
+    }
+
+    /// Get the glTF normal texture scale for a normal texture slot.
+    pub fn normal_texture_scale(&self, index: usize) -> Option<f32> {
+        self.texture_scale(TextureType::Normals, index)
+    }
+
+    /// Get the glTF texture strength value for a texture slot.
+    ///
+    /// Assimp stores this as `AI_MATKEY_GLTF_TEXTURE_STRENGTH(type, index)`. In glTF this is mainly
+    /// used by `occlusionTexture.strength`.
+    pub fn texture_strength(&self, texture_type: TextureType, index: usize) -> Option<f32> {
+        self.get_texture_float_property(material_keys::TEXTURE_STRENGTH, texture_type, index)
+    }
+
+    /// Get the glTF occlusion texture strength for an ambient occlusion texture slot.
+    pub fn occlusion_texture_strength(&self, index: usize) -> Option<f32> {
+        self.texture_strength(TextureType::AmbientOcclusion, index)
+    }
+
     /// Get the number of textures for a specific type
     pub fn texture_count(&self, texture_type: TextureType) -> usize {
         unsafe { sys::aiGetMaterialTextureCount(self.as_raw_sys(), texture_type.to_sys()) as usize }
@@ -827,7 +890,7 @@ impl Material {
             let uv_ok = sys::aiGetMaterialUVTransform(
                 self.as_raw_sys(),
                 uv_key.as_ptr(),
-                texture_type.to_sys() as u32,
+                texture_type.to_semantic(),
                 index as u32,
                 uv_transform.as_mut_ptr(),
             ) == sys::aiReturn::aiReturn_SUCCESS;
@@ -850,7 +913,7 @@ impl Material {
                 let ok = sys::aiGetMaterialProperty(
                     self.as_raw_sys(),
                     key.as_ptr(),
-                    texture_type.to_sys() as u32,
+                    texture_type.to_semantic(),
                     index as u32,
                     &mut prop_ptr,
                 ) == sys::aiReturn::aiReturn_SUCCESS;
@@ -1178,10 +1241,9 @@ impl<'a> MaterialPropertyData<'a> {
 }
 
 impl MaterialPropertyRef {
-    fn from_ptr(scene: Scene, prop_ptr: *const sys::aiMaterialProperty) -> Self {
-        debug_assert!(!prop_ptr.is_null());
-        let prop_ptr = unsafe { SharedPtr::new_unchecked(prop_ptr) };
-        Self { scene, prop_ptr }
+    fn from_ptr(scene: Scene, prop_ptr: *const sys::aiMaterialProperty) -> Option<Self> {
+        let prop_ptr = SharedPtr::new(prop_ptr)?;
+        Some(Self { scene, prop_ptr })
     }
 
     #[inline]
@@ -1409,7 +1471,9 @@ impl Iterator for MaterialPropertyIterator {
             if ptr.is_null() {
                 continue;
             }
-            return Some(MaterialPropertyRef::from_ptr(self.scene.clone(), ptr));
+            if let Some(prop) = MaterialPropertyRef::from_ptr(self.scene.clone(), ptr) {
+                return Some(prop);
+            }
         }
         None
     }
@@ -1451,6 +1515,11 @@ impl TextureType {
                 sys::aiTextureType::aiTextureType_GLTF_METALLIC_ROUGHNESS
             }
         }
+    }
+
+    #[inline]
+    fn to_semantic(self) -> u32 {
+        self.to_sys() as u32
     }
 
     /// Try convert a raw u32 (aiTextureType) into TextureType safely
@@ -1504,6 +1573,20 @@ impl TextureType {
 mod material_property_data_tests {
     use super::*;
 
+    fn ai_string_from_cstr(value: &CStr) -> sys::aiString {
+        let bytes = value.to_bytes();
+        assert!(bytes.len() < 1024);
+
+        let mut out = sys::aiString {
+            length: bytes.len() as u32,
+            ..Default::default()
+        };
+        for (idx, byte) in bytes.iter().copied().enumerate() {
+            out.data[idx] = byte as std::os::raw::c_char;
+        }
+        out
+    }
+
     fn make_prop_with_data(mut data: Vec<u8>) -> (sys::aiMaterialProperty, Vec<u8>) {
         let prop = sys::aiMaterialProperty {
             mDataLength: data.len() as u32,
@@ -1546,6 +1629,64 @@ mod material_property_data_tests {
         assert_eq!(d.read_ne_f32_array::<3>(4), Some([1.0, 2.0, 3.5]));
         assert_eq!(d.read_ne_f64(4 + 12), Some(9.0));
         assert_eq!(d.read_ne_u32(9999), None);
+    }
+
+    #[test]
+    fn material_property_ref_rejects_unaligned_pointers() {
+        let scene = Scene::from_memory(b"o tri\nv 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\n", Some("obj"))
+            .expect("import OBJ scene");
+        let buf = [0u64; 8];
+        let unaligned =
+            unsafe { (buf.as_ptr() as *const u8).add(1) } as *const sys::aiMaterialProperty;
+
+        assert!(MaterialPropertyRef::from_ptr(scene, unaligned).is_none());
+    }
+
+    #[test]
+    fn texture_scale_and_strength_read_texture_scoped_float_properties() {
+        let scene = Scene::from_memory(b"o tri\nv 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\n", Some("obj"))
+            .expect("import OBJ scene");
+
+        let mut scale_data = 0.42f32.to_ne_bytes();
+        let mut strength_data = 0.73f32.to_ne_bytes();
+        let mut scale_prop = sys::aiMaterialProperty {
+            mKey: ai_string_from_cstr(material_keys::TEXTURE_SCALE),
+            mSemantic: TextureType::Normals.to_semantic(),
+            mIndex: 0,
+            mDataLength: scale_data.len() as u32,
+            mType: sys::aiPropertyTypeInfo::aiPTI_Float,
+            mData: scale_data.as_mut_ptr().cast(),
+        };
+        let mut strength_prop = sys::aiMaterialProperty {
+            mKey: ai_string_from_cstr(material_keys::TEXTURE_STRENGTH),
+            mSemantic: TextureType::AmbientOcclusion.to_semantic(),
+            mIndex: 1,
+            mDataLength: strength_data.len() as u32,
+            mType: sys::aiPropertyTypeInfo::aiPTI_Float,
+            mData: strength_data.as_mut_ptr().cast(),
+        };
+        let mut props = [
+            &mut scale_prop as *mut sys::aiMaterialProperty,
+            &mut strength_prop as *mut sys::aiMaterialProperty,
+        ];
+        let mat = sys::aiMaterial {
+            mProperties: props.as_mut_ptr(),
+            mNumProperties: props.len() as u32,
+            mNumAllocated: props.len() as u32,
+        };
+        let material = Material {
+            scene,
+            material_ptr: SharedPtr::new(&mat as *const sys::aiMaterial).unwrap(),
+        };
+
+        assert_eq!(material.normal_texture_scale(0), Some(0.42));
+        assert_eq!(material.occlusion_texture_strength(1), Some(0.73));
+        assert_eq!(material.occlusion_texture_strength(0), None);
+        assert_eq!(material.texture_scale(TextureType::Diffuse, 0), None);
+        assert_eq!(
+            material.texture_strength(TextureType::AmbientOcclusion, usize::MAX),
+            None
+        );
     }
 }
 

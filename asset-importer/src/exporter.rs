@@ -154,7 +154,8 @@ impl ExportBuilder {
         let c_format = CString::new(self.format_id.as_str())
             .map_err(|_| Error::invalid_parameter("Invalid format ID"))?;
 
-        let result = if self.properties.is_empty() {
+        let used_bridge = !self.properties.is_empty();
+        let result = if !used_bridge {
             if let Some(fs) = &self.file_system {
                 let mut file_io = AssimpFileIO::new(fs.clone()).create_ai_file_io();
                 unsafe {
@@ -208,6 +209,8 @@ impl ExportBuilder {
 
         if result == sys::aiReturn::aiReturn_SUCCESS {
             Ok(())
+        } else if used_bridge {
+            Err(Error::from_bridge_or_assimp())
         } else {
             Err(Error::from_assimp())
         }
@@ -218,7 +221,8 @@ impl ExportBuilder {
         let c_format = CString::new(self.format_id.as_str())
             .map_err(|_| Error::invalid_parameter("Invalid format ID"))?;
 
-        let blob_ptr = if self.properties.is_empty() {
+        let used_bridge = !self.properties.is_empty();
+        let blob_ptr = if !used_bridge {
             unsafe {
                 sys::aiExportSceneToBlob(scene.as_raw_sys(), c_format.as_ptr(), self.preprocessing)
             }
@@ -236,7 +240,11 @@ impl ExportBuilder {
         };
 
         if blob_ptr.is_null() {
-            Err(Error::from_assimp())
+            if used_bridge {
+                Err(Error::from_bridge_or_assimp())
+            } else {
+                Err(Error::from_assimp())
+            }
         } else {
             ExportBlob::from_sys_ptr(blob_ptr)
                 .ok_or_else(|| Error::invalid_scene("Invalid export blob pointer"))

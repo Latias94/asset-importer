@@ -28,8 +28,11 @@ The expected vendored Assimp version appears in multiple places:
 
 Plan:
 
-- Short term: update all constants together during the 6.0.5 upgrade.
-- Later: consider deriving package metadata from generated headers or a single checked-in metadata file.
+- [x] Add `asset-importer-sys/assimp-version.txt` as the single source used by build/prebuilt
+      validation and the package tool.
+- [x] Add a build-script rerun trigger for the metadata file.
+- Later: consider deriving user-facing docs/release notes from the same metadata during release
+  automation, while keeping changelogs human-authored.
 
 Risk:
 
@@ -58,8 +61,10 @@ Assimp exposes many property macros. The safe API currently exposes a curated su
 
 Plan:
 
-- During binding diff review, add constants only for newly relevant 6.0.5 keys or keys already used by examples/tests.
-- Keep tests that compare string constants to generated macro values.
+- [x] Confirm that 6.0.5 did not add bindgen-visible material key macros in the core C headers.
+- [x] Add safe constants/helpers for the behavior-level glTF keys that 6.0.5 fixes internally:
+  `$tex.scale` and `$tex.strength`.
+- Keep tests focused on safe API behavior rather than mirroring every upstream material macro.
 
 Risk:
 
@@ -85,3 +90,30 @@ Risk:
 
 - Medium. Changing default features is user-visible, but the new default is more deterministic and
   matches the sys crate behavior.
+
+## Candidate 6: FFI Boundary Hardening
+
+Problem:
+
+The safe Rust API is already structured around checked pointer helpers, panic-catching callbacks,
+and read-only scene views. A follow-up audit still found several common FFI hazards:
+
+- C++ exceptions could cross `extern "C"` bridge functions.
+- Assimp takes ownership of custom C++ `IOSystem` and `ProgressHandler` objects, but the bridge also
+  held them in `unique_ptr`, creating double-free risk.
+- Bridge error strings could be stale when read after pure C Assimp calls.
+- A few file/texture helper paths used lossy casts or unchecked arithmetic.
+- Material property views had one unchecked pointer wrapper path.
+
+Plan:
+
+- [x] Catch C++ exceptions at all bridge entrypoints and store them as bridge errors.
+- [x] Transfer custom IO/progress handler ownership to Assimp exactly once.
+- [x] Split pure Assimp error lookup from bridge-aware error lookup.
+- [x] Replace file callback truncating casts and memory stream arithmetic with checked conversions.
+- [x] Route material property views through checked `SharedPtr` construction.
+
+Risk:
+
+- Low to medium. The changes are defensive and should preserve behavior, but they touch native
+  bridge ownership and therefore need source-build tests.

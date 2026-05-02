@@ -334,13 +334,14 @@ impl FileStream for MemoryFileStream {
     }
 
     fn write(&mut self, buffer: &[u8]) -> Result<usize> {
-        // Extend the data vector if necessary
-        let end_position = self.position + buffer.len();
+        let end_position = self
+            .position
+            .checked_add(buffer.len())
+            .ok_or_else(|| crate::error::Error::io_error("Write position overflow".to_string()))?;
         if end_position > self.data.len() {
             self.data.resize(end_position, 0);
         }
 
-        // Write the data
         self.data[self.position..end_position].copy_from_slice(buffer);
         self.position = end_position;
 
@@ -352,8 +353,10 @@ impl FileStream for MemoryFileStream {
     }
 
     fn seek(&mut self, position: u64) -> Result<()> {
-        // Allow seeking beyond current data for write operations
-        self.position = position as usize;
+        let position = usize::try_from(position)
+            .map_err(|_| crate::error::Error::io_error("Seek position too large".to_string()))?;
+        // Allow seeking beyond current data for write operations.
+        self.position = position;
         Ok(())
     }
 
@@ -620,7 +623,7 @@ extern "C" fn file_tell_proc(file: *mut sys::aiFile) -> usize {
     }
 
     with_stream(file, 0, |stream| match stream.tell() {
-        Ok(pos) => pos as usize,
+        Ok(pos) => usize::try_from(pos).unwrap_or(0),
         Err(_) => 0,
     })
 }
@@ -632,7 +635,7 @@ extern "C" fn file_size_proc(file: *mut sys::aiFile) -> usize {
     }
 
     with_stream(file, 0, |stream| match stream.size() {
-        Ok(size) => size as usize,
+        Ok(size) => usize::try_from(size).unwrap_or(0),
         Err(_) => 0,
     })
 }
@@ -648,11 +651,15 @@ extern "C" fn file_seek_proc(
     }
 
     with_stream(file, sys::aiReturn::aiReturn_FAILURE, |stream| {
+        let Ok(offset) = u64::try_from(offset) else {
+            return sys::aiReturn::aiReturn_FAILURE;
+        };
+
         let new_position = match origin {
-            sys::aiOrigin::aiOrigin_SET => offset as u64,
+            sys::aiOrigin::aiOrigin_SET => offset,
             sys::aiOrigin::aiOrigin_CUR => match stream.tell() {
                 Ok(current) => {
-                    let Some(pos) = current.checked_add(offset as u64) else {
+                    let Some(pos) = current.checked_add(offset) else {
                         return sys::aiReturn::aiReturn_FAILURE;
                     };
                     pos
@@ -661,11 +668,10 @@ extern "C" fn file_seek_proc(
             },
             sys::aiOrigin::aiOrigin_END => match stream.size() {
                 Ok(size) => {
-                    let off = offset as u64;
-                    if off > size {
+                    if offset > size {
                         return sys::aiReturn::aiReturn_FAILURE;
                     }
-                    size - off
+                    size - offset
                 }
                 Err(_) => return sys::aiReturn::aiReturn_FAILURE,
             },
@@ -741,5 +747,15 @@ mod tests {
         let bytes_read = stream.read(&mut buffer).unwrap();
         assert_eq!(bytes_read, test_data.len());
         assert_eq!(buffer, test_data);
+    }
+
+    #[test]
+    fn memory_file_stream_write_rejects_position_overflow() {
+        let mut stream = MemoryFileStream {
+            data: Vec::new(),
+            position: usize::MAX,
+        };
+
+        assert!(stream.write(&[1]).is_err());
     }
 }

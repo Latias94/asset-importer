@@ -93,6 +93,7 @@ impl BuildConfig {
 
     pub fn emit_rerun_triggers(&self) {
         println!("cargo:rerun-if-changed=build.rs");
+        println!("cargo:rerun-if-changed=assimp-version.txt");
         println!("cargo:rerun-if-changed=wrapper.h");
         println!("cargo:rerun-if-changed=wrapper.cpp");
 

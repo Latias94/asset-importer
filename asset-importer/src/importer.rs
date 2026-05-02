@@ -92,18 +92,6 @@ impl Drop for PropertyStoreGuard {
     }
 }
 
-fn last_bridge_error_string() -> Option<String> {
-    let last_bridge_err = unsafe { sys::aiGetLastErrorStringRust() };
-    if last_bridge_err.is_null() {
-        return None;
-    }
-    Some(
-        unsafe { CStr::from_ptr(last_bridge_err) }
-            .to_string_lossy()
-            .into_owned(),
-    )
-}
-
 /// A property store for configuring import behavior
 ///
 /// This provides a more convenient API for setting import properties
@@ -675,8 +663,8 @@ impl ImportBuilder {
 
         // Check if import was successful
         if scene_ptr.is_null() {
-            if let Some(msg) = last_bridge_error_string() {
-                return Err(Error::other(msg));
+            if use_bridge {
+                return Err(Error::from_bridge_or_assimp());
             }
             return Err(Error::from_assimp());
         }
@@ -760,8 +748,8 @@ impl ImportBuilder {
 
         // Check if import was successful
         if scene_ptr.is_null() {
-            if let Some(msg) = last_bridge_error_string() {
-                return Err(Error::other(msg));
+            if use_bridge {
+                return Err(Error::from_bridge_or_assimp());
             }
             return Err(Error::from_assimp());
         }

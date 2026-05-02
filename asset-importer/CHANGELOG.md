@@ -7,10 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **glTF texture material helpers**: Added `Material::{texture_scale,normal_texture_scale,texture_strength,occlusion_texture_strength}` and the corresponding `$tex.scale` / `$tex.strength` material key constants for Assimp 6.0.5's glTF normal-scale and occlusion-strength fixes.
+
 ### Changed
 - **Bundled Assimp updated**: Vendored Assimp (via `asset-importer-sys`) is now pinned to `v6.0.5`.
 - **Default build mode (breaking)**: Default features are now empty and the crate builds bundled Assimp from source unless `prebuilt` or `system` is explicitly enabled. This matches the `asset-importer-sys` default and prevents stale prebuilt release artifacts from breaking normal builds.
 - **Prebuilt binaries are opt-in**: Enable `features = ["prebuilt"]` when you want to use release artifacts; stale packages are rejected by the sys crate version gate.
+- **Pointer wrapper cleanup**: Removed the unused unchecked `SharedPtr` constructor and route material-property views through checked pointer construction.
+
+### Fixed
+- **Bridge error isolation**: `Error::from_assimp()` no longer reuses stale C++ bridge errors after pure C Assimp calls; bridge paths now explicitly read bridge errors only for bridge calls.
+- **Custom I/O overflow hardening**: Memory-backed file streams and file callback size/seek conversions now use checked arithmetic/conversions instead of lossy casts or overflowing addition.
+- **Texture size overflow hardening**: Uncompressed texture byte-size reporting now saturates instead of truncating oversized dimensions.
 
 ## [0.7.0] - 2026-01-25
 

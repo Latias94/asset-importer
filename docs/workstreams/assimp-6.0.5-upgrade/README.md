@@ -33,9 +33,22 @@ This workstream also tracks cleanup opportunities found during source review. Th
 - Docs: replace user-facing `v6.0.4` references where they describe the bundled Assimp version.
 - Tests: verify `build-assimp` first, then feature combinations that do not require unavailable release artifacts.
 
+## 6.0.5 Interface Review
+
+- Public C binding inputs (`cimport.h`, `scene.h`, `material.h`, `mesh.h`, `anim.h`, `cexport.h`,
+  `version.h`, and related core headers) did not change between `v6.0.4` and `v6.0.5`.
+- Forced bindgen regeneration produced no diff in `asset-importer-sys/src/bindings_pregenerated.rs`.
+- The only `include/assimp` changes are C++ helper/header hardening in `LineSplitter.h`,
+  `ParsingUtils.h`, `StreamReader.h`, plus the C++ `ai_epsilon` linkage tweak in `defs.h`.
+- No required safe Rust wrapper additions were found for new C ABI symbols, struct fields, enums,
+  postprocess flags, import properties, or export properties.
+- Useful behavior-level additions were still made in the safe API for glTF material metadata fixed
+  by 6.0.5: `Material::{texture_scale,normal_texture_scale,texture_strength,occlusion_texture_strength}`.
+
 ## Known Risk Areas
 
-- Assimp 6.0.5 is a bugfix release, but it includes importer/exporter hardening and new/changed C API surface such as `aiBuffer`.
+- Assimp 6.0.5 is a bugfix release. No bindgen-visible C API additions were found, but the release
+  includes importer/exporter hardening that can affect malformed or edge-case assets.
 - The C++ bridge relies on `Assimp::Importer`, `Assimp::Exporter`, `Assimp::IOSystem`, `Assimp::ProgressHandler`, and `aiCopyScene`; any signature drift must be handled explicitly.
 - The prebuilt path validates exact Assimp metadata, so all version constants must move together.
 - Explicit `prebuilt` checks may fail locally until 6.0.5 release artifacts are rebuilt and published for crate version `0.7.0`; default builds are no longer blocked by those artifacts.
@@ -50,6 +63,7 @@ This workstream also tracks cleanup opportunities found during source review. Th
 - [x] Harden prebuilt version validation so stale 6.0.4 packages are rejected instead of warning-only header fallback.
 - [x] Switch the high-level crate default away from prebuilt artifacts and back to vendored source builds.
 - [x] Run focused formatting and tests.
+- [x] Add behavior-level safe helpers for glTF texture scale/strength metadata fixed by 6.0.5.
 - [ ] Decide whether this change is ready for a conventional commit.
 
 ## Verification Notes
@@ -66,3 +80,18 @@ This workstream also tracks cleanup opportunities found during source review. Th
 - `cargo check --workspace --features export,type-extensions,raw-sys,glam,mint,bytemuck,tokio` passed with the default vendored source build.
 - `cargo test --doc -p asset-importer` passed with the default vendored source build: 6 doctests.
 - `cargo check -p asset-importer --features prebuilt` failed as expected because the cached/package manifest reports `assimp_version=6.0.4` while the crate expects `6.0.5`.
+- Follow-up hardening verification after the FFI audit:
+  - `cargo check -p asset-importer` passed.
+  - `cargo nextest run --workspace` passed: 90 tests.
+  - `cargo check --workspace --features export,type-extensions,raw-sys,glam,mint,bytemuck,tokio` passed.
+  - `cargo nextest run -p asset-importer --features export` passed: 94 tests.
+  - `cargo test --doc -p asset-importer` passed: 6 doctests.
+  - `cargo check -p asset-importer-sys --features build-assimp,package --bin package` passed.
+  - `cargo check -p asset-importer --features prebuilt` still fails as expected on stale 6.0.4 prebuilt artifacts.
+- Follow-up glTF texture helper verification:
+  - `cargo nextest run -p asset-importer texture_scale_and_strength_read_texture_scoped_float_properties` passed.
+  - `cargo check -p asset-importer` passed.
+  - `cargo nextest run --workspace` passed: 91 tests.
+  - `cargo check --workspace --features export,type-extensions,raw-sys,glam,mint,bytemuck,tokio` passed.
+  - `cargo nextest run -p asset-importer --features export` passed: 95 tests.
+  - `cargo test --doc -p asset-importer` passed: 6 doctests.

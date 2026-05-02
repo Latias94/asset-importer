@@ -279,7 +279,8 @@ impl Texture {
         } else {
             let w = self.width() as u64;
             let h = self.height() as u64;
-            w.saturating_mul(h).saturating_mul(4) as usize // 4 bytes per texel (ARGB)
+            let bytes = w.saturating_mul(h).saturating_mul(4); // 4 bytes per texel (ARGB)
+            usize::try_from(bytes).unwrap_or(usize::MAX)
         }
     }
 

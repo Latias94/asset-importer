@@ -17,8 +17,9 @@
 #include <assimp/IOStream.hpp>
 #include <assimp/ProgressHandler.hpp>
 #include <assimp/cexport.h> // aiCopyScene
+#include <cstdio>
 #include <cstring>
-#include <memory>
+#include <exception>
 #include <mutex>
 #include <string>
 
@@ -205,6 +206,30 @@ static void apply_export_properties(Assimp::ExportProperties& target, const aiRu
 }
 #endif
 
+static void set_bridge_error(const char* message) noexcept {
+    try {
+        g_last_error_msg = message ? message : "Unknown bridge error";
+    } catch (...) {
+        // Last-resort: do not allow error reporting itself to cross the C ABI.
+    }
+}
+
+static void set_exception_error(const char* context, const std::exception& e) noexcept {
+    try {
+        g_last_error_msg = std::string(context) + " threw C++ exception: " + e.what();
+    } catch (...) {
+        set_bridge_error("Bridge threw C++ exception");
+    }
+}
+
+static void set_unknown_exception_error(const char* context) noexcept {
+    try {
+        g_last_error_msg = std::string(context) + " threw unknown C++ exception";
+    } catch (...) {
+        set_bridge_error("Bridge threw unknown C++ exception");
+    }
+}
+
 static const aiScene* import_with_bridge(
     const char* path,
     const char* mem,
@@ -220,17 +245,14 @@ static const aiScene* import_with_bridge(
     Assimp::Importer importer;
 
     // IO bridge
-    std::unique_ptr<RustIOSystem> io_guard;
     if (file_io) {
-        io_guard = std::make_unique<RustIOSystem>(file_io);
-        importer.SetIOHandler(io_guard.get());
+        // Assimp::Importer takes ownership of custom IO/progress handlers and deletes them.
+        importer.SetIOHandler(new RustIOSystem(file_io));
     }
 
     // Progress bridge
-    std::unique_ptr<BridgeProgressHandler> ph;
     if (progress_cb) {
-        ph = std::make_unique<BridgeProgressHandler>(progress_cb, progress_user);
-        importer.SetProgressHandler(ph.get());
+        importer.SetProgressHandler(new BridgeProgressHandler(progress_cb, progress_user));
     }
 
     // Properties
@@ -273,11 +295,19 @@ const struct aiScene* aiImportFileExWithProgressRust(
     void* progress_user)
 {
     g_last_error_msg.clear();
-    if (!path) {
-        g_last_error_msg = "Path is null";
+    try {
+        if (!path) {
+            g_last_error_msg = "Path is null";
+            return nullptr;
+        }
+        return import_with_bridge(path, nullptr, 0u, flags, file_io, props, props_count, progress_cb, progress_user, nullptr);
+    } catch (const std::exception& e) {
+        set_exception_error("aiImportFileExWithProgressRust", e);
+        return nullptr;
+    } catch (...) {
+        set_unknown_exception_error("aiImportFileExWithProgressRust");
         return nullptr;
     }
-    return import_with_bridge(path, nullptr, 0u, flags, file_io, props, props_count, progress_cb, progress_user, nullptr);
 }
 
 const struct aiScene* aiImportFileFromMemoryWithProgressRust(
@@ -291,11 +321,19 @@ const struct aiScene* aiImportFileFromMemoryWithProgressRust(
     void* progress_user)
 {
     g_last_error_msg.clear();
-    if (!data || length == 0u) {
-        g_last_error_msg = "Memory buffer is empty";
+    try {
+        if (!data || length == 0u) {
+            g_last_error_msg = "Memory buffer is empty";
+            return nullptr;
+        }
+        return import_with_bridge(nullptr, data, length, flags, nullptr, props, props_count, progress_cb, progress_user, hint);
+    } catch (const std::exception& e) {
+        set_exception_error("aiImportFileFromMemoryWithProgressRust", e);
+        return nullptr;
+    } catch (...) {
+        set_unknown_exception_error("aiImportFileFromMemoryWithProgressRust");
         return nullptr;
     }
-    return import_with_bridge(nullptr, data, length, flags, nullptr, props, props_count, progress_cb, progress_user, hint);
 }
 
 enum aiReturn aiExportSceneExWithPropertiesRust(
@@ -308,6 +346,7 @@ enum aiReturn aiExportSceneExWithPropertiesRust(
     size_t props_count)
 {
     g_last_error_msg.clear();
+    try {
 
 #ifdef ASSIMP_BUILD_NO_EXPORT
     (void)scene;
@@ -332,10 +371,9 @@ enum aiReturn aiExportSceneExWithPropertiesRust(
     Assimp::Exporter exporter;
     Assimp::ExportProperties export_props;
 
-    std::unique_ptr<RustIOSystem> io_guard;
     if (file_io) {
-        io_guard = std::make_unique<RustIOSystem>(file_io);
-        exporter.SetIOHandler(io_guard.get());
+        // Assimp::Exporter takes ownership of custom IO handlers via SetIOHandler().
+        exporter.SetIOHandler(new RustIOSystem(file_io));
     }
 
     apply_export_properties(export_props, props, props_count);
@@ -346,6 +384,13 @@ enum aiReturn aiExportSceneExWithPropertiesRust(
     }
     return r;
 #endif
+    } catch (const std::exception& e) {
+        set_exception_error("aiExportSceneExWithPropertiesRust", e);
+        return aiReturn_FAILURE;
+    } catch (...) {
+        set_unknown_exception_error("aiExportSceneExWithPropertiesRust");
+        return aiReturn_FAILURE;
+    }
 }
 
 const struct aiExportDataBlob* aiExportSceneToBlobWithPropertiesRust(
@@ -356,6 +401,7 @@ const struct aiExportDataBlob* aiExportSceneToBlobWithPropertiesRust(
     size_t props_count)
 {
     g_last_error_msg.clear();
+    try {
 
 #ifdef ASSIMP_BUILD_NO_EXPORT
     (void)scene;
@@ -388,6 +434,13 @@ const struct aiExportDataBlob* aiExportSceneToBlobWithPropertiesRust(
 
     return exporter.GetOrphanedBlob();
 #endif
+    } catch (const std::exception& e) {
+        set_exception_error("aiExportSceneToBlobWithPropertiesRust", e);
+        return nullptr;
+    } catch (...) {
+        set_unknown_exception_error("aiExportSceneToBlobWithPropertiesRust");
+        return nullptr;
+    }
 }
 
 const char* aiGetLastErrorStringRust(void) {

@@ -14,8 +14,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Bundled Assimp updated**: Updated the `assimp` submodule to `v6.0.5` (`392a658f9c271be965271f45e7521a1b80ea4392`).
 - **Prebuilt/package version gate**: Updated expected prebuilt Assimp metadata to `6.0.5`.
 - **Source-build-first docs**: Clarified that the default sys crate path builds bundled Assimp from source and that `prebuilt` is an explicit opt-in mode requiring matching release artifacts.
+- **Assimp version metadata**: Centralized the vendored Assimp version used by the build script and prebuilt package tool in `assimp-version.txt`.
 
 ### Fixed
+- **C++ bridge ownership**: The bridge now respects Assimp's ownership contract for custom `IOSystem` and `ProgressHandler` objects, avoiding double-free risk.
+- **C++ bridge exception boundary**: Bridge entrypoints now catch C++ exceptions and convert them into the thread-local bridge error string instead of allowing exceptions to cross the C ABI boundary.
 - **Prebuilt version validation**: Prebuilt packages are now validated against `manifest.txt` before falling back to headers, preventing stale packages whose installed headers do not expose version macros from being accepted silently.
 
 ## [0.7.0] - 2026-01-25

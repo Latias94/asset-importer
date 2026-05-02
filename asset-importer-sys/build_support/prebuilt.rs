@@ -10,7 +10,10 @@ use flate2::read::GzDecoder;
 use tar::Archive;
 
 const PACKAGE_PREFIX: &str = "asset-importer";
-const VENDORED_ASSIMP_VERSION: &str = "6.0.5";
+
+fn vendored_assimp_version() -> &'static str {
+    include_str!("../assimp-version.txt").trim()
+}
 
 pub fn prepare(cfg: &BuildConfig, link_kind: LinkKind) -> BuildPlan {
     let crate_version = env::var("CARGO_PKG_VERSION").unwrap();
@@ -165,14 +168,15 @@ fn parse_manifest_value<'a>(contents: &'a str, key: &str) -> Option<&'a str> {
 }
 
 fn require_prebuilt_assimp_version(version: &str) {
-    if version == VENDORED_ASSIMP_VERSION {
+    let expected = vendored_assimp_version();
+    if version == expected {
         return;
     }
 
     panic!(
         "prebuilt Assimp package is version {}, but this crate expects {}.\n\
          Hint: rebuild the prebuilt package for this crate version, remove `prebuilt` to use the default vendored build, or use `--features system`.",
-        version, VENDORED_ASSIMP_VERSION
+        version, expected
     );
 }
 

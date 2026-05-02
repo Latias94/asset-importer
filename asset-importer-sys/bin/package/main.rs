@@ -6,7 +6,9 @@ use std::{
 
 use flate2::{Compression, write::GzEncoder};
 
-const VENDORED_ASSIMP_VERSION: &str = "6.0.5";
+fn vendored_assimp_version() -> &'static str {
+    include_str!("../../assimp-version.txt").trim()
+}
 
 fn target_os_from_triple(target: &str) -> &'static str {
     if target.contains("-windows-") {
@@ -140,7 +142,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         &crate_version,
         link_type,
         crt,
-        VENDORED_ASSIMP_VERSION,
+        vendored_assimp_version(),
     )?;
 
     // Add license files
