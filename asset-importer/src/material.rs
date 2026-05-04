@@ -834,9 +834,11 @@ impl Material {
         self.get_texture_float_property(material_keys::TEXTURE_STRENGTH, texture_type, index)
     }
 
-    /// Get the glTF occlusion texture strength for an ambient occlusion texture slot.
+    /// Get the glTF occlusion texture strength.
+    ///
+    /// Assimp imports glTF `occlusionTexture` into `aiTextureType_LIGHTMAP`.
     pub fn occlusion_texture_strength(&self, index: usize) -> Option<f32> {
-        self.texture_strength(TextureType::AmbientOcclusion, index)
+        self.texture_strength(TextureType::Lightmap, index)
     }
 
     /// Get the number of textures for a specific type
@@ -1659,7 +1661,7 @@ mod material_property_data_tests {
         };
         let mut strength_prop = sys::aiMaterialProperty {
             mKey: ai_string_from_cstr(material_keys::TEXTURE_STRENGTH),
-            mSemantic: TextureType::AmbientOcclusion.to_semantic(),
+            mSemantic: TextureType::Lightmap.to_semantic(),
             mIndex: 1,
             mDataLength: strength_data.len() as u32,
             mType: sys::aiPropertyTypeInfo::aiPTI_Float,
@@ -1684,7 +1686,7 @@ mod material_property_data_tests {
         assert_eq!(material.occlusion_texture_strength(0), None);
         assert_eq!(material.texture_scale(TextureType::Diffuse, 0), None);
         assert_eq!(
-            material.texture_strength(TextureType::AmbientOcclusion, usize::MAX),
+            material.texture_strength(TextureType::Lightmap, usize::MAX),
             None
         );
     }
@@ -1817,6 +1819,13 @@ impl Material {
     /// Ambient occlusion texture
     pub fn ambient_occlusion_texture(&self, index: usize) -> Option<TextureInfo> {
         self.texture(TextureType::AmbientOcclusion, index)
+    }
+
+    /// glTF occlusion texture.
+    ///
+    /// Assimp imports glTF `occlusionTexture` as a lightmap texture.
+    pub fn occlusion_texture(&self, index: usize) -> Option<TextureInfo> {
+        self.texture(TextureType::Lightmap, index)
     }
 
     /// Lightmap texture

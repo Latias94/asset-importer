@@ -8,7 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- **glTF texture material helpers**: Added `Material::{texture_scale,normal_texture_scale,texture_strength,occlusion_texture_strength}` and the corresponding `$tex.scale` / `$tex.strength` material key constants for Assimp 6.0.5's glTF normal-scale and occlusion-strength fixes.
+- **glTF texture material helpers**: Added `Material::{texture_scale,normal_texture_scale,texture_strength,occlusion_texture,occlusion_texture_strength}` and the corresponding `$tex.scale` / `$tex.strength` material key constants for Assimp 6.0.5's glTF normal-scale and occlusion-strength fixes. The glTF occlusion convenience helpers use Assimp's `aiTextureType_LIGHTMAP` mapping.
+- **glTF 6.0.5 regression coverage**: Added in-memory glTF fixtures for `normalTexture.scale`, `occlusionTexture.strength`, and `CUBICSPLINE` animation tangent preservation.
 
 ### Changed
 - **Bundled Assimp updated**: Vendored Assimp (via `asset-importer-sys`) is now pinned to `v6.0.5`.

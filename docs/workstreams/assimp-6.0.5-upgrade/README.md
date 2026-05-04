@@ -43,7 +43,11 @@ This workstream also tracks cleanup opportunities found during source review. Th
 - No required safe Rust wrapper additions were found for new C ABI symbols, struct fields, enums,
   postprocess flags, import properties, or export properties.
 - Useful behavior-level additions were still made in the safe API for glTF material metadata fixed
-  by 6.0.5: `Material::{texture_scale,normal_texture_scale,texture_strength,occlusion_texture_strength}`.
+  by 6.0.5:
+  `Material::{texture_scale,normal_texture_scale,texture_strength,occlusion_texture,occlusion_texture_strength}`.
+- Assimp imports glTF `occlusionTexture` as `aiTextureType_LIGHTMAP`, so the glTF occlusion
+  convenience helpers intentionally use `TextureType::Lightmap` rather than
+  `TextureType::AmbientOcclusion`.
 
 ## Known Risk Areas
 
@@ -94,4 +98,11 @@ This workstream also tracks cleanup opportunities found during source review. Th
   - `cargo nextest run --workspace` passed: 91 tests.
   - `cargo check --workspace --features export,type-extensions,raw-sys,glam,mint,bytemuck,tokio` passed.
   - `cargo nextest run -p asset-importer --features export` passed: 95 tests.
+  - `cargo test --doc -p asset-importer` passed: 6 doctests.
+- Follow-up real glTF fixture verification:
+  - `cargo nextest run -p asset-importer gltf_import_preserves` passed: 2 tests.
+  - `cargo check -p asset-importer` passed.
+  - `cargo nextest run --workspace` passed: 93 tests.
+  - `cargo check --workspace --features export,type-extensions,raw-sys,glam,mint,bytemuck,tokio` passed.
+  - `cargo nextest run -p asset-importer --features export` passed: 97 tests.
   - `cargo test --doc -p asset-importer` passed: 6 doctests.

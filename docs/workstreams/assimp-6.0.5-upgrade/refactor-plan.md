@@ -64,6 +64,9 @@ Plan:
 - [x] Confirm that 6.0.5 did not add bindgen-visible material key macros in the core C headers.
 - [x] Add safe constants/helpers for the behavior-level glTF keys that 6.0.5 fixes internally:
   `$tex.scale` and `$tex.strength`.
+- [x] Add real in-memory glTF fixture tests for normal texture scale, occlusion texture strength,
+  and CUBICSPLINE tangent preservation.
+- [x] Correct the glTF occlusion helper to Assimp's actual `aiTextureType_LIGHTMAP` mapping.
 - Keep tests focused on safe API behavior rather than mirroring every upstream material macro.
 
 Risk:
