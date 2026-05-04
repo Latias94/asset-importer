@@ -588,7 +588,7 @@ impl Model {
                 0,
                 glow::RGBA,
                 glow::UNSIGNED_BYTE,
-                Some(&data),
+                glow::PixelUnpackData::Slice(Some(&data)),
             );
 
             gl.generate_mipmap(glow::TEXTURE_2D);

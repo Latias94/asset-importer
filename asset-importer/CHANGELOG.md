@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-05-04
+
 ### Added
 - **glTF texture material helpers**: Added `Material::{texture_scale,normal_texture_scale,texture_strength,occlusion_texture,occlusion_texture_strength}` and the corresponding `$tex.scale` / `$tex.strength` material key constants for Assimp 6.0.5's glTF normal-scale and occlusion-strength fixes. The glTF occlusion convenience helpers use Assimp's `aiTextureType_LIGHTMAP` mapping.
 - **glTF 6.0.5 regression coverage**: Added in-memory glTF fixtures for `normalTexture.scale`, `occlusionTexture.strength`, and `CUBICSPLINE` animation tangent preservation.
@@ -15,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Bundled Assimp updated**: Vendored Assimp (via `asset-importer-sys`) is now pinned to `v6.0.5`.
 - **Default build mode (breaking)**: Default features are now empty and the crate builds bundled Assimp from source unless `prebuilt` or `system` is explicitly enabled. This matches the `asset-importer-sys` default and prevents stale prebuilt release artifacts from breaking normal builds.
 - **Prebuilt binaries are opt-in**: Enable `features = ["prebuilt"]` when you want to use release artifacts; stale packages are rejected by the sys crate version gate.
+- **Dependency refresh**: Updated the optional `glam` integration to `0.32.1`, the OpenGL demo to `glow` `0.17.0`, and refreshed the repository lockfile to current compatible dependency versions.
 - **Pointer wrapper cleanup**: Removed the unused unchecked `SharedPtr` constructor and route material-property views through checked pointer construction.
 
 ### Fixed

@@ -35,10 +35,10 @@ policy. Enable `prebuilt` only when you explicitly want matching release artifac
 ### Build from Source
 ```toml
 [dependencies]
-asset-importer-sys = "0.7"
+asset-importer-sys = "0.8"
 
 # Equivalent explicit source-build mode:
-asset-importer-sys = { version = "0.7", features = ["build-assimp"] }
+asset-importer-sys = { version = "0.8", features = ["build-assimp"] }
 ```
 - Builds Assimp from bundled source
 - Requires: CMake, C++ compiler, Git
@@ -47,7 +47,7 @@ asset-importer-sys = { version = "0.7", features = ["build-assimp"] }
 ### Prebuilt Binaries
 ```toml
 [dependencies]
-asset-importer-sys = { version = "0.7", features = ["prebuilt"] }
+asset-importer-sys = { version = "0.8", features = ["prebuilt"] }
 ```
 - Downloads prebuilt libraries from GitHub releases
 - No build dependencies required
@@ -56,7 +56,7 @@ asset-importer-sys = { version = "0.7", features = ["prebuilt"] }
 
 ### System Library
 ```toml
-asset-importer-sys = { version = "0.7", features = ["system", "generate-bindings"] }
+asset-importer-sys = { version = "0.8", features = ["system", "generate-bindings"] }
 ```
 Uses system-installed assimp. Install via package manager:
 - **macOS**: `brew install assimp`
@@ -81,7 +81,7 @@ rustflags = ["-C", "target-feature=+crt-static"]
 
 ### Static Linking
 ```toml
-asset-importer-sys = { version = "0.7", features = ["static-link", "build-assimp"] }
+asset-importer-sys = { version = "0.8", features = ["static-link", "build-assimp"] }
 ```
 - Creates single executable with fewer external runtime dependencies
 - Larger binary size
@@ -89,7 +89,7 @@ asset-importer-sys = { version = "0.7", features = ["static-link", "build-assimp
 ### Additional Options
 ```toml
 asset-importer-sys = {
-    version = "0.7",
+    version = "0.8",
     features = [
         "build-assimp",
         "export",        # Enable export functionality

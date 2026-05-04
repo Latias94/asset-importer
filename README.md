@@ -39,16 +39,16 @@ Add to your `Cargo.toml`:
 ```toml
 [dependencies]
 # Default: build bundled Assimp from source (most reliable)
-asset-importer = "0.7"
+asset-importer = "0.8"
 
 # Or explicitly select the source build mode
-asset-importer = { version = "0.7", features = ["build-assimp"] }
+asset-importer = { version = "0.8", features = ["build-assimp"] }
 
 # Or use prebuilt binaries (fastest, but requires matching release artifacts)
-asset-importer = { version = "0.7", features = ["prebuilt"] }
+asset-importer = { version = "0.8", features = ["prebuilt"] }
 
 # Or link a system-installed Assimp (requires libclang/bindgen; mutually exclusive build mode)
-asset-importer = { version = "0.7", features = ["system"] }
+asset-importer = { version = "0.8", features = ["system"] }
 ```
 
 Basic usage:
@@ -108,7 +108,7 @@ Practical guidance:
 ### Default: Build from Source (Recommended)
 
 ```toml
-asset-importer = "0.7"
+asset-importer = "0.8"
 ```
 
 - **Most reliable**: Uses the bundled Assimp source that matches this crate
@@ -118,13 +118,13 @@ asset-importer = "0.7"
 You can also select the same vendored source build explicitly:
 
 ```toml
-asset-importer = { version = "0.7", features = ["build-assimp"] }
+asset-importer = { version = "0.8", features = ["build-assimp"] }
 ```
 
 ### Prebuilt Binaries (Opt-in)
 
 ```toml
-asset-importer = { version = "0.7", features = ["prebuilt"] }
+asset-importer = { version = "0.8", features = ["prebuilt"] }
 ```
 
 - **Fastest**: No native Assimp compilation
@@ -135,7 +135,7 @@ asset-importer = { version = "0.7", features = ["prebuilt"] }
 ### System Library
 
 ```toml
-asset-importer = { version = "0.7", features = ["system"] }
+asset-importer = { version = "0.8", features = ["system"] }
 ```
 
 - **Lightweight**: Uses existing system installation
@@ -146,7 +146,7 @@ asset-importer = { version = "0.7", features = ["system"] }
 
 ```toml
 asset-importer = {
-    version = "0.7",
+    version = "0.8",
     features = [
         "build-assimp",    # Optional explicit source build mode; omit for the default source build
         "export",          # Enable export functionality
@@ -227,7 +227,7 @@ For maximum compatibility, keep the default source build. For a system package, 
 For development work, the default source build is recommended:
 
 ```toml
-asset-importer = "0.7"
+asset-importer = "0.8"
 ```
 
 This ensures local builds do not depend on release artifact availability. Use `features = ["prebuilt"]`

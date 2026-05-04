@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-05-04
+
 ### Added
 - **Maintainer binding regeneration override**: Added `ASSET_IMPORTER_FORCE_GENERATE_BINDINGS=1` so vendored binding refreshes can run bindgen without temporarily removing pregenerated bindings.
 

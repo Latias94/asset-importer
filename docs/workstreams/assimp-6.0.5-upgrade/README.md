@@ -31,6 +31,8 @@ This workstream also tracks cleanup opportunities found during source review. Th
 - Feature policy: keep source builds as the default and use `prebuilt` only when matching release artifacts are requested explicitly.
 - Safe API: inspect generated binding additions/removals, especially fields, enums, material keys, postprocess flags, export properties, and newly exposed C API helpers.
 - Docs: replace user-facing `v6.0.4` references where they describe the bundled Assimp version.
+- Release prep: bump workspace crate versions to `0.8.0`, refresh README/changelog install snippets,
+  and update dependency pins that intentionally affect the public/demo surface.
 - Tests: verify `build-assimp` first, then feature combinations that do not require unavailable release artifacts.
 
 ## 6.0.5 Interface Review
@@ -55,7 +57,7 @@ This workstream also tracks cleanup opportunities found during source review. Th
   includes importer/exporter hardening that can affect malformed or edge-case assets.
 - The C++ bridge relies on `Assimp::Importer`, `Assimp::Exporter`, `Assimp::IOSystem`, `Assimp::ProgressHandler`, and `aiCopyScene`; any signature drift must be handled explicitly.
 - The prebuilt path validates exact Assimp metadata, so all version constants must move together.
-- Explicit `prebuilt` checks may fail locally until 6.0.5 release artifacts are rebuilt and published for crate version `0.7.0`; default builds are no longer blocked by those artifacts.
+- Explicit `prebuilt` checks may fail locally until 6.0.5 release artifacts are rebuilt and published for crate version `0.8.0`; default builds are no longer blocked by those artifacts.
 
 ## Status
 
@@ -68,6 +70,8 @@ This workstream also tracks cleanup opportunities found during source review. Th
 - [x] Switch the high-level crate default away from prebuilt artifacts and back to vendored source builds.
 - [x] Run focused formatting and tests.
 - [x] Add behavior-level safe helpers for glTF texture scale/strength metadata fixed by 6.0.5.
+- [x] Prepare `v0.8.0` manifests, README snippets, changelogs, and lockfile dependency refresh.
+- [x] Update optional `glam` integration to `0.32.1` and the OpenGL demo to `glow` `0.17.0`.
 - [ ] Decide whether this change is ready for a conventional commit.
 
 ## Verification Notes
@@ -108,3 +112,12 @@ This workstream also tracks cleanup opportunities found during source review. Th
   - `cargo test --doc -p asset-importer` passed: 6 doctests.
 - CI cache hardening verification:
   - `cargo test -p asset-importer --test gltf_regression_tests --no-default-features --features "build-assimp,static-link" -- --nocapture` passed: 2 tests.
+- v0.8.0 release-prep verification:
+  - `cargo fmt --all --check` passed.
+  - `cargo check --workspace` passed.
+  - `cargo check -p asset-importer --example 11_glam_integration --features glam` passed.
+  - `cargo check -p asset-importer --example model_loading_demo --features demo` passed after updating `glow::tex_image_2d` to use `PixelUnpackData`.
+  - `cargo nextest run --workspace` passed: 93 tests.
+  - `cargo test --doc -p asset-importer` passed: 6 doctests.
+  - `cargo package -p asset-importer-sys --allow-dirty --no-verify` passed.
+  - `cargo package -p asset-importer --allow-dirty --no-verify` fails until `asset-importer-sys 0.8.0` is published to crates.io; publish order remains sys first, then high-level crate.
