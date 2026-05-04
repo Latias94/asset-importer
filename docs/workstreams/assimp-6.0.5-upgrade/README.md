@@ -106,3 +106,5 @@ This workstream also tracks cleanup opportunities found during source review. Th
   - `cargo check --workspace --features export,type-extensions,raw-sys,glam,mint,bytemuck,tokio` passed.
   - `cargo nextest run -p asset-importer --features export` passed: 97 tests.
   - `cargo test --doc -p asset-importer` passed: 6 doctests.
+- CI cache hardening verification:
+  - `cargo test -p asset-importer --test gltf_regression_tests --no-default-features --features "build-assimp,static-link" -- --nocapture` passed: 2 tests.

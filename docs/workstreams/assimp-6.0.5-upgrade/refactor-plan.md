@@ -120,3 +120,24 @@ Risk:
 
 - Low to medium. The changes are defensive and should preserve behavior, but they touch native
   bridge ownership and therefore need source-build tests.
+
+## Candidate 7: Vendored Build Cache Invalidation
+
+Problem:
+
+CI target caches can preserve `asset-importer-sys` CMake output across Assimp upgrades. If the Rust
+crate is rebuilt against a cached 6.0.4 static library while the source tree and tests expect 6.0.5,
+glTF 6.0.5 regression tests fail with old runtime behavior.
+
+Plan:
+
+- [x] Add an `OUT_DIR` stamp that records the expected Assimp version, link kind, CMake profile, and
+  Assimp source path.
+- [x] When the stamp differs, remove only known CMake output/install children under `OUT_DIR`
+  (`build`, `include`, `lib`, `lib64`, `bin`, `share`) before rebuilding.
+- [x] Verify the CI-style static source-build glTF regression command.
+
+Risk:
+
+- Low. Cleanup is scoped to Cargo's package-specific `OUT_DIR` and only to known CMake output
+  directories.

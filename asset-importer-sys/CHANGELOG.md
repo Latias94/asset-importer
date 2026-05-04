@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - **C++ bridge ownership**: The bridge now respects Assimp's ownership contract for custom `IOSystem` and `ProgressHandler` objects, avoiding double-free risk.
 - **C++ bridge exception boundary**: Bridge entrypoints now catch C++ exceptions and convert them into the thread-local bridge error string instead of allowing exceptions to cross the C ABI boundary.
+- **Vendored build cache invalidation**: Source builds now stamp the Assimp version/link profile in `OUT_DIR` and rebuild cached CMake output when it changes, avoiding stale 6.0.4 libraries after upgrading to 6.0.5.
 - **Prebuilt version validation**: Prebuilt packages are now validated against `manifest.txt` before falling back to headers, preventing stale packages whose installed headers do not expose version macros from being accepted silently.
 
 ## [0.7.0] - 2026-01-25

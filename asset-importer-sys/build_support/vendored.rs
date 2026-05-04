@@ -6,11 +6,17 @@ use crate::build_support::{
     util,
 };
 
+fn expected_assimp_version() -> &'static str {
+    include_str!("../assimp-version.txt").trim()
+}
+
 pub fn build(cfg: &BuildConfig, link_kind: LinkKind) -> BuildPlan {
     let assimp_src = cfg.assimp_source_dir();
     validate_assimp_source(&assimp_src);
+    reset_stale_cmake_output(cfg, &assimp_src, link_kind);
 
     let dst = build_assimp_with_cmake(cfg, &assimp_src, link_kind);
+    write_build_stamp(cfg, &assimp_src, link_kind);
 
     let include_dir = dst.join("include");
     let include_dirs = vec![include_dir, assimp_src.join("include")];
@@ -76,6 +82,76 @@ fn validate_assimp_source(assimp_src: &std::path::Path) {
             assimp_src.display()
         );
     }
+}
+
+fn build_stamp_contents(
+    cfg: &BuildConfig,
+    assimp_src: &std::path::Path,
+    link_kind: LinkKind,
+) -> String {
+    format!(
+        "assimp_version={}\nlink_kind={:?}\ncmake_profile={}\nsource={}\n",
+        expected_assimp_version(),
+        link_kind,
+        cfg.cmake_profile(),
+        assimp_src.display()
+    )
+}
+
+fn build_stamp_path(cfg: &BuildConfig) -> PathBuf {
+    cfg.out_dir.join("asset-importer-assimp-build-stamp.txt")
+}
+
+fn reset_stale_cmake_output(cfg: &BuildConfig, assimp_src: &std::path::Path, link_kind: LinkKind) {
+    let stamp_path = build_stamp_path(cfg);
+    let expected = build_stamp_contents(cfg, assimp_src, link_kind);
+    if fs::read_to_string(&stamp_path).ok().as_deref() == Some(expected.as_str()) {
+        return;
+    }
+
+    if cfg.verbose {
+        util::warn(format!(
+            "Assimp build cache stamp changed; rebuilding vendored Assimp {}",
+            expected_assimp_version()
+        ));
+    }
+
+    for name in ["build", "include", "lib", "lib64", "bin", "share"] {
+        remove_out_dir_child(cfg, name);
+    }
+    let _ = fs::remove_file(stamp_path);
+}
+
+fn remove_out_dir_child(cfg: &BuildConfig, name: &str) {
+    let target = cfg.out_dir.join(name);
+    if !target.exists() {
+        return;
+    }
+
+    let Ok(out_dir) = cfg.out_dir.canonicalize() else {
+        return;
+    };
+    let Ok(target_canonical) = target.canonicalize() else {
+        return;
+    };
+    if !target_canonical.starts_with(&out_dir) {
+        util::warn(format!(
+            "Refusing to remove stale Assimp build path outside OUT_DIR: {}",
+            target_canonical.display()
+        ));
+        return;
+    }
+
+    if target_canonical.is_dir() {
+        let _ = fs::remove_dir_all(&target_canonical);
+    } else {
+        let _ = fs::remove_file(&target_canonical);
+    }
+}
+
+fn write_build_stamp(cfg: &BuildConfig, assimp_src: &std::path::Path, link_kind: LinkKind) {
+    let stamp_path = build_stamp_path(cfg);
+    let _ = fs::write(stamp_path, build_stamp_contents(cfg, assimp_src, link_kind));
 }
 
 fn build_assimp_with_cmake(
