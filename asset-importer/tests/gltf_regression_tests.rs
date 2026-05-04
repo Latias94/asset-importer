@@ -1,4 +1,4 @@
-use asset_importer::{Scene, TextureType, animation::AnimInterpolation};
+use asset_importer::{Scene, TextureType, animation::AnimInterpolation, version};
 
 const GLTF_PNG_1X1: &str =
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=";
@@ -12,6 +12,33 @@ fn assert_close(actual: f32, expected: f32) {
         (actual - expected).abs() < 1e-5,
         "expected {expected}, got {actual}"
     );
+}
+
+fn gltf_605_regressions_available() -> bool {
+    let runtime = (
+        version::assimp_version_major(),
+        version::assimp_version_minor(),
+        version::assimp_version_patch(),
+    );
+
+    if runtime >= (6, 0, 5) {
+        return true;
+    }
+
+    let message = format!(
+        "glTF 6.0.5 regression tests require Assimp >= 6.0.5, but runtime is {}.{}.{}",
+        runtime.0, runtime.1, runtime.2
+    );
+
+    if cfg!(feature = "build-assimp") || !cfg!(any(feature = "system", feature = "prebuilt")) {
+        panic!(
+            "{message}; build-assimp/default source builds should use the vendored 6.0.5 tree. \
+             If this happens in CI, clear restored target artifacts and verify submodules."
+        );
+    }
+
+    eprintln!("{message}; skipping system/prebuilt runtime-specific glTF 6.0.5 regression");
+    false
 }
 
 fn material_texture_metadata_gltf() -> String {
@@ -122,6 +149,10 @@ fn cubic_spline_animation_gltf() -> String {
 
 #[test]
 fn gltf_import_preserves_normal_scale_and_occlusion_strength() {
+    if !gltf_605_regressions_available() {
+        return;
+    }
+
     let gltf = material_texture_metadata_gltf();
     let scene = Scene::from_memory(gltf.as_bytes(), Some("gltf")).expect("import glTF material");
     let material = scene.material(0).expect("material 0");
@@ -142,6 +173,10 @@ fn gltf_import_preserves_normal_scale_and_occlusion_strength() {
 
 #[test]
 fn gltf_import_preserves_cubic_spline_translation_tangents() {
+    if !gltf_605_regressions_available() {
+        return;
+    }
+
     let gltf = cubic_spline_animation_gltf();
     let scene = Scene::from_memory(gltf.as_bytes(), Some("gltf")).expect("import glTF animation");
     let animation = scene.animation(0).expect("animation 0");

@@ -135,6 +135,9 @@ Plan:
   Assimp source path.
 - [x] When the stamp differs, remove only known CMake output/install children under `OUT_DIR`
   (`build`, `include`, `lib`, `lib64`, `bin`, `share`) before rebuilding.
+- [x] Clean local `asset-importer-sys` / `asset-importer` build outputs after restoring CI target
+  cache in source-build jobs, so Cargo cannot skip the build script and run old native artifacts.
+- [x] Add explicit runtime-version diagnostics to 6.0.5-specific glTF regression tests.
 - [x] Verify the CI-style static source-build glTF regression command.
 
 Risk:

@@ -65,6 +65,9 @@ jobs:
           echo "CRT=${{ matrix.crt }}"
           echo "RUSTFLAGS=${RUSTFLAGS:-<empty>}"
 
+      - name: Clean cached local build outputs
+        run: cargo clean -p asset-importer-sys -p asset-importer
+
       - name: Build workspace (from source)
         run: cargo build --workspace --no-default-features --features "${{ matrix.features }}"
         env:
@@ -94,6 +97,9 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y cmake build-essential
+
+      - name: Clean cached local build outputs
+        run: cargo clean -p asset-importer-sys -p asset-importer
 
       - name: Check examples (build-assimp)
         run: cargo check -p asset-importer --examples --no-default-features --features build-assimp
@@ -256,6 +262,9 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y cmake build-essential
+
+      - name: Clean cached local build outputs
+        run: cargo clean -p asset-importer-sys -p asset-importer
 
       - name: Run clippy
         run: cargo clippy --workspace --all-targets --no-default-features --features build-assimp -- -D warnings
