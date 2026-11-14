@@ -59,7 +59,12 @@ unsafe impl<T: SharedPtrTarget> SharedPtrTarget for *const T {}
 
 impl<T> SharedPtr<T> {
     /// Creates a new `SharedPtr` if `ptr` is non-null.
-    pub(crate) fn new(ptr: *const T) -> Option<Self> {
+    ///
+    /// # Safety
+    /// A non-null, aligned pointer must refer to an initialized `T` that remains valid
+    /// and immutable whenever this pointer or any copy is dereferenced. The caller must
+    /// retain the actual owner; the checks here cannot establish ownership or validity.
+    pub(crate) unsafe fn new(ptr: *const T) -> Option<Self> {
         if ptr.is_null() {
             return None;
         }
@@ -97,7 +102,7 @@ unsafe impl<T: SharedPtrTarget> Send for SharedPtr<T> {}
 unsafe impl<T: SharedPtrTarget> Sync for SharedPtr<T> {}
 
 // The callback table stays at a stable heap address, and every callback accesses Rust
-// state through Mutex/AtomicBool. Raw callers must not mutate the table while shared.
+// state through mutexes. Raw callers must not mutate the table while shared.
 unsafe impl Send for crate::io::OwnedAiFileIO {}
 unsafe impl Sync for crate::io::OwnedAiFileIO {}
 
@@ -107,12 +112,12 @@ mod tests {
 
     #[test]
     fn new_rejects_null_and_unaligned_pointers() {
-        assert!(SharedPtr::<u32>::new(std::ptr::null()).is_none());
+        assert!(unsafe { SharedPtr::<u32>::new(std::ptr::null()) }.is_none());
 
         let buf = [0u32; 2];
         let unaligned = unsafe { (buf.as_ptr() as *const u8).add(1) } as *const u32;
-        assert!(SharedPtr::new(unaligned).is_none());
+        assert!(unsafe { SharedPtr::new(unaligned) }.is_none());
 
-        assert!(SharedPtr::new(buf.as_ptr()).is_some());
+        assert!(unsafe { SharedPtr::new(buf.as_ptr()) }.is_some());
     }
 }

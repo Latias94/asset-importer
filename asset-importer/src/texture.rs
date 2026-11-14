@@ -123,8 +123,16 @@ pub struct Texture {
 }
 
 impl Texture {
-    pub(crate) fn from_sys_ptr(scene: Scene, texture_ptr: *const sys::aiTexture) -> Result<Self> {
-        let texture_ptr = SharedPtr::new(texture_ptr)
+    /// # Safety
+    /// A non-null, aligned `texture_ptr` must point to an initialized `aiTexture`
+    /// owned by `scene`. Its non-null data buffer must be valid for the size declared
+    /// by its dimensions, and all reachable data must remain valid and read-only for
+    /// the lifetime of `scene` and its clones.
+    pub(crate) unsafe fn from_sys_ptr(
+        scene: Scene,
+        texture_ptr: *const sys::aiTexture,
+    ) -> Result<Self> {
+        let texture_ptr = unsafe { SharedPtr::new(texture_ptr) }
             .ok_or_else(|| Error::invalid_scene("Texture pointer is null"))?;
         Ok(Self { scene, texture_ptr })
     }
@@ -180,7 +188,7 @@ impl Texture {
                 return Ok(TextureDataRef::Compressed(&[]));
             }
             let data_ptr = texture.pcData as *const u8;
-            let Some(bytes) = ffi::slice_from_ptr_len_opt(self, data_ptr, size) else {
+            let Some(bytes) = (unsafe { ffi::slice_from_ptr_len_opt(self, data_ptr, size) }) else {
                 return Err(Error::invalid_scene("Texture data is null"));
             };
             Ok(TextureDataRef::Compressed(bytes))
@@ -193,9 +201,9 @@ impl Texture {
             if size == 0 {
                 return Ok(TextureDataRef::Texels(&[]));
             }
-            let Some(texels) =
+            let Some(texels) = (unsafe {
                 ffi::slice_from_ptr_len_opt(self, texture.pcData as *const Texel, size)
-            else {
+            }) else {
                 return Err(Error::invalid_scene("Texture data is null"));
             };
             Ok(TextureDataRef::Texels(texels))
@@ -222,7 +230,7 @@ impl Texture {
         let hint = &self.raw().achFormatHint;
         // Find the null terminator
         let len = hint.iter().position(|&c| c == 0).unwrap_or(hint.len());
-        ffi::slice_from_ptr_len(self, hint.as_ptr() as *const u8, len)
+        unsafe { ffi::slice_from_ptr_len(self, hint.as_ptr() as *const u8, len) }
     }
 
     /// Get the format hint as UTF-8 (lossy) without allocation.
@@ -324,8 +332,18 @@ pub struct TextureIterator {
 
 impl TextureIterator {
     /// Create a new texture iterator
-    pub(crate) fn new(scene: Scene, textures: *mut *mut sys::aiTexture, count: usize) -> Self {
-        let textures_ptr = SharedPtr::new(textures as *const *const sys::aiTexture);
+    ///
+    /// # Safety
+    /// A non-null, aligned `textures` must point to `count` initialized texture
+    /// pointers owned by `scene`. The array, each non-null, aligned texture, and all
+    /// reachable data must remain valid and read-only for the lifetime of `scene`
+    /// and its clones. Non-null data buffers must be valid for their declared sizes.
+    pub(crate) unsafe fn new(
+        scene: Scene,
+        textures: *mut *mut sys::aiTexture,
+        count: usize,
+    ) -> Self {
+        let textures_ptr = unsafe { SharedPtr::new(textures as *const *const sys::aiTexture) };
         Self {
             scene,
             textures: textures_ptr,
@@ -340,7 +358,9 @@ impl Iterator for TextureIterator {
 
     fn next(&mut self) -> Option<Self::Item> {
         let textures = self.textures?;
-        let slice = crate::ffi::slice_from_ptr_len_opt(&(), textures.as_ptr(), self.count)?;
+        let slice = unsafe {
+            crate::ffi::slice_from_ptr_len_opt(&self.scene, textures.as_ptr(), self.count)
+        }?;
         while self.index < slice.len() {
             let texture_ptr = slice[self.index];
             self.index += 1;
@@ -348,7 +368,7 @@ impl Iterator for TextureIterator {
                 continue;
             }
             // `from_sys_ptr` only fails on null pointers; keep the iterator robust anyway.
-            if let Ok(tex) = Texture::from_sys_ptr(self.scene.clone(), texture_ptr) {
+            if let Ok(tex) = unsafe { Texture::from_sys_ptr(self.scene.clone(), texture_ptr) } {
                 return Some(tex);
             }
         }

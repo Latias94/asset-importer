@@ -1,4 +1,8 @@
 //! Scene export functionality
+//!
+//! Prepare scene data during import or with [`Scene::apply_postprocess`] before exporting.
+//! Post-processing properties belong to the scene's importer. Export properties configure
+//! only the selected format, whose mandatory conversions are applied by Assimp.
 
 use std::ffi::CString;
 use std::path::Path;
@@ -9,7 +13,7 @@ use crate::{
     error::{Error, Result},
     ffi,
     importer::{PropertyStore, PropertyValue},
-    io::{FileSystem, OwnedAiFileIO},
+    io::{DefaultFileSystem, FileSystem, OwnedAiFileIO},
     ptr::SharedPtr,
     scene::Scene,
     sys,
@@ -46,18 +50,20 @@ mod export_properties_tests {
 }
 
 /// Builder for configuring and executing scene exports
+///
+/// Configure scene preparation through [`crate::importer::ImportBuilder`] or apply
+/// post-processing to an exclusively owned [`Scene`] before exporting. The export
+/// operation does not accept additional post-processing steps.
 pub struct ExportBuilder {
     format_id: String,
-    preprocessing: u32,
     file_system: Option<std::sync::Arc<std::sync::Mutex<dyn FileSystem>>>,
-    properties: Vec<(String, PropertyValue)>,
+    properties: PropertyStore,
 }
 
 impl std::fmt::Debug for ExportBuilder {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ExportBuilder")
             .field("format_id", &self.format_id)
-            .field("preprocessing", &self.preprocessing)
             .field("file_system", &self.file_system.is_some())
             .field("properties", &self.properties.len())
             .finish()
@@ -69,21 +75,14 @@ impl ExportBuilder {
     pub fn new<S: Into<String>>(format_id: S) -> Self {
         Self {
             format_id: format_id.into(),
-            preprocessing: 0,
             file_system: None,
-            properties: Vec::new(),
+            properties: PropertyStore::new(),
         }
     }
 
-    /// Set preprocessing steps to apply before export
-    pub fn with_preprocessing(mut self, steps: u32) -> Self {
-        self.preprocessing = steps;
-        self
-    }
-
-    /// Set an exporter property.
+    /// Set an exporter property, replacing any value with the same name and native type.
     pub fn with_property<S: Into<String>>(mut self, name: S, value: PropertyValue) -> Self {
-        self.properties.push((name.into(), value));
+        self.properties.set(name, value);
         self
     }
 
@@ -130,6 +129,8 @@ impl ExportBuilder {
     }
 
     /// Use a custom file system for exporting through the C++ bridge.
+    ///
+    /// This setting is only valid for file exports. Blob exports reject it.
     pub fn with_file_system<F>(self, file_system: F) -> Self
     where
         F: FileSystem + 'static,
@@ -148,21 +149,30 @@ impl ExportBuilder {
 
     /// Export the scene to a file.
     ///
+    /// Uses [`DefaultFileSystem`] when no custom file system is configured, so write
+    /// and flush failures are returned to the caller.
+    /// Paths must be valid UTF-8 on every platform, including native 3MF output.
     /// 3MF requires the native file system because its ZIP writer bypasses custom I/O.
     /// Morph targets with sparse UV or color channels cannot be copied safely by Assimp.
     /// Empty or unsupported node metadata and mesh animation channels are also rejected
     /// because Assimp cannot deep-copy their ownership safely.
     pub fn export_to_file<P: AsRef<Path>>(self, scene: &Scene, path: P) -> Result<()> {
-        let path_str = path.as_ref().to_string_lossy();
-        let c_path = CString::new(path_str.as_ref())
-            .map_err(|_| Error::invalid_parameter("Invalid file path"))?;
+        let path_str = path
+            .as_ref()
+            .to_str()
+            .ok_or_else(|| Error::invalid_parameter("Export file paths must be valid UTF-8"))?;
+        let c_path =
+            CString::new(path_str).map_err(|_| Error::invalid_parameter("Invalid file path"))?;
         let c_format = CString::new(self.format_id.as_str())
             .map_err(|_| Error::invalid_parameter("Invalid format ID"))?;
 
-        let file_io = self
-            .file_system
-            .as_ref()
-            .map(|fs| OwnedAiFileIO::new(fs.clone()));
+        let file_io = match self.file_system {
+            Some(file_system) => Some(OwnedAiFileIO::new(file_system)),
+            None if self.format_id != "3mf" => Some(OwnedAiFileIO::new(std::sync::Arc::new(
+                std::sync::Mutex::new(DefaultFileSystem),
+            ))),
+            None => None,
+        };
         let buffers = build_rust_properties(&self.properties)?;
         let result = unsafe {
             sys::aiExportSceneExWithPropertiesRust(
@@ -172,29 +182,37 @@ impl ExportBuilder {
                 file_io
                     .as_ref()
                     .map_or(std::ptr::null(), |io| io.as_ptr_sys()),
-                self.preprocessing,
+                0,
                 buffers.ffi_props.as_ptr(),
                 buffers.ffi_props.len(),
             )
         };
 
-        if file_io.as_ref().is_some_and(|io| io.has_error()) {
-            return Err(Error::io_error("Custom IO callback failed during export"));
+        if let Some(error) = file_io.as_ref().and_then(OwnedAiFileIO::take_error) {
+            return Err(error);
         }
 
-        if result == sys::aiReturn::aiReturn_SUCCESS {
-            Ok(())
-        } else {
-            Err(Error::export_failed(Error::from_bridge().to_string()))
+        match result {
+            sys::aiReturn::aiReturn_SUCCESS => Ok(()),
+            sys::aiReturn::aiReturn_OUTOFMEMORY => Err(Error::OutOfMemory),
+            _ => Err(Error::export_failed(Error::from_bridge().to_string())),
         }
     }
 
     /// Export the scene to a blob in memory.
     ///
+    /// A configured custom file system is rejected because blobs own their output.
     /// 3MF is unsupported because its ZIP writer writes directly to the host file system.
     /// Morph targets with sparse UV or color channels cannot be copied safely by Assimp.
     /// Empty or unsupported node metadata and mesh animation channels are also rejected.
+    /// Native blob failures return [`Error::ExportFailed`] because Assimp's blob API
+    /// does not expose an `aiReturn` status, including for out-of-memory failures.
     pub fn export_to_blob(self, scene: &Scene) -> Result<ExportBlob> {
+        if self.file_system.is_some() {
+            return Err(Error::invalid_parameter(
+                "Custom file systems are only supported for file exports",
+            ));
+        }
         let c_format = CString::new(self.format_id.as_str())
             .map_err(|_| Error::invalid_parameter("Invalid format ID"))?;
 
@@ -203,7 +221,7 @@ impl ExportBuilder {
             sys::aiExportSceneToBlobWithPropertiesRust(
                 scene.as_raw_sys(),
                 c_format.as_ptr(),
-                self.preprocessing,
+                0,
                 buffers.ffi_props.as_ptr(),
                 buffers.ffi_props.len(),
             )
@@ -212,7 +230,7 @@ impl ExportBuilder {
         if blob_ptr.is_null() {
             Err(Error::export_failed(Error::from_bridge().to_string()))
         } else {
-            ExportBlob::from_sys_ptr(blob_ptr)
+            unsafe { ExportBlob::from_sys_ptr(blob_ptr) }
                 .ok_or_else(|| Error::invalid_scene("Invalid export blob pointer"))
         }
     }
@@ -226,8 +244,12 @@ pub struct ExportBlob {
 
 impl ExportBlob {
     /// Create an ExportBlob from a raw Assimp blob pointer
-    fn from_sys_ptr(blob_ptr: *const sys::aiExportDataBlob) -> Option<Self> {
-        let blob_ptr = SharedPtr::new(blob_ptr)?;
+    ///
+    /// # Safety
+    /// A non-null, aligned pointer must be the root of an exclusively owned blob chain
+    /// returned by Assimp. Ownership transfers here, including all reachable buffers.
+    unsafe fn from_sys_ptr(blob_ptr: *const sys::aiExportDataBlob) -> Option<Self> {
+        let blob_ptr = unsafe { SharedPtr::new(blob_ptr) }?;
         Some(Self {
             inner: Arc::new(ExportBlobInner { root: blob_ptr }),
         })
@@ -249,7 +271,7 @@ impl ExportBlob {
     /// Get the data as a byte slice
     pub fn data(&self) -> &[u8] {
         let blob = self.raw_root();
-        ffi::slice_from_ptr_len(self, blob.data as *const u8, blob.size)
+        unsafe { ffi::slice_from_ptr_len(self, blob.data as *const u8, blob.size) }
     }
 
     /// Get the size of the data
@@ -310,7 +332,7 @@ impl ExportBlobView {
     /// Get the data as a byte slice.
     pub fn data(&self) -> &[u8] {
         let blob = self.raw();
-        ffi::slice_from_ptr_len(self, blob.data as *const u8, blob.size)
+        unsafe { ffi::slice_from_ptr_len(self, blob.data as *const u8, blob.size) }
     }
 
     /// Get the size of the data.
@@ -336,7 +358,7 @@ impl ExportBlobView {
     /// Get the next blob in the chain.
     pub fn next(&self) -> Option<ExportBlobView> {
         let next = self.raw().next as *const sys::aiExportDataBlob;
-        SharedPtr::new(next).map(|blob_ptr| ExportBlobView {
+        unsafe { SharedPtr::new(next) }.map(|blob_ptr| ExportBlobView {
             inner: self.inner.clone(),
             blob_ptr,
         })
@@ -355,7 +377,7 @@ impl Iterator for ExportBlobIterator {
     fn next(&mut self) -> Option<Self::Item> {
         let current = self.current?;
         let next = current.as_ref().next as *const sys::aiExportDataBlob;
-        self.current = SharedPtr::new(next);
+        self.current = unsafe { SharedPtr::new(next) };
         Some(ExportBlobView {
             inner: self.inner.clone(),
             blob_ptr: current,
@@ -376,11 +398,14 @@ pub struct ExportFormatDesc {
 
 impl ExportFormatDesc {
     /// Create from raw Assimp export format description
-    pub(crate) fn from_raw(desc: &sys::aiExportFormatDesc) -> Self {
+    ///
+    /// # Safety
+    /// Non-null string fields must remain valid NUL-terminated strings during this call.
+    pub(crate) unsafe fn from_raw(desc: &sys::aiExportFormatDesc) -> Self {
         Self {
-            id: crate::error::c_str_to_string_or_empty(desc.id),
-            description: crate::error::c_str_to_string_or_empty(desc.description),
-            file_extension: crate::error::c_str_to_string_or_empty(desc.fileExtension),
+            id: unsafe { crate::error::c_str_to_string_or_empty(desc.id) },
+            description: unsafe { crate::error::c_str_to_string_or_empty(desc.description) },
+            file_extension: unsafe { crate::error::c_str_to_string_or_empty(desc.fileExtension) },
         }
     }
 }
@@ -447,7 +472,7 @@ pub mod formats {
     /// Wavefront OBJ format
     pub const OBJ: &str = "obj";
     /// COLLADA format
-    pub const COLLADA: &str = "dae";
+    pub const COLLADA: &str = "collada";
     /// Stanford PLY format
     pub const PLY: &str = "ply";
     /// STL format
@@ -637,21 +662,20 @@ mod tests {
         let buf = [0u64; 8];
         let unaligned =
             unsafe { (buf.as_ptr() as *const u8).add(1) } as *const sys::aiExportDataBlob;
-        assert!(ExportBlob::from_sys_ptr(unaligned).is_none());
+        assert!(unsafe { ExportBlob::from_sys_ptr(unaligned) }.is_none());
     }
 
     #[test]
     fn test_export_builder() {
-        let builder = ExportBuilder::new(formats::OBJ).with_preprocessing(0);
+        let builder = ExportBuilder::new(formats::OBJ);
 
         assert_eq!(builder.format_id, formats::OBJ);
-        assert_eq!(builder.preprocessing, 0);
     }
 
     #[test]
     fn test_format_constants() {
         assert_eq!(formats::OBJ, "obj");
-        assert_eq!(formats::COLLADA, "dae");
+        assert_eq!(formats::COLLADA, "collada");
         assert_eq!(formats::GLTF2, "gltf2");
     }
 
@@ -669,9 +693,12 @@ mod tests {
                 export_properties::FBX_TRANSPARENCY_FACTOR_REFER_TO_OPACITY,
                 true,
             )
+            .with_property_string("EXPORT_BLOB_NAME", "superseded\0name")
+            .with_property_string("EXPORT_BLOB_NAME", "current.obj")
             .export_to_blob(&scene)
             .expect("export to blob with properties");
 
         assert!(blob.size() > 0);
+        assert_eq!(blob.name(), "current.obj");
     }
 }

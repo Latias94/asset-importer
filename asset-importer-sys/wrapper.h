@@ -100,6 +100,7 @@ bool aiGetMemoryRequirementsRust(const struct aiRustScene* owner, struct aiMemor
 // === Export bridging ===
 
 // Export a scene to a file with optional custom IO and exporter properties.
+// preprocessing must be zero; prepare the scene with its importer before exporting.
 // Returns aiReturn_SUCCESS on success.
 enum aiReturn aiExportSceneExWithPropertiesRust(
     const struct aiScene* scene,
@@ -112,6 +113,7 @@ enum aiReturn aiExportSceneExWithPropertiesRust(
 );
 
 // Export a scene to a blob with exporter properties.
+// preprocessing must be zero; prepare the scene with its importer before exporting.
 // Returns an owned blob chain; free with aiReleaseExportBlob.
 const struct aiExportDataBlob* aiExportSceneToBlobWithPropertiesRust(
     const struct aiScene* scene,

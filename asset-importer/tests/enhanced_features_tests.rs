@@ -80,7 +80,7 @@ fn test_property_store_conversions() {
 fn test_import_with_property_store() {
     let mut props = PropertyStore::new();
     props
-        .set_float(import_properties::MAX_SMOOTHING_ANGLE, 45.0)
+        .set_float(import_properties::NORMAL_MAX_SMOOTHING_ANGLE, 45.0)
         .set_bool(import_properties::REMOVE_DEGENERATE_FACES, true)
         .set_int(import_properties::LIMIT_BONE_WEIGHTS_MAX, 4);
 
@@ -137,7 +137,7 @@ fn test_russimp_compatible_interface() {
 #[test]
 fn test_import_with_property_store_ref() {
     let mut props = PropertyStore::new();
-    props.set_float(import_properties::MAX_SMOOTHING_ANGLE, 60.0);
+    props.set_float(import_properties::NORMAL_MAX_SMOOTHING_ANGLE, 60.0);
 
     let importer = Importer::new();
     let result = importer
@@ -214,7 +214,7 @@ fn test_material_keys_constants() {
 #[test]
 fn test_import_properties_constants() {
     // Test that import property constants are valid strings
-    assert!(!import_properties::MAX_SMOOTHING_ANGLE.is_empty());
+    assert!(!import_properties::NORMAL_MAX_SMOOTHING_ANGLE.is_empty());
     assert!(!import_properties::FBX_READ_ALL_GEOMETRY_LAYERS.is_empty());
     assert!(!import_properties::REMOVE_DEGENERATE_FACES.is_empty());
     assert!(!import_properties::GLOBAL_SCALE_FACTOR.is_empty());

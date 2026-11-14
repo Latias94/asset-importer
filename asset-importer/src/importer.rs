@@ -2,7 +2,7 @@
 
 use std::ffi::{CStr, CString};
 use std::os::raw::{c_char, c_void};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use crate::{
@@ -44,7 +44,11 @@ impl Drop for ProgressUser {
     }
 }
 
-extern "C" fn progress_cb(percentage: f32, message: *const c_char, user: *mut c_void) -> bool {
+unsafe extern "C" fn progress_cb(
+    percentage: f32,
+    message: *const c_char,
+    user: *mut c_void,
+) -> bool {
     if user.is_null() {
         return true;
     }
@@ -70,10 +74,12 @@ extern "C" fn progress_cb(percentage: f32, message: *const c_char, user: *mut c_
     })
 }
 
-/// A property store for configuring import behavior
+/// A property store for configuring import and export behavior.
 ///
-/// This provides a more convenient API for setting import properties
-/// compared to using the builder methods directly.
+/// Setting a property replaces its previous value in the same native type space.
+/// Boolean and integer properties share a type space; float, string, and matrix
+/// properties are independent, even when their names match.
+/// Only the final values are validated and encoded when an operation executes.
 #[derive(Debug, Clone)]
 pub struct PropertyStore {
     properties: Vec<(String, PropertyValue)>,
@@ -87,32 +93,39 @@ impl PropertyStore {
         }
     }
 
+    /// Set a property, replacing any value with the same name and native type.
+    pub fn set<S: Into<String>>(&mut self, name: S, value: PropertyValue) -> &mut Self {
+        let name = name.into();
+        if let Some((_, previous)) = self
+            .properties
+            .iter_mut()
+            .find(|(key, previous)| key == &name && previous.same_native_type(&value))
+        {
+            *previous = value;
+        } else {
+            self.properties.push((name, value));
+        }
+        self
+    }
+
     /// Set an integer property
     pub fn set_int<S: Into<String>>(&mut self, name: S, value: i32) -> &mut Self {
-        self.properties
-            .push((name.into(), PropertyValue::Integer(value)));
-        self
+        self.set(name, PropertyValue::Integer(value))
     }
 
     /// Set a float property
     pub fn set_float<S: Into<String>>(&mut self, name: S, value: f32) -> &mut Self {
-        self.properties
-            .push((name.into(), PropertyValue::Float(value)));
-        self
+        self.set(name, PropertyValue::Float(value))
     }
 
     /// Set a string property
     pub fn set_string<S: Into<String>, V: Into<String>>(&mut self, name: S, value: V) -> &mut Self {
-        self.properties
-            .push((name.into(), PropertyValue::String(value.into())));
-        self
+        self.set(name, PropertyValue::String(value.into()))
     }
 
     /// Set a boolean property
     pub fn set_bool<S: Into<String>>(&mut self, name: S, value: bool) -> &mut Self {
-        self.properties
-            .push((name.into(), PropertyValue::Boolean(value)));
-        self
+        self.set(name, PropertyValue::Boolean(value))
     }
 
     /// Set a matrix property
@@ -121,12 +134,10 @@ impl PropertyStore {
         name: S,
         value: crate::types::Matrix4x4,
     ) -> &mut Self {
-        self.properties
-            .push((name.into(), PropertyValue::Matrix(value)));
-        self
+        self.set(name, PropertyValue::Matrix(value))
     }
 
-    /// Get all properties as a slice
+    /// Get the effective properties in their original insertion order.
     pub fn properties(&self) -> &[(String, PropertyValue)] {
         &self.properties
     }
@@ -141,7 +152,7 @@ impl PropertyStore {
         self.properties.is_empty()
     }
 
-    /// Get the number of properties
+    /// Get the number of effective properties across all native type spaces.
     pub fn len(&self) -> usize {
         self.properties.len()
     }
@@ -153,9 +164,19 @@ impl Default for PropertyStore {
     }
 }
 
+impl Extend<(String, PropertyValue)> for PropertyStore {
+    fn extend<T: IntoIterator<Item = (String, PropertyValue)>>(&mut self, properties: T) {
+        for (name, value) in properties {
+            self.set(name, value);
+        }
+    }
+}
+
 impl From<Vec<(String, PropertyValue)>> for PropertyStore {
     fn from(properties: Vec<(String, PropertyValue)>) -> Self {
-        Self { properties }
+        let mut store = Self::new();
+        store.extend(properties);
+        store
     }
 }
 
@@ -172,8 +193,11 @@ pub mod import_properties {
     /// Remove vertex components (AI_CONFIG_PP_RVC_FLAGS)
     pub const REMOVE_VERTEX_COMPONENTS: &str = "PP_RVC_FLAGS";
 
-    /// Maximum smoothing angle for normal generation (AI_CONFIG_PP_CT_MAX_SMOOTHING_ANGLE)
-    pub const MAX_SMOOTHING_ANGLE: &str = "PP_CT_MAX_SMOOTHING_ANGLE";
+    /// Maximum normal smoothing angle in degrees (AI_CONFIG_PP_GSN_MAX_SMOOTHING_ANGLE).
+    pub const NORMAL_MAX_SMOOTHING_ANGLE: &str = "PP_GSN_MAX_SMOOTHING_ANGLE";
+
+    /// Maximum tangent smoothing angle in degrees (AI_CONFIG_PP_CT_MAX_SMOOTHING_ANGLE).
+    pub const TANGENT_MAX_SMOOTHING_ANGLE: &str = "PP_CT_MAX_SMOOTHING_ANGLE";
 
     /// FBX: Read all geometry layers (AI_CONFIG_IMPORT_FBX_READ_ALL_GEOMETRY_LAYERS)
     pub const FBX_READ_ALL_GEOMETRY_LAYERS: &str = "IMPORT_FBX_READ_ALL_GEOMETRY_LAYERS";
@@ -221,26 +245,17 @@ pub mod import_properties {
     /// Remove degenerate faces (AI_CONFIG_PP_FD_REMOVE)
     pub const REMOVE_DEGENERATE_FACES: &str = "PP_FD_REMOVE";
 
-    /// Split large meshes (AI_CONFIG_PP_SLM_VERTEX_LIMIT)
-    pub const SPLIT_LARGE_MESHES_VERTEX_LIMIT: &str = "PP_SLM_VERTEX_LIMIT";
-
-    /// Split large meshes triangle limit (AI_CONFIG_PP_SLM_TRIANGLE_LIMIT)
-    pub const SPLIT_LARGE_MESHES_TRIANGLE_LIMIT: &str = "PP_SLM_TRIANGLE_LIMIT";
-
     /// Limit bone weights (AI_CONFIG_PP_LBW_MAX_WEIGHTS)
     pub const LIMIT_BONE_WEIGHTS_MAX: &str = "PP_LBW_MAX_WEIGHTS";
 
-    /// Validate data structure (AI_CONFIG_PP_DB_THRESHOLD)
-    pub const VALIDATE_DATA_STRUCTURE_THRESHOLD: &str = "PP_DB_THRESHOLD";
+    /// Bone removal threshold for the Debone step (AI_CONFIG_PP_DB_THRESHOLD).
+    pub const DEBONE_THRESHOLD: &str = "PP_DB_THRESHOLD";
 
     /// IFC: Skip space representations (AI_CONFIG_IMPORT_IFC_SKIP_SPACE_REPRESENTATIONS)
     pub const IFC_SKIP_SPACE_REPRESENTATIONS: &str = "IMPORT_IFC_SKIP_SPACE_REPRESENTATIONS";
 
-    /// Global scale factor (AI_CONFIG_GLOBAL_SCALE_FACTOR_KEY)
+    /// User scale factor for the GlobalScale step (AI_CONFIG_GLOBAL_SCALE_FACTOR_KEY).
     pub const GLOBAL_SCALE_FACTOR: &str = "GLOBAL_SCALE_FACTOR";
-
-    /// Application scale factor (AI_CONFIG_APP_SCALE_KEY)
-    pub const APP_SCALE_FACTOR: &str = "APP_SCALE_FACTOR";
 }
 
 #[cfg(test)]
@@ -259,7 +274,11 @@ mod import_properties_tests {
             c_key(crate::sys::AI_CONFIG_PP_RVC_FLAGS)
         );
         assert_eq!(
-            import_properties::MAX_SMOOTHING_ANGLE,
+            import_properties::NORMAL_MAX_SMOOTHING_ANGLE,
+            c_key(crate::sys::AI_CONFIG_PP_GSN_MAX_SMOOTHING_ANGLE)
+        );
+        assert_eq!(
+            import_properties::TANGENT_MAX_SMOOTHING_ANGLE,
             c_key(crate::sys::AI_CONFIG_PP_CT_MAX_SMOOTHING_ANGLE)
         );
         assert_eq!(
@@ -319,19 +338,11 @@ mod import_properties_tests {
             c_key(crate::sys::AI_CONFIG_PP_FD_REMOVE)
         );
         assert_eq!(
-            import_properties::SPLIT_LARGE_MESHES_VERTEX_LIMIT,
-            c_key(crate::sys::AI_CONFIG_PP_SLM_VERTEX_LIMIT)
-        );
-        assert_eq!(
-            import_properties::SPLIT_LARGE_MESHES_TRIANGLE_LIMIT,
-            c_key(crate::sys::AI_CONFIG_PP_SLM_TRIANGLE_LIMIT)
-        );
-        assert_eq!(
             import_properties::LIMIT_BONE_WEIGHTS_MAX,
             c_key(crate::sys::AI_CONFIG_PP_LBW_MAX_WEIGHTS)
         );
         assert_eq!(
-            import_properties::VALIDATE_DATA_STRUCTURE_THRESHOLD,
+            import_properties::DEBONE_THRESHOLD,
             c_key(crate::sys::AI_CONFIG_PP_DB_THRESHOLD)
         );
         assert_eq!(
@@ -342,22 +353,32 @@ mod import_properties_tests {
             import_properties::GLOBAL_SCALE_FACTOR,
             c_key(crate::sys::AI_CONFIG_GLOBAL_SCALE_FACTOR_KEY)
         );
-        assert_eq!(
-            import_properties::APP_SCALE_FACTOR,
-            c_key(crate::sys::AI_CONFIG_APP_SCALE_KEY)
-        );
     }
 }
 
 /// Builder for configuring and executing scene imports
 pub struct ImportBuilder {
-    source_path: Option<std::path::PathBuf>,
-    source_memory: Option<Arc<[u8]>>,
+    source: Option<ImportSource>,
     source_memory_hint: Option<String>,
     post_process: PostProcessSteps,
-    properties: Vec<(String, PropertyValue)>,
+    properties: PropertyStore,
     file_system: Option<std::sync::Arc<std::sync::Mutex<dyn FileSystem>>>,
     progress_handler: Option<Box<dyn ProgressHandler>>,
+}
+
+enum ImportSource {
+    File(PathBuf),
+    OwnedMemory(Vec<u8>),
+    SharedMemory(Arc<[u8]>),
+}
+
+enum ImportInput<'a> {
+    File(CString),
+    Memory {
+        data: &'a [u8],
+        length: u32,
+        hint: Option<CString>,
+    },
 }
 
 /// Property values that can be set for import configuration
@@ -375,15 +396,28 @@ pub enum PropertyValue {
     Matrix(crate::types::Matrix4x4),
 }
 
+impl PropertyValue {
+    fn same_native_type(&self, other: &Self) -> bool {
+        matches!(
+            (self, other),
+            (
+                Self::Integer(_) | Self::Boolean(_),
+                Self::Integer(_) | Self::Boolean(_)
+            ) | (Self::Float(_), Self::Float(_))
+                | (Self::String(_), Self::String(_))
+                | (Self::Matrix(_), Self::Matrix(_))
+        )
+    }
+}
+
 impl ImportBuilder {
     /// Create a new import builder
     pub fn new() -> Self {
         Self {
-            source_path: None,
-            source_memory: None,
+            source: None,
             source_memory_hint: None,
             post_process: PostProcessSteps::default(),
-            properties: Vec::new(),
+            properties: PropertyStore::new(),
             file_system: None,
             progress_handler: None,
         }
@@ -393,8 +427,7 @@ impl ImportBuilder {
     ///
     /// This enables [`ImportBuilder::import`] without passing the path again.
     pub fn with_source_file<P: AsRef<Path>>(mut self, path: P) -> Self {
-        self.source_path = Some(path.as_ref().to_path_buf());
-        self.source_memory = None;
+        self.source = Some(ImportSource::File(path.as_ref().to_path_buf()));
         self.source_memory_hint = None;
         self
     }
@@ -403,23 +436,19 @@ impl ImportBuilder {
     ///
     /// Prefer [`ImportBuilder::with_source_memory_owned`] or [`ImportBuilder::with_source_memory_shared`]
     /// when you already have an owned buffer.
-    pub fn with_source_memory_copy(mut self, data: &[u8]) -> Self {
-        self.source_path = None;
-        self.source_memory = Some(Arc::from(data.to_vec()));
-        self
+    pub fn with_source_memory_copy(self, data: &[u8]) -> Self {
+        self.with_source_memory_owned(data.to_vec())
     }
 
-    /// Set the import source to an owned memory buffer.
+    /// Set the import source to an owned memory buffer without copying its allocation.
     pub fn with_source_memory_owned(mut self, data: Vec<u8>) -> Self {
-        self.source_path = None;
-        self.source_memory = Some(Arc::from(data));
+        self.source = Some(ImportSource::OwnedMemory(data));
         self
     }
 
     /// Set the import source to a shared memory buffer.
     pub fn with_source_memory_shared(mut self, data: Arc<[u8]>) -> Self {
-        self.source_path = None;
-        self.source_memory = Some(data);
+        self.source = Some(ImportSource::SharedMemory(data));
         self
     }
 
@@ -449,15 +478,13 @@ impl ImportBuilder {
 
     /// Set an integer property
     pub fn with_property_int<S: Into<String>>(mut self, name: S, value: i32) -> Self {
-        self.properties
-            .push((name.into(), PropertyValue::Integer(value)));
+        self.properties.set_int(name, value);
         self
     }
 
     /// Set a float property
     pub fn with_property_float<S: Into<String>>(mut self, name: S, value: f32) -> Self {
-        self.properties
-            .push((name.into(), PropertyValue::Float(value)));
+        self.properties.set_float(name, value);
         self
     }
 
@@ -467,15 +494,13 @@ impl ImportBuilder {
         name: S,
         value: V,
     ) -> Self {
-        self.properties
-            .push((name.into(), PropertyValue::String(value.into())));
+        self.properties.set_string(name, value);
         self
     }
 
     /// Set a boolean property
     pub fn with_property_bool<S: Into<String>>(mut self, name: S, value: bool) -> Self {
-        self.properties
-            .push((name.into(), PropertyValue::Boolean(value)));
+        self.properties.set_bool(name, value);
         self
     }
 
@@ -485,18 +510,18 @@ impl ImportBuilder {
         name: S,
         value: crate::types::Matrix4x4,
     ) -> Self {
-        self.properties
-            .push((name.into(), PropertyValue::Matrix(value)));
+        self.properties.set_matrix(name, value);
         self
     }
 
-    /// Set properties from a PropertyStore
+    /// Merge a property store, overriding existing values in matching native type spaces.
     pub fn with_property_store(mut self, store: PropertyStore) -> Self {
-        self.properties.extend(store.properties);
+        self.properties
+            .extend(Vec::<(String, PropertyValue)>::from(store));
         self
     }
 
-    /// Set properties from a PropertyStore by reference
+    /// Merge a borrowed property store with the same override semantics as an owned store.
     pub fn with_property_store_ref(mut self, store: &PropertyStore) -> Self {
         self.properties.extend(store.properties().iter().cloned());
         self
@@ -543,67 +568,51 @@ impl ImportBuilder {
     /// This is the preferred ergonomic entry point when the source was set via
     /// [`Importer::read_file`], [`Importer::read_from_memory`], or the `with_source_*` methods.
     pub fn import(mut self) -> Result<Scene> {
-        if self.source_path.is_some() && self.source_memory.is_some() {
-            return Err(Error::invalid_parameter(
-                "Both file and memory sources are set; choose exactly one",
-            ));
+        let source = self.source.take().ok_or_else(|| {
+            Error::invalid_parameter(
+                "Import source not set (use Importer::read_file/read_from_memory or ImportBuilder::with_source_*)",
+            )
+        })?;
+        let hint = self.source_memory_hint.take();
+        match source {
+            ImportSource::File(path) => self.import_file(path),
+            ImportSource::OwnedMemory(data) => self.import_from_memory(&data, hint.as_deref()),
+            ImportSource::SharedMemory(data) => self.import_from_memory(&data, hint.as_deref()),
         }
-
-        if let Some(path) = self.source_path.take() {
-            return self.import_file(path);
-        }
-
-        if let Some(data) = self.source_memory.take() {
-            let hint = self.source_memory_hint.take();
-            return self.import_from_memory(data.as_ref(), hint.as_deref());
-        }
-
-        Err(Error::invalid_parameter(
-            "Import source not set (use Importer::read_file/read_from_memory or ImportBuilder::with_source_*)",
-        ))
     }
 
     /// Import a scene from a file path.
+    ///
+    /// Native Unix imports preserve the path's original bytes. Custom file systems
+    /// require UTF-8 paths; other platforms reject paths that cannot be encoded as UTF-8.
     pub fn import_file<P: AsRef<Path>>(self, path: P) -> Result<Scene> {
-        self.post_process
-            .validate()
-            .map_err(Error::invalid_parameter)?;
-        let path_str = path.as_ref().to_string_lossy();
-        let c_path = CString::new(path_str.as_ref())
-            .map_err(|_| Error::invalid_parameter("Invalid file path"))?;
-        let buffers = build_rust_properties(&self.properties)?;
-        let file_io = self
-            .file_system
-            .as_ref()
-            .map(|fs| OwnedAiFileIO::new(fs.clone()));
-        let user = self.progress_handler.map(ProgressUser::new);
-        let callback: sys::aiRustProgressCallback = user.as_ref().map(|_| progress_cb as _);
-        let owner = unsafe {
-            sys::aiImportFileRust(
-                c_path.as_ptr(),
-                self.post_process.as_raw(),
-                file_io
-                    .as_ref()
-                    .map_or(std::ptr::null(), |io| io.as_ptr_sys()),
-                buffers.ffi_props.as_ptr(),
-                buffers.ffi_props.len(),
-                callback,
-                user.as_ref()
-                    .map_or(std::ptr::null_mut(), ProgressUser::as_void_ptr),
-            )
+        let path = path.as_ref();
+        let path_bytes = if self.file_system.is_some() {
+            path.to_str()
+                .ok_or_else(|| Error::invalid_parameter("Custom file systems require UTF-8 paths"))?
+                .as_bytes()
+        } else {
+            #[cfg(unix)]
+            {
+                use std::os::unix::ffi::OsStrExt;
+                path.as_os_str().as_bytes()
+            }
+            #[cfg(not(unix))]
+            {
+                path.to_str()
+                    .ok_or_else(|| {
+                        Error::invalid_parameter("Native file paths must be valid UTF-8")
+                    })?
+                    .as_bytes()
+            }
         };
-        // Adopt native ownership before invoking user destructors, which may panic.
-        let scene = unsafe { Scene::from_importer(owner, file_io) }?;
-        drop(user);
-        drop(self.file_system);
-        Ok(scene)
+        let c_path =
+            CString::new(path_bytes).map_err(|_| Error::invalid_parameter("Invalid file path"))?;
+        self.execute(ImportInput::File(c_path))
     }
 
-    /// Import a scene from a memory buffer.
+    /// Import a scene directly from a borrowed memory buffer without copying the source.
     pub fn import_from_memory(self, data: &[u8], hint: Option<&str>) -> Result<Scene> {
-        self.post_process
-            .validate()
-            .map_err(Error::invalid_parameter)?;
         let length = u32::try_from(data.len()).map_err(|_| {
             Error::invalid_parameter("Memory buffer is too large (assimp C API takes u32 length)")
         })?;
@@ -611,6 +620,13 @@ impl ImportBuilder {
             .map(CString::new)
             .transpose()
             .map_err(|_| Error::invalid_parameter("Invalid hint"))?;
+        self.execute(ImportInput::Memory { data, length, hint })
+    }
+
+    fn execute(self, input: ImportInput<'_>) -> Result<Scene> {
+        self.post_process
+            .validate()
+            .map_err(Error::invalid_parameter)?;
         let buffers = build_rust_properties(&self.properties)?;
         let file_io = self
             .file_system
@@ -618,21 +634,35 @@ impl ImportBuilder {
             .map(|fs| OwnedAiFileIO::new(fs.clone()));
         let user = self.progress_handler.map(ProgressUser::new);
         let callback: sys::aiRustProgressCallback = user.as_ref().map(|_| progress_cb as _);
+        let file_io_ptr = file_io
+            .as_ref()
+            .map_or(std::ptr::null(), |io| io.as_ptr_sys());
+        let user_ptr = user
+            .as_ref()
+            .map_or(std::ptr::null_mut(), ProgressUser::as_void_ptr);
         let owner = unsafe {
-            sys::aiImportFileFromMemoryRust(
-                data.as_ptr().cast::<c_char>(),
-                length,
-                self.post_process.as_raw(),
-                hint.as_ref().map_or(std::ptr::null(), |hint| hint.as_ptr()),
-                file_io
-                    .as_ref()
-                    .map_or(std::ptr::null(), |io| io.as_ptr_sys()),
-                buffers.ffi_props.as_ptr(),
-                buffers.ffi_props.len(),
-                callback,
-                user.as_ref()
-                    .map_or(std::ptr::null_mut(), ProgressUser::as_void_ptr),
-            )
+            match input {
+                ImportInput::File(path) => sys::aiImportFileRust(
+                    path.as_ptr(),
+                    self.post_process.as_raw(),
+                    file_io_ptr,
+                    buffers.ffi_props.as_ptr(),
+                    buffers.ffi_props.len(),
+                    callback,
+                    user_ptr,
+                ),
+                ImportInput::Memory { data, length, hint } => sys::aiImportFileFromMemoryRust(
+                    data.as_ptr().cast::<c_char>(),
+                    length,
+                    self.post_process.as_raw(),
+                    hint.as_ref().map_or(std::ptr::null(), |hint| hint.as_ptr()),
+                    file_io_ptr,
+                    buffers.ffi_props.as_ptr(),
+                    buffers.ffi_props.len(),
+                    callback,
+                    user_ptr,
+                ),
+            }
         };
         let scene = unsafe { Scene::from_importer(owner, file_io) }?;
         drop(user);
@@ -684,11 +714,9 @@ impl Importer {
         self.read_file(path).import()
     }
 
-    /// Quick import from memory with default settings
+    /// Quick import from borrowed memory with default settings and no source copy.
     pub fn import_from_memory(&self, data: &[u8], hint: Option<&str>) -> Result<Scene> {
-        self.read_from_memory(data)
-            .with_memory_hint_opt(hint)
-            .import()
+        ImportBuilder::new().import_from_memory(data, hint)
     }
 
     /// Quick import from an owned memory buffer (no extra copy).
@@ -759,7 +787,7 @@ mod tests {
     fn progress_cb_rejects_unaligned_user_pointers() {
         let buf = [0u64; 8];
         let unaligned = unsafe { (buf.as_ptr() as *const u8).add(1) } as *mut c_void;
-        assert!(progress_cb(0.5, std::ptr::null(), unaligned));
+        assert!(unsafe { progress_cb(0.5, std::ptr::null(), unaligned) });
     }
 
     #[test]

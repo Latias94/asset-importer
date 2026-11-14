@@ -20,8 +20,16 @@ pub struct Animation {
 }
 
 impl Animation {
-    pub(crate) fn from_sys_ptr(scene: Scene, animation_ptr: *mut sys::aiAnimation) -> Option<Self> {
-        let animation_ptr = SharedPtr::new(animation_ptr as *const sys::aiAnimation)?;
+    /// # Safety
+    /// A non-null, aligned `animation_ptr` must point to an initialized `aiAnimation`
+    /// owned by `scene`. Its non-null arrays must be valid for their declared lengths,
+    /// and all reachable data must remain valid and read-only for the lifetime of
+    /// `scene` and its clones.
+    pub(crate) unsafe fn from_sys_ptr(
+        scene: Scene,
+        animation_ptr: *mut sys::aiAnimation,
+    ) -> Option<Self> {
+        let animation_ptr = unsafe { SharedPtr::new(animation_ptr as *const sys::aiAnimation) }?;
         Some(Self {
             scene,
             animation_ptr,
@@ -47,31 +55,35 @@ impl Animation {
     #[inline]
     fn channel_ptr(&self, index: usize) -> Option<*const sys::aiNodeAnim> {
         let anim = self.raw();
-        ffi::ptr_array_get(self, anim.mChannels, anim.mNumChannels as usize, index)
+        unsafe { ffi::ptr_array_get(self, anim.mChannels, anim.mNumChannels as usize, index) }
             .map(|p| p as *const sys::aiNodeAnim)
     }
 
     #[inline]
     fn mesh_channel_ptr(&self, index: usize) -> Option<*const sys::aiMeshAnim> {
         let anim = self.raw();
-        ffi::ptr_array_get(
-            self,
-            anim.mMeshChannels,
-            anim.mNumMeshChannels as usize,
-            index,
-        )
+        unsafe {
+            ffi::ptr_array_get(
+                self,
+                anim.mMeshChannels,
+                anim.mNumMeshChannels as usize,
+                index,
+            )
+        }
         .map(|p| p as *const sys::aiMeshAnim)
     }
 
     #[inline]
     fn morph_mesh_channel_ptr(&self, index: usize) -> Option<*const sys::aiMeshMorphAnim> {
         let anim = self.raw();
-        ffi::ptr_array_get(
-            self,
-            anim.mMorphMeshChannels,
-            anim.mNumMorphMeshChannels as usize,
-            index,
-        )
+        unsafe {
+            ffi::ptr_array_get(
+                self,
+                anim.mMorphMeshChannels,
+                anim.mNumMorphMeshChannels as usize,
+                index,
+            )
+        }
         .map(|p| p as *const sys::aiMeshMorphAnim)
     }
 
@@ -113,7 +125,7 @@ impl Animation {
         }
 
         let channel_ptr = self.channel_ptr(index)?;
-        NodeAnimation::from_ptr(self.scene.clone(), channel_ptr)
+        unsafe { NodeAnimation::from_ptr(self.scene.clone(), channel_ptr) }
     }
 
     /// Get an iterator over all node animation channels
@@ -141,7 +153,7 @@ impl Animation {
             return None;
         }
         let ptr = self.mesh_channel_ptr(index)?;
-        MeshAnimation::from_ptr(self.scene.clone(), ptr)
+        unsafe { MeshAnimation::from_ptr(self.scene.clone(), ptr) }
     }
 
     /// Iterate mesh animation channels
@@ -169,7 +181,7 @@ impl Animation {
             return None;
         }
         let ptr = self.morph_mesh_channel_ptr(index)?;
-        MorphMeshAnimation::from_ptr(self.scene.clone(), ptr)
+        unsafe { MorphMeshAnimation::from_ptr(self.scene.clone(), ptr) }
     }
 
     /// Iterate morph mesh animation channels
@@ -191,8 +203,16 @@ pub struct NodeAnimation {
 }
 
 impl NodeAnimation {
-    pub(crate) fn from_ptr(scene: Scene, channel_ptr: *const sys::aiNodeAnim) -> Option<Self> {
-        let channel_ptr = SharedPtr::new(channel_ptr)?;
+    /// # Safety
+    /// A non-null, aligned `channel_ptr` must point to an initialized `aiNodeAnim`
+    /// owned by `scene`. Its non-null arrays must be valid for their declared lengths,
+    /// and all reachable data must remain valid and read-only for the lifetime of
+    /// `scene` and its clones.
+    pub(crate) unsafe fn from_ptr(
+        scene: Scene,
+        channel_ptr: *const sys::aiNodeAnim,
+    ) -> Option<Self> {
+        let channel_ptr = unsafe { SharedPtr::new(channel_ptr) }?;
         Some(Self { scene, channel_ptr })
     }
 
@@ -232,7 +252,7 @@ impl NodeAnimation {
         let ch = self.raw();
         let n = ch.mNumPositionKeys as usize;
         debug_assert!(n == 0 || !ch.mPositionKeys.is_null());
-        ffi::slice_from_ptr_len(self, ch.mPositionKeys as *const raw::AiVectorKey, n)
+        unsafe { ffi::slice_from_ptr_len(self, ch.mPositionKeys as *const raw::AiVectorKey, n) }
     }
 
     /// Iterate position keyframes without allocation.
@@ -263,7 +283,7 @@ impl NodeAnimation {
         let ch = self.raw();
         let n = ch.mNumRotationKeys as usize;
         debug_assert!(n == 0 || !ch.mRotationKeys.is_null());
-        ffi::slice_from_ptr_len(self, ch.mRotationKeys as *const raw::AiQuatKey, n)
+        unsafe { ffi::slice_from_ptr_len(self, ch.mRotationKeys as *const raw::AiQuatKey, n) }
     }
 
     /// Iterate rotation keyframes without allocation.
@@ -294,7 +314,7 @@ impl NodeAnimation {
         let ch = self.raw();
         let n = ch.mNumScalingKeys as usize;
         debug_assert!(n == 0 || !ch.mScalingKeys.is_null());
-        ffi::slice_from_ptr_len(self, ch.mScalingKeys as *const raw::AiVectorKey, n)
+        unsafe { ffi::slice_from_ptr_len(self, ch.mScalingKeys as *const raw::AiVectorKey, n) }
     }
 
     /// Iterate scaling keyframes without allocation.
@@ -442,18 +462,18 @@ impl Iterator for NodeAnimationIterator {
 
     fn next(&mut self) -> Option<Self::Item> {
         let (base, len) = self.channel_array();
-        let channels: &[*mut sys::aiNodeAnim] =
-            ffi::slice_from_ptr_len_opt(&(), base as *const *mut sys::aiNodeAnim, len)?;
+        let channels: &[*mut sys::aiNodeAnim] = unsafe {
+            ffi::slice_from_ptr_len_opt(&self.scene, base as *const *mut sys::aiNodeAnim, len)
+        }?;
         while self.index < channels.len() {
             let channel_ptr = channels[self.index];
             self.index += 1;
             if channel_ptr.is_null() {
                 continue;
             }
-            return NodeAnimation::from_ptr(
-                self.scene.clone(),
-                channel_ptr as *const sys::aiNodeAnim,
-            );
+            return unsafe {
+                NodeAnimation::from_ptr(self.scene.clone(), channel_ptr as *const sys::aiNodeAnim)
+            };
         }
         None
     }
@@ -487,8 +507,13 @@ pub struct MeshAnimation {
 }
 
 impl MeshAnimation {
-    fn from_ptr(scene: Scene, channel_ptr: *const sys::aiMeshAnim) -> Option<Self> {
-        let channel_ptr = SharedPtr::new(channel_ptr)?;
+    /// # Safety
+    /// A non-null, aligned `channel_ptr` must point to an initialized `aiMeshAnim`
+    /// owned by `scene`. Its non-null arrays must be valid for their declared lengths,
+    /// and all reachable data must remain valid and read-only for the lifetime of
+    /// `scene` and its clones.
+    unsafe fn from_ptr(scene: Scene, channel_ptr: *const sys::aiMeshAnim) -> Option<Self> {
+        let channel_ptr = unsafe { SharedPtr::new(channel_ptr) }?;
         Some(Self { scene, channel_ptr })
     }
 
@@ -517,7 +542,7 @@ impl MeshAnimation {
         let ch = self.raw();
         let n = ch.mNumKeys as usize;
         debug_assert!(n == 0 || !ch.mKeys.is_null());
-        ffi::slice_from_ptr_len(self, ch.mKeys as *const MeshKey, n)
+        unsafe { ffi::slice_from_ptr_len(self, ch.mKeys as *const MeshKey, n) }
     }
 }
 
@@ -545,15 +570,18 @@ impl Iterator for MeshAnimationIterator {
     type Item = MeshAnimation;
     fn next(&mut self) -> Option<Self::Item> {
         let (base, len) = self.channel_array();
-        let chans: &[*mut sys::aiMeshAnim] =
-            ffi::slice_from_ptr_len_opt(&(), base as *const *mut sys::aiMeshAnim, len)?;
+        let chans: &[*mut sys::aiMeshAnim] = unsafe {
+            ffi::slice_from_ptr_len_opt(&self.scene, base as *const *mut sys::aiMeshAnim, len)
+        }?;
         while self.index < chans.len() {
             let ptr = chans[self.index];
             self.index += 1;
             if ptr.is_null() {
                 continue;
             }
-            return MeshAnimation::from_ptr(self.scene.clone(), ptr as *const sys::aiMeshAnim);
+            return unsafe {
+                MeshAnimation::from_ptr(self.scene.clone(), ptr as *const sys::aiMeshAnim)
+            };
         }
         None
     }
@@ -602,7 +630,7 @@ impl MorphMeshKey {
         let k = self.raw();
         let n = k.mNumValuesAndWeights as usize;
         debug_assert!(n == 0 || !k.mValues.is_null());
-        ffi::slice_from_ptr_len(self, k.mValues as *const u32, n)
+        unsafe { ffi::slice_from_ptr_len(self, k.mValues as *const u32, n) }
     }
 
     /// Morph target weights (zero-copy).
@@ -610,7 +638,7 @@ impl MorphMeshKey {
         let k = self.raw();
         let n = k.mNumValuesAndWeights as usize;
         debug_assert!(n == 0 || !k.mWeights.is_null());
-        ffi::slice_from_ptr_len(self, k.mWeights as *const f64, n)
+        unsafe { ffi::slice_from_ptr_len(self, k.mWeights as *const f64, n) }
     }
 }
 
@@ -622,8 +650,13 @@ pub struct MorphMeshAnimation {
 }
 
 impl MorphMeshAnimation {
-    fn from_ptr(scene: Scene, channel_ptr: *const sys::aiMeshMorphAnim) -> Option<Self> {
-        let channel_ptr = SharedPtr::new(channel_ptr)?;
+    /// # Safety
+    /// A non-null, aligned `channel_ptr` must point to an initialized `aiMeshMorphAnim`
+    /// owned by `scene`. Its non-null arrays must be valid for their declared lengths,
+    /// and all reachable data must remain valid and read-only for the lifetime of
+    /// `scene` and its clones.
+    unsafe fn from_ptr(scene: Scene, channel_ptr: *const sys::aiMeshMorphAnim) -> Option<Self> {
+        let channel_ptr = unsafe { SharedPtr::new(channel_ptr) }?;
         Some(Self { scene, channel_ptr })
     }
 
@@ -635,7 +668,7 @@ impl MorphMeshAnimation {
     #[inline]
     fn keys_raw(&self) -> Option<&[sys::aiMeshMorphKey]> {
         let ch = self.raw();
-        ffi::slice_from_ptr_len_opt(ch, ch.mKeys, ch.mNumKeys as usize)
+        unsafe { ffi::slice_from_ptr_len_opt(ch, ch.mKeys, ch.mNumKeys as usize) }
     }
 
     /// Get the name of this morph mesh animation channel
@@ -664,7 +697,7 @@ impl MorphMeshAnimation {
         if n > 0 && (key_ref.mValues.is_null() || key_ref.mWeights.is_null()) {
             return None;
         }
-        let key_ptr = SharedPtr::new(std::ptr::from_ref(key_ref))?;
+        let key_ptr = unsafe { SharedPtr::new(std::ptr::from_ref(key_ref)) }?;
         Some(MorphMeshKey {
             scene: self.scene.clone(),
             key_ptr,
@@ -696,18 +729,18 @@ impl Iterator for MorphMeshAnimationIterator {
     type Item = MorphMeshAnimation;
     fn next(&mut self) -> Option<Self::Item> {
         let (base, len) = self.channel_array();
-        let chans: &[*mut sys::aiMeshMorphAnim] =
-            ffi::slice_from_ptr_len_opt(&(), base as *const *mut sys::aiMeshMorphAnim, len)?;
+        let chans: &[*mut sys::aiMeshMorphAnim] = unsafe {
+            ffi::slice_from_ptr_len_opt(&self.scene, base as *const *mut sys::aiMeshMorphAnim, len)
+        }?;
         while self.index < chans.len() {
             let ptr = chans[self.index];
             self.index += 1;
             if ptr.is_null() {
                 continue;
             }
-            return MorphMeshAnimation::from_ptr(
-                self.scene.clone(),
-                ptr as *const sys::aiMeshMorphAnim,
-            );
+            return unsafe {
+                MorphMeshAnimation::from_ptr(self.scene.clone(), ptr as *const sys::aiMeshMorphAnim)
+            };
         }
         None
     }

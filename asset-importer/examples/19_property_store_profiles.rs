@@ -77,7 +77,7 @@ fn profile_preview(store: &mut PropertyStore) -> PostProcessSteps {
 fn profile_quality(store: &mut PropertyStore) -> PostProcessSteps {
     // Demonstrate smoothing angle + other postprocess knobs.
     store
-        .set_float(import_properties::MAX_SMOOTHING_ANGLE, 80.0)
+        .set_float(import_properties::NORMAL_MAX_SMOOTHING_ANGLE, 80.0)
         .set_bool(import_properties::REMOVE_DEGENERATE_FACES, true);
 
     PostProcessSteps::TRIANGULATE

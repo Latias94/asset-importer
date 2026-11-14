@@ -2,7 +2,7 @@ use std::ffi::CString;
 
 use crate::{
     error::{Error, Result},
-    importer::PropertyValue,
+    importer::{PropertyStore, PropertyValue},
     sys,
     types::to_ai_matrix4x4,
 };
@@ -14,16 +14,14 @@ pub(crate) struct BridgePropertyBuffers {
     _matrices: Vec<sys::aiMatrix4x4>,
 }
 
-pub(crate) fn build_rust_properties(
-    props: &[(String, PropertyValue)],
-) -> Result<BridgePropertyBuffers> {
+pub(crate) fn build_rust_properties(props: &PropertyStore) -> Result<BridgePropertyBuffers> {
     let mut ffi_props = Vec::with_capacity(props.len());
     let mut name_bufs: Vec<CString> = Vec::with_capacity(props.len());
     let mut value_str_bufs: Vec<CString> = Vec::new();
     let mut matrices: Vec<sys::aiMatrix4x4> = Vec::new();
     let mut matrix_ptr_fixes: Vec<(usize, usize)> = Vec::new();
 
-    for (prop_index, (name, value)) in props.iter().enumerate() {
+    for (prop_index, (name, value)) in props.properties().iter().enumerate() {
         let c_name = CString::new(name.as_str())
             .map_err(|_| Error::invalid_parameter("Invalid property name"))?;
         let mut p = sys::aiRustProperty {
@@ -96,11 +94,11 @@ mod tests {
 
     #[test]
     fn property_buffers_keep_c_strings_alive() {
-        let props = vec![
+        let props = PropertyStore::from(vec![
             ("a".to_string(), PropertyValue::Integer(7)),
             ("b".to_string(), PropertyValue::String("hello".to_string())),
             ("c".to_string(), PropertyValue::Boolean(true)),
-        ];
+        ]);
 
         let buffers = build_rust_properties(&props).unwrap();
 
@@ -136,11 +134,11 @@ mod tests {
         );
 
         // Interleave matrices with other properties to exercise pointer patching order.
-        let props = vec![
+        let props = PropertyStore::from(vec![
             ("m0".to_string(), PropertyValue::Matrix(m0)),
             ("i".to_string(), PropertyValue::Integer(42)),
             ("m1".to_string(), PropertyValue::Matrix(m1)),
-        ];
+        ]);
 
         let buffers = build_rust_properties(&props).unwrap();
 

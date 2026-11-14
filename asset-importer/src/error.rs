@@ -139,10 +139,17 @@ impl Error {
     }
 
     pub(crate) fn from_bridge() -> Self {
-        Self::other(bridge_error_string().unwrap_or_else(|| {
-            "Assimp bridge operation failed without an error message".to_owned()
-        }))
+        Self::other(bridge_error_string_or_default())
     }
+
+    pub(crate) fn import_failed_from_bridge() -> Self {
+        Self::import_failed(bridge_error_string_or_default())
+    }
+}
+
+pub(crate) fn bridge_error_string_or_default() -> String {
+    bridge_error_string()
+        .unwrap_or_else(|| "Assimp bridge operation failed without an error message".to_owned())
 }
 
 fn bridge_error_string() -> Option<String> {
@@ -158,7 +165,11 @@ fn bridge_error_string() -> Option<String> {
 }
 
 /// Convert a C string to a Rust string, returning empty string for null pointers
-pub(crate) fn c_str_to_string_or_empty(ptr: *const std::os::raw::c_char) -> String {
+///
+/// # Safety
+/// A non-null pointer must reference a valid NUL-terminated string that remains
+/// readable and unmodified for the duration of this call.
+pub(crate) unsafe fn c_str_to_string_or_empty(ptr: *const std::os::raw::c_char) -> String {
     if ptr.is_null() {
         String::new()
     } else {
@@ -181,12 +192,12 @@ mod tests {
     fn test_c_str_to_string_or_empty() {
         // Test with null pointer
         let null_ptr: *const std::os::raw::c_char = std::ptr::null();
-        let result = c_str_to_string_or_empty(null_ptr);
+        let result = unsafe { c_str_to_string_or_empty(null_ptr) };
         assert_eq!(result, "");
 
         // Test with valid C string
         let c_string = std::ffi::CString::new("test string").unwrap();
-        let result = c_str_to_string_or_empty(c_string.as_ptr());
+        let result = unsafe { c_str_to_string_or_empty(c_string.as_ptr()) };
         assert_eq!(result, "test string");
     }
 

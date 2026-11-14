@@ -1,4 +1,8 @@
 //! Convert a model to another format based on output extension
+//!
+//! Prepare geometry through import post-processing. Further preparation can use
+//! `Scene::apply_postprocess` while the scene is exclusively owned, before exporting.
+//! Export properties configure the output format rather than scene preparation.
 
 #[path = "common/mod.rs"]
 mod common;

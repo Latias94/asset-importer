@@ -122,7 +122,7 @@ impl MaterialStringRef {
     /// Raw bytes (without assuming NUL-termination).
     pub fn as_bytes(&self) -> &[u8] {
         let len = (self.value.length as usize).min(self.value.data.len());
-        ffi::slice_from_ptr_len(self, self.value.data.as_ptr() as *const u8, len)
+        unsafe { ffi::slice_from_ptr_len(self, self.value.data.as_ptr() as *const u8, len) }
     }
 
     /// Borrow the underlying Assimp `aiString`.
@@ -144,8 +144,14 @@ impl std::fmt::Display for MaterialStringRef {
 }
 
 impl Material {
-    pub(crate) fn from_sys_ptr(scene: Scene, material_ptr: *mut sys::aiMaterial) -> Option<Self> {
-        let material_ptr = SharedPtr::new(material_ptr as *const sys::aiMaterial)?;
+    /// # Safety
+    /// A non-null, aligned pointer and its reachable data must remain valid and immutable
+    /// while any clone of the resulting view exists. `scene` must retain their owner.
+    pub(crate) unsafe fn from_sys_ptr(
+        scene: Scene,
+        material_ptr: *mut sys::aiMaterial,
+    ) -> Option<Self> {
+        let material_ptr = unsafe { SharedPtr::new(material_ptr as *const sys::aiMaterial) }?;
         Some(Self {
             scene,
             material_ptr,
@@ -422,7 +428,7 @@ impl Material {
         index: u32,
     ) -> Option<MaterialPropertyInfo> {
         let prop_ptr = self.property_ptr(key, semantic, index)?;
-        MaterialPropertyRef::from_ptr(self.scene.clone(), prop_ptr)
+        unsafe { MaterialPropertyRef::from_ptr(self.scene.clone(), prop_ptr) }
             .map(MaterialPropertyRef::into_info)
     }
 
@@ -484,7 +490,7 @@ impl Material {
         semantic: Option<TextureType>,
         index: u32,
     ) -> Option<MaterialPropertyData<'_>> {
-        let prop = ffi::ref_from_ptr(self, self.property_ptr(key, semantic, index)?)?;
+        let prop = unsafe { ffi::ref_from_ptr(self, self.property_ptr(key, semantic, index)?) }?;
         unsafe { MaterialPropertyData::from_sys(prop) }
     }
 
@@ -619,7 +625,9 @@ impl Material {
         let m = self.raw();
         MaterialPropertyIterator {
             scene: self.scene.clone(),
-            props: SharedPtr::new(m.mProperties as *const *const sys::aiMaterialProperty),
+            props: unsafe {
+                SharedPtr::new(m.mProperties as *const *const sys::aiMaterialProperty)
+            },
             count: m.mNumProperties as usize,
             index: 0,
         }
@@ -967,7 +975,7 @@ impl<'a> MaterialPropertyData<'a> {
         if len > isize::MAX as usize {
             return None;
         }
-        let bytes = ffi::slice_from_ptr_len_opt(prop, prop.mData as *const u8, len)?;
+        let bytes = unsafe { ffi::slice_from_ptr_len_opt(prop, prop.mData as *const u8, len) }?;
         Some(Self {
             bytes,
             type_info: PropertyTypeInfo::from_sys(prop.mType),
@@ -1150,8 +1158,11 @@ impl<'a> MaterialPropertyData<'a> {
 }
 
 impl MaterialPropertyRef {
-    fn from_ptr(scene: Scene, prop_ptr: *const sys::aiMaterialProperty) -> Option<Self> {
-        let prop_ptr = SharedPtr::new(prop_ptr)?;
+    /// # Safety
+    /// A non-null, aligned property and its data must remain valid and immutable while
+    /// any clone of the resulting view exists. `scene` must retain their owner.
+    unsafe fn from_ptr(scene: Scene, prop_ptr: *const sys::aiMaterialProperty) -> Option<Self> {
+        let prop_ptr = unsafe { SharedPtr::new(prop_ptr) }?;
         Some(Self { scene, prop_ptr })
     }
 
@@ -1169,7 +1180,7 @@ impl MaterialPropertyRef {
     pub fn key_bytes(&self) -> &[u8] {
         let s = &self.raw().mKey;
         let len = (s.length as usize).min(s.data.len());
-        ffi::slice_from_ptr_len(self, s.data.as_ptr() as *const u8, len)
+        unsafe { ffi::slice_from_ptr_len(self, s.data.as_ptr() as *const u8, len) }
     }
 
     /// Property key as owned `String` (allocates).
@@ -1202,7 +1213,7 @@ impl MaterialPropertyRef {
     /// Interpret the property payload as an `i32` slice when stored as `Integer` (zero-copy).
     pub fn data_i32(&self) -> Option<&[i32]> {
         (self.type_info() == PropertyTypeInfo::Integer)
-            .then(|| self.data_cast_slice_opt())
+            .then(|| unsafe { self.data_cast_slice_opt() })
             .flatten()
     }
 
@@ -1212,21 +1223,21 @@ impl MaterialPropertyRef {
     /// reinterprets the bytes as `u32` when the payload is aligned and sized for `u32`.
     pub fn data_u32(&self) -> Option<&[u32]> {
         (self.type_info() == PropertyTypeInfo::Integer)
-            .then(|| self.data_cast_slice_opt())
+            .then(|| unsafe { self.data_cast_slice_opt() })
             .flatten()
     }
 
     /// Interpret the property payload as an `f32` slice when stored as `Float` (zero-copy).
     pub fn data_f32(&self) -> Option<&[f32]> {
         (self.type_info() == PropertyTypeInfo::Float)
-            .then(|| self.data_cast_slice_opt())
+            .then(|| unsafe { self.data_cast_slice_opt() })
             .flatten()
     }
 
     /// Interpret the property payload as an `f64` slice when stored as `Double` (zero-copy).
     pub fn data_f64(&self) -> Option<&[f64]> {
         (self.type_info() == PropertyTypeInfo::Double)
-            .then(|| self.data_cast_slice_opt())
+            .then(|| unsafe { self.data_cast_slice_opt() })
             .flatten()
     }
 
@@ -1330,7 +1341,10 @@ impl MaterialPropertyRef {
         self.as_vec4()
     }
 
-    fn data_cast_slice_opt<T>(&self) -> Option<&[T]> {
+    /// # Safety
+    /// Every initialized payload bit pattern must be a valid `T`, without mutable
+    /// interior state. Callers use only primitive numeric types.
+    unsafe fn data_cast_slice_opt<T>(&self) -> Option<&[T]> {
         let data = unsafe { MaterialPropertyData::from_sys(self.raw()) }?;
         let len = data.bytes.len();
         let size = std::mem::size_of::<T>();
@@ -1346,7 +1360,7 @@ impl MaterialPropertyRef {
         if (ptr as usize) % align != 0 || len % size != 0 {
             return None;
         }
-        Some(ffi::slice_from_ptr_len(self, ptr as *const T, len / size))
+        Some(unsafe { ffi::slice_from_ptr_len(self, ptr as *const T, len / size) })
     }
 
     fn into_info(self) -> MaterialPropertyInfo {
@@ -1367,14 +1381,15 @@ impl Iterator for MaterialPropertyIterator {
 
     fn next(&mut self) -> Option<Self::Item> {
         let props = self.props?;
-        let slice = crate::ffi::slice_from_ptr_len_opt(&(), props.as_ptr(), self.count)?;
+        let slice =
+            unsafe { crate::ffi::slice_from_ptr_len_opt(&self.scene, props.as_ptr(), self.count) }?;
         while self.index < slice.len() {
             let ptr = slice[self.index];
             self.index += 1;
             if ptr.is_null() {
                 continue;
             }
-            if let Some(prop) = MaterialPropertyRef::from_ptr(self.scene.clone(), ptr) {
+            if let Some(prop) = unsafe { MaterialPropertyRef::from_ptr(self.scene.clone(), ptr) } {
                 return Some(prop);
             }
         }
@@ -1503,7 +1518,17 @@ mod material_property_data_tests {
         (prop, data)
     }
 
-    fn with_material(properties: &mut [sys::aiMaterialProperty], check: impl FnOnce(&Material)) {
+    /// # Safety
+    /// Every non-null native payload must point to initialized, readable memory valid
+    /// for its declared length and remain alive and immutable throughout this call.
+    /// Null payloads may only be used with operations that reject them before reading.
+    /// The material and any cloned or derived views, references, or iterators must not
+    /// escape the callback, including through other threads. The retained scene does
+    /// not own the fixture buffers.
+    unsafe fn with_material(
+        properties: &mut [sys::aiMaterialProperty],
+        check: impl FnOnce(&Material),
+    ) {
         let scene = Scene::from_memory(b"o tri\nv 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\n", Some("obj"))
             .expect("import owner scene");
         let mut pointers: Vec<_> = properties.iter_mut().map(std::ptr::from_mut).collect();
@@ -1516,7 +1541,7 @@ mod material_property_data_tests {
         // The material view is dropped before any of the borrowed fixture storage.
         let material = Material {
             scene,
-            material_ptr: SharedPtr::new(&raw).unwrap(),
+            material_ptr: unsafe { SharedPtr::new(&raw) }.unwrap(),
         };
         check(&material);
     }
@@ -1533,16 +1558,18 @@ mod material_property_data_tests {
             mDataLength: bytes.len() as u32,
             ..Default::default()
         };
-        with_material(&mut [property], |material| {
-            assert_eq!(
-                material.get_property_i32_array(c"$test.number", None, 0),
-                expected
-            );
-            assert_eq!(
-                material.get_integer_property(c"$test.number"),
-                expected.as_ref().and_then(|values| values.first().copied())
-            );
-        });
+        unsafe {
+            with_material(&mut [property], |material| {
+                assert_eq!(
+                    material.get_property_i32_array(c"$test.number", None, 0),
+                    expected
+                );
+                assert_eq!(
+                    material.get_integer_property(c"$test.number"),
+                    expected.as_ref().and_then(|values| values.first().copied())
+                );
+            });
+        }
     }
 
     #[test]
@@ -1647,13 +1674,15 @@ mod material_property_data_tests {
             mDataLength: 4,
             ..Default::default()
         };
-        with_material(&mut [property], |material| {
-            assert_eq!(material.get_integer_property(c"$test.number"), None);
-            assert_eq!(
-                material.get_property_i32_array(c"$test.number", None, 0),
-                None
-            );
-        });
+        unsafe {
+            with_material(&mut [property], |material| {
+                assert_eq!(material.get_integer_property(c"$test.number"), None);
+                assert_eq!(
+                    material.get_property_i32_array(c"$test.number", None, 0),
+                    None
+                );
+            });
+        }
     }
 
     #[test]
@@ -1669,13 +1698,15 @@ mod material_property_data_tests {
             mDataLength: bytes.len() as u32,
             ..Default::default()
         };
-        with_material(&mut [property], |material| {
-            assert_eq!(material.get_integer_property(c"$test.number"), Some(1));
-            assert_eq!(
-                material.get_property_i32_array(c"$test.number", None, 0),
-                None
-            );
-        });
+        unsafe {
+            with_material(&mut [property], |material| {
+                assert_eq!(material.get_integer_property(c"$test.number"), Some(1));
+                assert_eq!(
+                    material.get_property_i32_array(c"$test.number", None, 0),
+                    None
+                );
+            });
+        }
         bytes = (-2.75f64).to_ne_bytes().to_vec();
         let property = sys::aiMaterialProperty {
             mSemantic: TextureType::Normals.to_semantic(),
@@ -1684,16 +1715,18 @@ mod material_property_data_tests {
             mDataLength: bytes.len() as u32,
             ..property
         };
-        with_material(&mut [property], |material| {
-            assert_eq!(
-                material.get_property_i32_array(c"$test.number", Some(TextureType::Normals), 2),
-                Some(vec![-2])
-            );
-            assert_eq!(
-                material.get_property_i32_array(c"$test.number", None, 0),
-                None
-            );
-        });
+        unsafe {
+            with_material(&mut [property], |material| {
+                assert_eq!(
+                    material.get_property_i32_array(c"$test.number", Some(TextureType::Normals), 2),
+                    Some(vec![-2])
+                );
+                assert_eq!(
+                    material.get_property_i32_array(c"$test.number", None, 0),
+                    None
+                );
+            });
+        }
     }
 
     #[test]
@@ -1736,52 +1769,64 @@ mod material_property_data_tests {
             property.mKey = ai_string_from_cstr(c"$test.number");
             property.mType = type_info;
             let expected_f32: Vec<_> = expected.iter().map(|value| *value as f32).collect();
-            with_material(&mut [property], |material| {
-                assert_eq!(
-                    material.get_float_property(c"$test.number"),
-                    Some(expected_f32[0])
-                );
-                assert_eq!(
-                    material
-                        .get_property_f32_array(c"$test.number", None, 0)
-                        .as_deref(),
-                    Some(expected_f32.as_slice())
-                );
-                assert_eq!(
-                    material
-                        .get_property_f64_array(c"$test.number", None, 0)
-                        .as_deref(),
-                    Some(expected.as_slice())
-                );
-                assert_eq!(
-                    material.get_color_property(c"$test.number"),
-                    Some(Color4D::new(
-                        expected_f32[0],
-                        expected_f32[1],
-                        expected_f32[2],
-                        expected_f32.get(3).copied().unwrap_or(1.0),
-                    ))
-                );
-            });
+            unsafe {
+                with_material(&mut [property], |material| {
+                    assert_eq!(
+                        material.get_float_property(c"$test.number"),
+                        Some(expected_f32[0])
+                    );
+                    assert_eq!(
+                        material
+                            .get_property_f32_array(c"$test.number", None, 0)
+                            .as_deref(),
+                        Some(expected_f32.as_slice())
+                    );
+                    assert_eq!(
+                        material
+                            .get_property_f64_array(c"$test.number", None, 0)
+                            .as_deref(),
+                        Some(expected.as_slice())
+                    );
+                    assert_eq!(
+                        material.get_color_property(c"$test.number"),
+                        Some(Color4D::new(
+                            expected_f32[0],
+                            expected_f32[1],
+                            expected_f32[2],
+                            expected_f32.get(3).copied().unwrap_or(1.0),
+                        ))
+                    );
+                });
+            }
             property.mSemantic = TextureType::Normals.to_semantic();
             property.mIndex = 2;
-            with_material(&mut [property], |material| {
-                assert_eq!(
-                    material.get_texture_float_property(c"$test.number", TextureType::Normals, 2),
-                    Some(expected_f32[0])
-                );
-                assert_eq!(
-                    material
-                        .get_property_f64_array(c"$test.number", Some(TextureType::Normals), 2)
-                        .as_deref(),
-                    Some(expected.as_slice())
-                );
-                assert_eq!(material.get_float_property(c"$test.number"), None);
-                assert_eq!(
-                    material.get_texture_float_property(c"$test.number", TextureType::Normals, 0),
-                    None
-                );
-            });
+            unsafe {
+                with_material(&mut [property], |material| {
+                    assert_eq!(
+                        material.get_texture_float_property(
+                            c"$test.number",
+                            TextureType::Normals,
+                            2
+                        ),
+                        Some(expected_f32[0])
+                    );
+                    assert_eq!(
+                        material
+                            .get_property_f64_array(c"$test.number", Some(TextureType::Normals), 2)
+                            .as_deref(),
+                        Some(expected.as_slice())
+                    );
+                    assert_eq!(material.get_float_property(c"$test.number"), None);
+                    assert_eq!(
+                        material.get_texture_float_property(
+                            c"$test.number",
+                            TextureType::Normals,
+                            0
+                        ),
+                        None
+                    );
+                });
+            }
         }
     }
 
@@ -1790,13 +1835,15 @@ mod material_property_data_tests {
         let (mut property, _owner) = make_prop_with_data(0.5f32.to_ne_bytes().to_vec());
         property.mKey = ai_string_from_cstr(c"$test.number");
         property.mType = sys::aiPropertyTypeInfo::aiPTI_Buffer;
-        with_material(&mut [property], |material| {
-            assert_eq!(material.get_float_property(c"$test.number"), Some(0.5));
-            assert_eq!(
-                material.get_integer_property(c"$test.number"),
-                Some(i32::from_ne_bytes(0.5f32.to_ne_bytes()))
-            );
-        });
+        unsafe {
+            with_material(&mut [property], |material| {
+                assert_eq!(material.get_float_property(c"$test.number"), Some(0.5));
+                assert_eq!(
+                    material.get_integer_property(c"$test.number"),
+                    Some(i32::from_ne_bytes(0.5f32.to_ne_bytes()))
+                );
+            });
+        }
         for byte in [0u8, 1, u8::MAX] {
             assert_integer_getters(
                 sys::aiPropertyTypeInfo::aiPTI_Buffer,
@@ -1820,30 +1867,34 @@ mod material_property_data_tests {
                 let (mut property, _owner) = make_prop_with_data(vec![0; length]);
                 property.mKey = ai_string_from_cstr(c"$test.number");
                 property.mType = type_info;
-                with_material(&mut [property], |material| {
-                    assert_eq!(material.get_float_property(c"$test.number"), None);
-                    assert_eq!(material.get_color_property(c"$test.number"), None);
-                    assert_eq!(
-                        material.get_property_f32_array(c"$test.number", None, 0),
-                        None
-                    );
-                    assert_eq!(
-                        material.get_property_f64_array(c"$test.number", None, 0),
-                        None
-                    );
-                });
+                unsafe {
+                    with_material(&mut [property], |material| {
+                        assert_eq!(material.get_float_property(c"$test.number"), None);
+                        assert_eq!(material.get_color_property(c"$test.number"), None);
+                        assert_eq!(
+                            material.get_property_f32_array(c"$test.number", None, 0),
+                            None
+                        );
+                        assert_eq!(
+                            material.get_property_f64_array(c"$test.number", None, 0),
+                            None
+                        );
+                    });
+                }
                 property.mSemantic = TextureType::Normals.to_semantic();
-                with_material(&mut [property], |material| {
-                    assert_eq!(material.normal_texture_scale(0), None);
-                    assert_eq!(
-                        material.get_texture_float_property(
-                            c"$test.number",
-                            TextureType::Normals,
-                            0
-                        ),
-                        None
-                    );
-                });
+                unsafe {
+                    with_material(&mut [property], |material| {
+                        assert_eq!(material.normal_texture_scale(0), None);
+                        assert_eq!(
+                            material.get_texture_float_property(
+                                c"$test.number",
+                                TextureType::Normals,
+                                0
+                            ),
+                            None
+                        );
+                    });
+                }
             }
         }
     }
@@ -1857,29 +1908,33 @@ mod material_property_data_tests {
         let (mut property, _owner) = make_prop_with_data(bytes);
         property.mKey = ai_string_from_cstr(c"$test.number");
         property.mType = sys::aiPropertyTypeInfo::aiPTI_Double;
-        with_material(&mut [property], |material| {
-            assert_eq!(
-                material.get_float_property(c"$test.number"),
-                Some(f32::INFINITY)
-            );
-            let color = material.get_color_property(c"$test.number").unwrap();
-            assert_eq!(color.x, f32::INFINITY);
-            assert_eq!(color.y, f32::NEG_INFINITY);
-            assert!(color.z.is_nan());
-            assert_eq!(color.w, 1.0);
-        });
+        unsafe {
+            with_material(&mut [property], |material| {
+                assert_eq!(
+                    material.get_float_property(c"$test.number"),
+                    Some(f32::INFINITY)
+                );
+                let color = material.get_color_property(c"$test.number").unwrap();
+                assert_eq!(color.x, f32::INFINITY);
+                assert_eq!(color.y, f32::NEG_INFINITY);
+                assert!(color.z.is_nan());
+                assert_eq!(color.w, 1.0);
+            });
+        }
         for count in [0, 1, 2] {
             property.mDataLength = count * 8;
-            with_material(&mut [property], |material| {
-                assert_eq!(material.get_color_property(c"$test.number"), None);
-                if count == 0 {
-                    assert_eq!(material.get_float_property(c"$test.number"), None);
-                    assert_eq!(
-                        material.get_property_f64_array(c"$test.number", None, 0),
-                        Some(vec![])
-                    );
-                }
-            });
+            unsafe {
+                with_material(&mut [property], |material| {
+                    assert_eq!(material.get_color_property(c"$test.number"), None);
+                    if count == 0 {
+                        assert_eq!(material.get_float_property(c"$test.number"), None);
+                        assert_eq!(
+                            material.get_property_f64_array(c"$test.number", None, 0),
+                            Some(vec![])
+                        );
+                    }
+                });
+            }
         }
     }
 
@@ -1897,36 +1952,38 @@ mod material_property_data_tests {
             let (mut property, _owner) = make_prop_with_data(bytes);
             property.mKey = ai_string_from_cstr(c"$test.number");
             property.mType = sys::aiPropertyTypeInfo::aiPTI_String;
-            with_material(&mut [property], |material| {
-                assert_eq!(
-                    material
-                        .get_string_property_ref(c"$test.number")
-                        .unwrap()
-                        .as_bytes(),
-                    text
-                );
-                if text == b" 1\t-2\n3.5 4 " {
-                    assert_eq!(material.get_float_property(c"$test.number"), Some(1.0));
+            unsafe {
+                with_material(&mut [property], |material| {
                     assert_eq!(
-                        material.get_color_property(c"$test.number"),
-                        Some(Color4D::new(1.0, -2.0, 3.5, 4.0))
+                        material
+                            .get_string_property_ref(c"$test.number")
+                            .unwrap()
+                            .as_bytes(),
+                        text
                     );
-                    assert_eq!(
-                        material.get_property_f32_array(c"$test.number", None, 0),
-                        Some(vec![1.0, -2.0, 3.5, 4.0])
-                    );
-                    assert_eq!(
-                        material.get_property_f64_array(c"$test.number", None, 0),
-                        Some(vec![1.0, -2.0, 3.5, 4.0])
-                    );
-                } else {
-                    assert_eq!(material.get_color_property(c"$test.number"), None);
-                    assert_eq!(
-                        material.get_property_f64_array(c"$test.number", None, 0),
-                        None
-                    );
-                }
-            });
+                    if text == b" 1\t-2\n3.5 4 " {
+                        assert_eq!(material.get_float_property(c"$test.number"), Some(1.0));
+                        assert_eq!(
+                            material.get_color_property(c"$test.number"),
+                            Some(Color4D::new(1.0, -2.0, 3.5, 4.0))
+                        );
+                        assert_eq!(
+                            material.get_property_f32_array(c"$test.number", None, 0),
+                            Some(vec![1.0, -2.0, 3.5, 4.0])
+                        );
+                        assert_eq!(
+                            material.get_property_f64_array(c"$test.number", None, 0),
+                            Some(vec![1.0, -2.0, 3.5, 4.0])
+                        );
+                    } else {
+                        assert_eq!(material.get_color_property(c"$test.number"), None);
+                        assert_eq!(
+                            material.get_property_f64_array(c"$test.number", None, 0),
+                            None
+                        );
+                    }
+                });
+            }
         }
         for (text, expected) in [
             (
@@ -1956,17 +2013,19 @@ mod material_property_data_tests {
             mDataLength: path_bytes.len() as u32,
             ..Default::default()
         };
-        with_material(&mut [path], |material| {
-            let texture = material.texture_ref(TextureType::Diffuse, 0).unwrap();
-            assert_eq!(texture.path_bytes(), b"texture.png");
-            assert_eq!(texture.mapping, TextureMapping::UV);
-            assert_eq!(texture.uv_index, 0);
-            assert_eq!(texture.blend_factor, 1.0);
-            assert_eq!(texture.operation, TextureOperation::Multiply);
-            assert_eq!(texture.map_modes, [TextureMapMode::Wrap; 3]);
-            assert!(texture.flags.is_empty());
-            assert!(texture.uv_transform.is_none());
-        });
+        unsafe {
+            with_material(&mut [path], |material| {
+                let texture = material.texture_ref(TextureType::Diffuse, 0).unwrap();
+                assert_eq!(texture.path_bytes(), b"texture.png");
+                assert_eq!(texture.mapping, TextureMapping::UV);
+                assert_eq!(texture.uv_index, 0);
+                assert_eq!(texture.blend_factor, 1.0);
+                assert_eq!(texture.operation, TextureOperation::Multiply);
+                assert_eq!(texture.map_modes, [TextureMapMode::Wrap; 3]);
+                assert!(texture.flags.is_empty());
+                assert!(texture.uv_transform.is_none());
+            });
+        }
         let mut mapping_bytes =
             (sys::aiTextureMapping::aiTextureMapping_SPHERE.0 as i32).to_ne_bytes();
         let mapping = sys::aiMaterialProperty {
@@ -1984,14 +2043,16 @@ mod material_property_data_tests {
             mDataLength: transform_bytes.len() as u32,
             ..path
         };
-        with_material(&mut [path, mapping, transform], |material| {
-            let texture = material.texture_ref(TextureType::Diffuse, 0).unwrap();
-            assert_eq!(texture.mapping, TextureMapping::Sphere);
-            assert_eq!(texture.uv_index, 0);
-            assert_eq!(texture.blend_factor, 1.0);
-            assert_eq!(texture.operation, TextureOperation::Multiply);
-            assert!(texture.uv_transform.is_none());
-        });
+        unsafe {
+            with_material(&mut [path, mapping, transform], |material| {
+                let texture = material.texture_ref(TextureType::Diffuse, 0).unwrap();
+                assert_eq!(texture.mapping, TextureMapping::Sphere);
+                assert_eq!(texture.uv_index, 0);
+                assert_eq!(texture.blend_factor, 1.0);
+                assert_eq!(texture.operation, TextureOperation::Multiply);
+                assert!(texture.uv_transform.is_none());
+            });
+        }
     }
 
     #[test]
@@ -2047,14 +2108,16 @@ mod material_property_data_tests {
                     ..path
                 }),
             );
-            with_material(&mut properties, |material| {
-                let texture = material.texture_ref(TextureType::Diffuse, 0).unwrap();
-                assert_eq!(texture.mapping, TextureMapping::UV);
-                assert_eq!(texture.uv_index, 0);
-                assert_eq!(texture.operation, TextureOperation::Multiply);
-                assert_eq!(texture.map_modes, [TextureMapMode::Wrap; 3]);
-                assert!(texture.flags.is_empty());
-            });
+            unsafe {
+                with_material(&mut properties, |material| {
+                    let texture = material.texture_ref(TextureType::Diffuse, 0).unwrap();
+                    assert_eq!(texture.mapping, TextureMapping::UV);
+                    assert_eq!(texture.uv_index, 0);
+                    assert_eq!(texture.operation, TextureOperation::Multiply);
+                    assert_eq!(texture.map_modes, [TextureMapMode::Wrap; 3]);
+                    assert!(texture.flags.is_empty());
+                });
+            }
         }
     }
 
@@ -2109,30 +2172,32 @@ mod material_property_data_tests {
                 ..path
             }
         }));
-        with_material(&mut properties, |material| {
-            let texture = material.texture_ref(TextureType::Normals, 2).unwrap();
-            assert_eq!(texture.path_bytes(), b"texture.png");
-            assert_eq!(texture.mapping, TextureMapping::UV);
-            assert_eq!(texture.uv_index, 2);
-            assert_eq!(texture.blend_factor, 0.5);
-            assert_eq!(texture.operation, TextureOperation::Unknown(77));
-            assert_eq!(
-                texture.map_modes,
-                [
-                    TextureMapMode::Unknown(u32::MAX),
-                    TextureMapMode::Unknown(78),
-                    TextureMapMode::Wrap,
-                ]
-            );
-            assert_eq!(texture.flags, TextureFlags::INVERT);
-            assert!(material.texture_ref(TextureType::Normals, 0).is_none());
-            assert!(material.texture_ref(TextureType::Diffuse, 2).is_none());
-            assert!(
-                material
-                    .texture_ref(TextureType::Normals, usize::MAX)
-                    .is_none()
-            );
-        });
+        unsafe {
+            with_material(&mut properties, |material| {
+                let texture = material.texture_ref(TextureType::Normals, 2).unwrap();
+                assert_eq!(texture.path_bytes(), b"texture.png");
+                assert_eq!(texture.mapping, TextureMapping::UV);
+                assert_eq!(texture.uv_index, 2);
+                assert_eq!(texture.blend_factor, 0.5);
+                assert_eq!(texture.operation, TextureOperation::Unknown(77));
+                assert_eq!(
+                    texture.map_modes,
+                    [
+                        TextureMapMode::Unknown(u32::MAX),
+                        TextureMapMode::Unknown(78),
+                        TextureMapMode::Wrap,
+                    ]
+                );
+                assert_eq!(texture.flags, TextureFlags::INVERT);
+                assert!(material.texture_ref(TextureType::Normals, 0).is_none());
+                assert!(material.texture_ref(TextureType::Diffuse, 2).is_none());
+                assert!(
+                    material
+                        .texture_ref(TextureType::Normals, usize::MAX)
+                        .is_none()
+                );
+            });
+        }
         let mut mapping_bytes = 79i32.to_ne_bytes();
         properties.push(sys::aiMaterialProperty {
             mKey: ai_string_from_cstr(c"$tex.mapping"),
@@ -2141,11 +2206,13 @@ mod material_property_data_tests {
             mDataLength: mapping_bytes.len() as u32,
             ..path
         });
-        with_material(&mut properties, |material| {
-            let texture = material.texture_ref(TextureType::Normals, 2).unwrap();
-            assert_eq!(texture.mapping, TextureMapping::Unknown(79));
-            assert_eq!(texture.uv_index, 0);
-        });
+        unsafe {
+            with_material(&mut properties, |material| {
+                let texture = material.texture_ref(TextureType::Normals, 2).unwrap();
+                assert_eq!(texture.mapping, TextureMapping::Unknown(79));
+                assert_eq!(texture.uv_index, 0);
+            });
+        }
     }
 
     #[test]
@@ -2177,12 +2244,14 @@ mod material_property_data_tests {
                     }
                 }),
             );
-            with_material(&mut properties, |material| {
-                let texture = material.texture_ref(TextureType::Diffuse, 0).unwrap();
-                assert_eq!(texture.blend_factor, 1.0);
-                assert!(texture.uv_transform.is_none());
-                assert!(texture.axis.is_none());
-            });
+            unsafe {
+                with_material(&mut properties, |material| {
+                    let texture = material.texture_ref(TextureType::Diffuse, 0).unwrap();
+                    assert_eq!(texture.blend_factor, 1.0);
+                    assert!(texture.uv_transform.is_none());
+                    assert!(texture.axis.is_none());
+                });
+            }
         }
     }
 
@@ -2238,30 +2307,34 @@ mod material_property_data_tests {
                     ..path
                 }
             }));
-            with_material(&mut properties, |material| {
-                let texture = material.texture_ref(TextureType::Diffuse, 0).unwrap();
-                let transform = texture.uv_transform.unwrap();
-                assert_eq!(transform.translation, Vector2D::new(1.0, 2.0));
-                assert_eq!(transform.scaling, Vector2D::new(3.0, 4.0));
-                assert_eq!(transform.rotation, 5.0);
-                assert_eq!(texture.axis, Some(Vector3D::new(1.0, 2.0, 3.0)));
-            });
+            unsafe {
+                with_material(&mut properties, |material| {
+                    let texture = material.texture_ref(TextureType::Diffuse, 0).unwrap();
+                    let transform = texture.uv_transform.unwrap();
+                    assert_eq!(transform.translation, Vector2D::new(1.0, 2.0));
+                    assert_eq!(transform.scaling, Vector2D::new(3.0, 4.0));
+                    assert_eq!(transform.rotation, 5.0);
+                    assert_eq!(texture.axis, Some(Vector3D::new(1.0, 2.0, 3.0)));
+                });
+            }
             if type_info == sys::aiPropertyTypeInfo::aiPTI_Float {
                 for length in [0, 4, 8, 12, 16, 19] {
                     properties[1].mDataLength = length;
                     properties[2].mDataLength = length;
-                    with_material(&mut properties, |material| {
-                        let texture = material.texture_ref(TextureType::Diffuse, 0).unwrap();
-                        assert!(texture.uv_transform.is_none());
-                        assert_eq!(
-                            texture.axis,
-                            if matches!(length, 12 | 16) {
-                                Some(Vector3D::new(1.0, 2.0, 3.0))
-                            } else {
-                                None
-                            }
-                        );
-                    });
+                    unsafe {
+                        with_material(&mut properties, |material| {
+                            let texture = material.texture_ref(TextureType::Diffuse, 0).unwrap();
+                            assert!(texture.uv_transform.is_none());
+                            assert_eq!(
+                                texture.axis,
+                                if matches!(length, 12 | 16) {
+                                    Some(Vector3D::new(1.0, 2.0, 3.0))
+                                } else {
+                                    None
+                                }
+                            );
+                        });
+                    }
                 }
             }
         }
@@ -2280,19 +2353,21 @@ mod material_property_data_tests {
             let (mut property, _owner) = make_prop_with_data(bytes);
             property.mKey = ai_string_from_cstr(c"$tex.file");
             property.mType = type_info;
-            with_material(
-                &mut [
-                    property,
-                    sys::aiMaterialProperty {
-                        mSemantic: TextureType::Diffuse.to_semantic(),
-                        ..property
+            unsafe {
+                with_material(
+                    &mut [
+                        property,
+                        sys::aiMaterialProperty {
+                            mSemantic: TextureType::Diffuse.to_semantic(),
+                            ..property
+                        },
+                    ],
+                    |material| {
+                        assert!(material.get_string_property_ref(c"$tex.file").is_none());
+                        assert!(material.texture_ref(TextureType::Diffuse, 0).is_none());
                     },
-                ],
-                |material| {
-                    assert!(material.get_string_property_ref(c"$tex.file").is_none());
-                    assert!(material.texture_ref(TextureType::Diffuse, 0).is_none());
-                },
-            );
+                );
+            }
         }
         for length in [0, 4, 16] {
             let property = sys::aiMaterialProperty {
@@ -2302,21 +2377,23 @@ mod material_property_data_tests {
                 mData: std::ptr::null_mut(),
                 ..Default::default()
             };
-            with_material(
-                &mut [
-                    property,
-                    sys::aiMaterialProperty {
-                        mSemantic: TextureType::Diffuse.to_semantic(),
-                        ..property
+            unsafe {
+                with_material(
+                    &mut [
+                        property,
+                        sys::aiMaterialProperty {
+                            mSemantic: TextureType::Diffuse.to_semantic(),
+                            ..property
+                        },
+                    ],
+                    |material| {
+                        assert!(material.get_string_property_ref(c"$tex.file").is_none());
+                        assert!(material.get_float_property(c"$tex.file").is_none());
+                        assert!(material.get_color_property(c"$tex.file").is_none());
+                        assert!(material.texture_ref(TextureType::Diffuse, 0).is_none());
                     },
-                ],
-                |material| {
-                    assert!(material.get_string_property_ref(c"$tex.file").is_none());
-                    assert!(material.get_float_property(c"$tex.file").is_none());
-                    assert!(material.get_color_property(c"$tex.file").is_none());
-                    assert!(material.texture_ref(TextureType::Diffuse, 0).is_none());
-                },
-            );
+                );
+            }
         }
     }
 
@@ -2362,28 +2439,30 @@ mod material_property_data_tests {
             mDataLength: emissive_bytes.len() as u32,
             ..color
         };
-        with_material(
-            &mut [
-                color,
-                emissive,
-                sys::aiMaterialProperty {
-                    mIndex: 1,
-                    ..emissive
+        unsafe {
+            with_material(
+                &mut [
+                    color,
+                    emissive,
+                    sys::aiMaterialProperty {
+                        mIndex: 1,
+                        ..emissive
+                    },
+                ],
+                |material| {
+                    assert_eq!(material.emission_texture(0).unwrap().path, "pbr.png");
+                    assert_eq!(material.emissive_texture(0).unwrap().path, "pbr.png");
+                    assert_eq!(material.emission_texture(1).unwrap().path, "gltf.png");
+                    assert_eq!(material.emissive_texture(1).unwrap().path, "gltf.png");
+                    assert!(material.emission_texture(2).is_none());
+                    assert!(material.texture(TextureType::EmissionColor, 1).is_none());
+                    assert_eq!(
+                        material.texture(TextureType::Emissive, 0).unwrap().path,
+                        "gltf.png"
+                    );
                 },
-            ],
-            |material| {
-                assert_eq!(material.emission_texture(0).unwrap().path, "pbr.png");
-                assert_eq!(material.emissive_texture(0).unwrap().path, "pbr.png");
-                assert_eq!(material.emission_texture(1).unwrap().path, "gltf.png");
-                assert_eq!(material.emissive_texture(1).unwrap().path, "gltf.png");
-                assert!(material.emission_texture(2).is_none());
-                assert!(material.texture(TextureType::EmissionColor, 1).is_none());
-                assert_eq!(
-                    material.texture(TextureType::Emissive, 0).unwrap().path,
-                    "gltf.png"
-                );
-            },
-        );
+            );
+        }
     }
 
     #[test]
@@ -2434,7 +2513,7 @@ mod material_property_data_tests {
         let unaligned =
             unsafe { (buf.as_ptr() as *const u8).add(1) } as *const sys::aiMaterialProperty;
 
-        assert!(MaterialPropertyRef::from_ptr(scene, unaligned).is_none());
+        assert!(unsafe { MaterialPropertyRef::from_ptr(scene, unaligned) }.is_none());
     }
 
     #[test]
@@ -2471,7 +2550,7 @@ mod material_property_data_tests {
         };
         let material = Material {
             scene,
-            material_ptr: SharedPtr::new(&mat as *const sys::aiMaterial).unwrap(),
+            material_ptr: unsafe { SharedPtr::new(&mat as *const sys::aiMaterial) }.unwrap(),
         };
 
         assert_eq!(material.normal_texture_scale(0), Some(0.42));
@@ -2791,7 +2870,7 @@ impl TextureInfoRef {
     /// Raw bytes of the path (without assuming NUL-termination).
     pub fn path_bytes(&self) -> &[u8] {
         let len = (self.path.length as usize).min(self.path.data.len());
-        ffi::slice_from_ptr_len(self, self.path.data.as_ptr() as *const u8, len)
+        unsafe { ffi::slice_from_ptr_len(self, self.path.data.as_ptr() as *const u8, len) }
     }
 
     /// Borrow the underlying Assimp `aiString`.

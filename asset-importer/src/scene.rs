@@ -5,7 +5,7 @@ use std::sync::Arc;
 use crate::{
     animation::Animation,
     camera::Camera,
-    error::{Error, Result},
+    error::{Error, Result, bridge_error_string_or_default},
     ffi,
     importer::{Importer, PropertyStore},
     io::OwnedAiFileIO,
@@ -135,7 +135,7 @@ enum SceneRelease {
 }
 
 impl Scene {
-    /// Adopt exclusive ownership of a successful bridge import.
+    /// Adopt ownership of a bridge import and prioritize custom I/O errors.
     ///
     /// # Safety
     /// `owner` must be returned by a bridge import and not yet owned or released elsewhere.
@@ -145,13 +145,19 @@ impl Scene {
         file_io: Option<OwnedAiFileIO>,
     ) -> Result<Self> {
         if owner.is_null() {
-            return Err(Error::from_bridge());
+            return Err(file_io
+                .as_ref()
+                .and_then(OwnedAiFileIO::take_error)
+                .unwrap_or_else(Error::import_failed_from_bridge));
         }
-        let owner = SharedPtr::new(owner).ok_or(Error::NullPointer)?;
+        let owner = unsafe { SharedPtr::new(owner) }.ok_or(Error::NullPointer)?;
         let scene_ptr = unsafe { sys::aiGetSceneRust(owner.as_ptr()) };
-        let Some(scene_ptr) = SharedPtr::new(scene_ptr) else {
+        let Some(scene_ptr) = (unsafe { SharedPtr::new(scene_ptr) }) else {
             unsafe { sys::aiReleaseSceneRust(owner.as_ptr().cast_mut()) };
-            return Err(Error::NullPointer);
+            return Err(file_io
+                .as_ref()
+                .and_then(OwnedAiFileIO::take_error)
+                .unwrap_or(Error::NullPointer));
         };
         let scene = Self {
             inner: Arc::new(SceneInner {
@@ -160,13 +166,13 @@ impl Scene {
                 file_io,
             }),
         };
-        if scene
+        if let Some(error) = scene
             .inner
             .file_io
             .as_ref()
-            .is_some_and(|io| io.has_error())
+            .and_then(OwnedAiFileIO::take_error)
         {
-            return Err(Error::io_error("Custom IO callback failed during import"));
+            return Err(error);
         }
         Ok(scene)
     }
@@ -183,7 +189,7 @@ impl Scene {
     ///   no external code may release or mutate the scene or its reachable data
     #[cfg(feature = "raw-sys")]
     pub unsafe fn from_raw_import(scene_ptr: *const sys::aiScene) -> Result<Self> {
-        let scene_ptr = SharedPtr::new(scene_ptr).ok_or(Error::NullPointer)?;
+        let scene_ptr = unsafe { SharedPtr::new(scene_ptr) }.ok_or(Error::NullPointer)?;
 
         Ok(Self {
             inner: Arc::new(SceneInner {
@@ -203,7 +209,7 @@ impl Scene {
     /// or mutate the scene or its reachable data.
     #[cfg(feature = "raw-sys")]
     pub unsafe fn from_raw_copied(scene_ptr: *const sys::aiScene) -> Result<Self> {
-        let scene_ptr = SharedPtr::new(scene_ptr).ok_or(Error::NullPointer)?;
+        let scene_ptr = unsafe { SharedPtr::new(scene_ptr) }.ok_or(Error::NullPointer)?;
         Ok(Self {
             inner: Arc::new(SceneInner {
                 scene_ptr,
@@ -255,17 +261,21 @@ impl Scene {
         };
         let ok =
             unsafe { sys::aiApplyPostProcessingRust(owner.as_ptr().cast_mut(), flags.as_raw()) };
-        if inner.file_io.as_ref().is_some_and(|io| io.has_error()) {
-            return Err(Error::io_error(
-                "Custom IO callback failed during post-processing",
-            ));
+        if let Some(error) = inner.file_io.as_ref().and_then(OwnedAiFileIO::take_error) {
+            return Err(error);
         }
         if !ok {
-            return Err(Error::invalid_scene(Error::from_bridge().to_string()));
+            let error = Error::invalid_scene(bridge_error_string_or_default());
+            let file_io = inner.file_io.take();
+            drop(inner);
+            return Err(file_io
+                .as_ref()
+                .and_then(OwnedAiFileIO::take_error)
+                .unwrap_or(error));
         }
 
         let new_ptr = unsafe { sys::aiGetSceneRust(owner.as_ptr()) };
-        inner.scene_ptr = SharedPtr::new(new_ptr).ok_or(Error::NullPointer)?;
+        inner.scene_ptr = unsafe { SharedPtr::new(new_ptr) }.ok_or(Error::NullPointer)?;
         Ok(Self {
             inner: Arc::new(inner),
         })
@@ -445,7 +455,7 @@ impl Scene {
 
     /// Get the root node of the scene
     pub fn root_node(&self) -> Option<Node> {
-        Node::from_sys_ptr(self.clone(), self.raw().mRootNode)
+        unsafe { Node::from_sys_ptr(self.clone(), self.raw().mRootNode) }
     }
 
     /// Get the number of meshes in the scene
@@ -465,8 +475,9 @@ impl Scene {
         }
 
         let scene = self.raw();
-        let mesh_ptr = ffi::ptr_array_get(self, scene.mMeshes, scene.mNumMeshes as usize, index)?;
-        Mesh::from_sys_ptr(self.clone(), mesh_ptr)
+        let mesh_ptr =
+            unsafe { ffi::ptr_array_get(self, scene.mMeshes, scene.mNumMeshes as usize, index) }?;
+        unsafe { Mesh::from_sys_ptr(self.clone(), mesh_ptr) }
     }
 
     /// Get an iterator over all meshes
@@ -494,9 +505,10 @@ impl Scene {
         }
 
         let scene = self.raw();
-        let material_ptr =
-            ffi::ptr_array_get(self, scene.mMaterials, scene.mNumMaterials as usize, index)?;
-        Material::from_sys_ptr(self.clone(), material_ptr)
+        let material_ptr = unsafe {
+            ffi::ptr_array_get(self, scene.mMaterials, scene.mNumMaterials as usize, index)
+        }?;
+        unsafe { Material::from_sys_ptr(self.clone(), material_ptr) }
     }
 
     /// Get an iterator over all materials
@@ -524,13 +536,15 @@ impl Scene {
         }
 
         let scene = self.raw();
-        let animation_ptr = ffi::ptr_array_get(
-            self,
-            scene.mAnimations,
-            scene.mNumAnimations as usize,
-            index,
-        )?;
-        Animation::from_sys_ptr(self.clone(), animation_ptr)
+        let animation_ptr = unsafe {
+            ffi::ptr_array_get(
+                self,
+                scene.mAnimations,
+                scene.mNumAnimations as usize,
+                index,
+            )
+        }?;
+        unsafe { Animation::from_sys_ptr(self.clone(), animation_ptr) }
     }
 
     /// Get an iterator over all animations
@@ -559,8 +573,8 @@ impl Scene {
 
         let scene = self.raw();
         let camera_ptr =
-            ffi::ptr_array_get(self, scene.mCameras, scene.mNumCameras as usize, index)?;
-        Camera::from_sys_ptr(self.clone(), camera_ptr)
+            unsafe { ffi::ptr_array_get(self, scene.mCameras, scene.mNumCameras as usize, index) }?;
+        unsafe { Camera::from_sys_ptr(self.clone(), camera_ptr) }
     }
 
     /// Get an iterator over all cameras
@@ -588,8 +602,9 @@ impl Scene {
         }
 
         let scene = self.raw();
-        let light_ptr = ffi::ptr_array_get(self, scene.mLights, scene.mNumLights as usize, index)?;
-        Light::from_sys_ptr(self.clone(), light_ptr)
+        let light_ptr =
+            unsafe { ffi::ptr_array_get(self, scene.mLights, scene.mNumLights as usize, index) }?;
+        unsafe { Light::from_sys_ptr(self.clone(), light_ptr) }
     }
 
     /// Get an iterator over all lights
@@ -750,7 +765,7 @@ impl Iterator for LightIterator {
 impl Scene {
     /// Get scene metadata
     pub fn metadata(&self) -> Result<Metadata> {
-        Metadata::from_sys_ptr(self.raw().mMetaData)
+        unsafe { Metadata::from_raw_sys(self.raw().mMetaData) }
     }
 
     /// Get the number of textures in the scene
@@ -770,15 +785,16 @@ impl Scene {
         }
 
         let scene = self.raw();
-        let texture_ptr =
-            ffi::ptr_array_get(self, scene.mTextures, scene.mNumTextures as usize, index)?;
-        Texture::from_sys_ptr(self.clone(), texture_ptr as *const sys::aiTexture).ok()
+        let texture_ptr = unsafe {
+            ffi::ptr_array_get(self, scene.mTextures, scene.mNumTextures as usize, index)
+        }?;
+        unsafe { Texture::from_sys_ptr(self.clone(), texture_ptr as *const sys::aiTexture) }.ok()
     }
 
     /// Get an iterator over all textures in the scene
     pub fn textures(&self) -> TextureIterator {
         let scene = self.raw();
-        TextureIterator::new(self.clone(), scene.mTextures, self.num_textures())
+        unsafe { TextureIterator::new(self.clone(), scene.mTextures, self.num_textures()) }
     }
 
     /// Check if the scene has embedded textures

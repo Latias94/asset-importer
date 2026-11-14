@@ -22,8 +22,12 @@ pub struct Light {
 }
 
 impl Light {
-    pub(crate) fn from_sys_ptr(scene: Scene, light_ptr: *mut sys::aiLight) -> Option<Self> {
-        let light_ptr = SharedPtr::new(light_ptr as *const sys::aiLight)?;
+    /// # Safety
+    /// A non-null, aligned `light_ptr` must point to an initialized `aiLight`
+    /// owned by `scene`. The pointee and all reachable data must remain valid and
+    /// read-only for the lifetime of `scene` and its clones.
+    pub(crate) unsafe fn from_sys_ptr(scene: Scene, light_ptr: *mut sys::aiLight) -> Option<Self> {
+        let light_ptr = unsafe { SharedPtr::new(light_ptr as *const sys::aiLight) }?;
         Some(Self { scene, light_ptr })
     }
 

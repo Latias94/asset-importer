@@ -119,13 +119,16 @@ pub struct ImporterDesc {
 
 impl ImporterDesc {
     /// Create from raw Assimp importer description
-    pub(crate) fn from_raw(desc: &sys::aiImporterDesc) -> Self {
-        let name = c_str_to_string_or_empty(desc.mName);
-        let author = c_str_to_string_or_empty(desc.mAuthor);
-        let maintainer = c_str_to_string_or_empty(desc.mMaintainer);
-        let comments = c_str_to_string_or_empty(desc.mComments);
+    ///
+    /// # Safety
+    /// Non-null string fields must remain valid NUL-terminated strings during this call.
+    pub(crate) unsafe fn from_raw(desc: &sys::aiImporterDesc) -> Self {
+        let name = unsafe { c_str_to_string_or_empty(desc.mName) };
+        let author = unsafe { c_str_to_string_or_empty(desc.mAuthor) };
+        let maintainer = unsafe { c_str_to_string_or_empty(desc.mMaintainer) };
+        let comments = unsafe { c_str_to_string_or_empty(desc.mComments) };
 
-        let extensions_str = c_str_to_string_or_empty(desc.mFileExtensions);
+        let extensions_str = unsafe { c_str_to_string_or_empty(desc.mFileExtensions) };
         let file_extensions = extensions_str
             .split_whitespace()
             .map(|s| s.to_string())
@@ -173,7 +176,7 @@ pub fn get_importer_desc(extension: &str) -> crate::Result<Option<ImporterDesc>>
 
     unsafe {
         let desc_ptr = sys::aiGetImporterDesc(c_extension.as_ptr());
-        Ok(ffi::ref_from_ptr(&c_extension, desc_ptr).map(ImporterDesc::from_raw))
+        Ok(ffi::ref_from_ptr(&c_extension, desc_ptr).map(|desc| ImporterDesc::from_raw(desc)))
     }
 }
 
@@ -181,7 +184,7 @@ pub fn get_importer_desc(extension: &str) -> crate::Result<Option<ImporterDesc>>
 pub fn get_importer_desc_cstr(extension: &std::ffi::CStr) -> Option<ImporterDesc> {
     unsafe {
         let desc_ptr = sys::aiGetImporterDesc(extension.as_ptr());
-        ffi::ref_from_ptr(extension, desc_ptr).map(ImporterDesc::from_raw)
+        ffi::ref_from_ptr(extension, desc_ptr).map(|desc| ImporterDesc::from_raw(desc))
     }
 }
 
@@ -231,7 +234,9 @@ impl Iterator for ImporterDescIterator {
             self.index += 1;
             unsafe {
                 let ptr = sys::aiGetImportFormatDescription(i);
-                if let Some(desc) = ffi::ref_from_ptr(self, ptr).map(ImporterDesc::from_raw) {
+                if let Some(desc) =
+                    ffi::ref_from_ptr(self, ptr).map(|desc| ImporterDesc::from_raw(desc))
+                {
                     return Some(desc);
                 }
             }

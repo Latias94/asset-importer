@@ -1,18 +1,23 @@
 //! Internal FFI helpers.
 //!
 //! These helpers centralize common pointer/length checks when borrowing slices from
-//! Assimp-owned memory. They intentionally tie the returned slice lifetime to an
-//! "owner" reference (usually `&self`) so callers cannot accidentally fabricate a
-//! longer lifetime.
+//! Assimp-owned memory. The owner reference bounds the returned borrow, but cannot
+//! prove that the pointer belongs to the owner. Callers must establish that relation
+//! at each unsafe call site.
 
 /// Borrow a slice from a raw pointer and element count.
 ///
 /// Returns an empty slice when `ptr` is null or `len == 0`.
 ///
-/// # Assumptions
-/// This crate assumes Assimp returns valid pointers/lengths for scene-backed data.
-/// The returned slice is tied to `owner` so it cannot outlive the safe wrapper type.
-pub(crate) fn slice_from_ptr_len<O: ?Sized, T>(owner: &O, ptr: *const T, len: usize) -> &[T] {
+/// # Safety
+/// When the pointer and length pass the null, alignment, and size checks, `ptr` must
+/// refer to `len` initialized values in one allocation. The allocation must remain
+/// valid and unmodified for the returned borrow, whose lifetime is bounded by `owner`.
+pub(crate) unsafe fn slice_from_ptr_len<O: ?Sized, T>(
+    owner: &O,
+    ptr: *const T,
+    len: usize,
+) -> &[T] {
     let _ = owner;
     if ptr.is_null() || len == 0 {
         &[]
@@ -42,9 +47,9 @@ pub(crate) fn slice_from_ptr_len<O: ?Sized, T>(owner: &O, ptr: *const T, len: us
 /// Borrow a slice from a raw pointer and element count, returning `None` when
 /// `ptr` is null.
 ///
-/// # Assumptions
-/// Same as [`slice_from_ptr_len`].
-pub(crate) fn slice_from_ptr_len_opt<O: ?Sized, T>(
+/// # Safety
+/// The requirements of [`slice_from_ptr_len`] apply.
+pub(crate) unsafe fn slice_from_ptr_len_opt<O: ?Sized, T>(
     owner: &O,
     ptr: *const T,
     len: usize,
@@ -53,7 +58,7 @@ pub(crate) fn slice_from_ptr_len_opt<O: ?Sized, T>(
     if ptr.is_null() {
         return None;
     }
-    Some(slice_from_ptr_len(owner, ptr, len))
+    Some(unsafe { slice_from_ptr_len(owner, ptr, len) })
 }
 
 /// Read a pointer element from a `T**`-style pointer array.
@@ -61,15 +66,16 @@ pub(crate) fn slice_from_ptr_len_opt<O: ?Sized, T>(
 /// Returns `None` when the base pointer is null, the index is out-of-bounds, or
 /// the element pointer at `index` is null.
 ///
-/// # Assumptions
-/// Same as [`slice_from_ptr_len`], plus `base` must be valid for `len` elements.
-pub(crate) fn ptr_array_get<O: ?Sized, T>(
+/// # Safety
+/// `base` must satisfy [`slice_from_ptr_len`] for `len` initialized pointer elements.
+/// The pointees are not dereferenced or validated by this function.
+pub(crate) unsafe fn ptr_array_get<O: ?Sized, T>(
     owner: &O,
     base: *const *mut T,
     len: usize,
     index: usize,
 ) -> Option<*mut T> {
-    let slice = slice_from_ptr_len_opt(owner, base, len)?;
+    let slice = unsafe { slice_from_ptr_len_opt(owner, base, len) }?;
     let ptr = *slice.get(index)?;
     if ptr.is_null() { None } else { Some(ptr) }
 }
@@ -78,10 +84,10 @@ pub(crate) fn ptr_array_get<O: ?Sized, T>(
 ///
 /// Returns `None` when `ptr` is null or not properly aligned for `T`.
 ///
-/// # Assumptions
-/// This crate assumes Assimp returns valid pointers for scene-backed data. This helper ties the
-/// returned reference lifetime to `owner` so it cannot outlive the safe wrapper type.
-pub(crate) fn ref_from_ptr<O: ?Sized, T>(owner: &O, ptr: *const T) -> Option<&T> {
+/// # Safety
+/// A non-null, aligned `ptr` must point to an initialized `T` that remains valid and
+/// unmodified for the returned borrow, whose lifetime is bounded by `owner`.
+pub(crate) unsafe fn ref_from_ptr<O: ?Sized, T>(owner: &O, ptr: *const T) -> Option<&T> {
     let _ = owner;
     if ptr.is_null() {
         return None;
@@ -101,9 +107,10 @@ pub(crate) fn ref_from_ptr<O: ?Sized, T>(owner: &O, ptr: *const T) -> Option<&T>
 /// Returns an empty slice when `ptr` is null or `len == 0`.
 ///
 /// # Safety
-/// Callers must ensure the memory behind `ptr` is valid for `len` elements of `T`
-/// for at least as long as `owner` is alive, and that no other references alias
-/// this region while the returned slice is in use.
+/// When the pointer and length pass the null, alignment, and size checks, `ptr` must
+/// refer to `len` initialized values in one allocation. The allocation must remain
+/// valid for the returned borrow, bounded by `owner`, with no other references
+/// aliasing this region while the returned slice is in use.
 pub(crate) unsafe fn slice_from_mut_ptr_len<O: ?Sized, T>(
     owner: &mut O,
     ptr: *mut T,
@@ -146,7 +153,7 @@ mod tests {
         let mut_p = std::ptr::dangling_mut::<u8>();
 
         let owner = &();
-        let s = slice_from_ptr_len(owner, p, too_large);
+        let s = unsafe { slice_from_ptr_len(owner, p, too_large) };
         assert!(s.is_empty());
 
         let mut owner = ();
@@ -159,18 +166,18 @@ mod tests {
         let owner = &();
         let arr = [1u8, 2u8];
 
-        let got = slice_from_ptr_len_opt(owner, arr.as_ptr(), 0).unwrap();
+        let got = unsafe { slice_from_ptr_len_opt(owner, arr.as_ptr(), 0) }.unwrap();
         assert!(got.is_empty());
 
-        let got = slice_from_ptr_len_opt(owner, arr.as_ptr(), arr.len()).unwrap();
+        let got = unsafe { slice_from_ptr_len_opt(owner, arr.as_ptr(), arr.len()) }.unwrap();
         assert_eq!(got, &arr);
 
         assert_eq!(
-            slice_from_ptr_len_opt(owner, std::ptr::null::<u8>(), 0),
+            unsafe { slice_from_ptr_len_opt(owner, std::ptr::null::<u8>(), 0) },
             None
         );
         assert_eq!(
-            slice_from_ptr_len_opt(owner, std::ptr::null::<u8>(), 2),
+            unsafe { slice_from_ptr_len_opt(owner, std::ptr::null::<u8>(), 2) },
             None
         );
     }
@@ -181,10 +188,10 @@ mod tests {
         let buf = [0u32; 2];
         let unaligned = unsafe { (buf.as_ptr() as *const u8).add(1) } as *const u32;
 
-        let got = slice_from_ptr_len(owner, unaligned, 1);
+        let got = unsafe { slice_from_ptr_len(owner, unaligned, 1) };
         assert!(got.is_empty());
 
-        let got_opt = slice_from_ptr_len_opt(owner, unaligned, 1).unwrap();
+        let got_opt = unsafe { slice_from_ptr_len_opt(owner, unaligned, 1) }.unwrap();
         assert!(got_opt.is_empty());
     }
 
@@ -206,19 +213,25 @@ mod tests {
 
         let owner = &arr;
         assert_eq!(
-            ptr_array_get(owner, arr.as_ptr(), arr.len(), 0),
+            unsafe { ptr_array_get(owner, arr.as_ptr(), arr.len(), 0) },
             Some(&mut a as *mut u32)
         );
-        assert_eq!(ptr_array_get(owner, arr.as_ptr(), arr.len(), 1), None);
         assert_eq!(
-            ptr_array_get(owner, arr.as_ptr(), arr.len(), 2),
+            unsafe { ptr_array_get(owner, arr.as_ptr(), arr.len(), 1) },
+            None
+        );
+        assert_eq!(
+            unsafe { ptr_array_get(owner, arr.as_ptr(), arr.len(), 2) },
             Some(&mut b as *mut u32)
         );
-        assert_eq!(ptr_array_get(owner, arr.as_ptr(), arr.len(), 3), None);
+        assert_eq!(
+            unsafe { ptr_array_get(owner, arr.as_ptr(), arr.len(), 3) },
+            None
+        );
 
         // Null base pointer should yield None even if len/index are non-zero.
         assert_eq!(
-            ptr_array_get(owner, std::ptr::null::<*mut u32>(), 10, 0),
+            unsafe { ptr_array_get(owner, std::ptr::null::<*mut u32>(), 10, 0) },
             None
         );
     }
@@ -226,12 +239,12 @@ mod tests {
     #[test]
     fn ref_from_ptr_rejects_null_and_unaligned_pointers() {
         let owner = &();
-        assert!(ref_from_ptr::<_, u32>(owner, std::ptr::null()).is_none());
+        assert!(unsafe { ref_from_ptr::<_, u32>(owner, std::ptr::null()) }.is_none());
 
         let buf = [0u32; 2];
         let unaligned = unsafe { (buf.as_ptr() as *const u8).add(1) } as *const u32;
-        assert!(ref_from_ptr(owner, unaligned).is_none());
+        assert!(unsafe { ref_from_ptr(owner, unaligned) }.is_none());
 
-        assert!(ref_from_ptr(owner, buf.as_ptr()).is_some());
+        assert!(unsafe { ref_from_ptr(owner, buf.as_ptr()) }.is_some());
     }
 }

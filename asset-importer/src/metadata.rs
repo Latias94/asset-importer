@@ -334,8 +334,8 @@ impl Metadata {
 
         // Parse each metadata entry.
         let n = metadata.mNumProperties as usize;
-        let keys = ffi::slice_from_ptr_len(metadata, metadata.mKeys, n);
-        let values = ffi::slice_from_ptr_len(metadata, metadata.mValues, n);
+        let keys = unsafe { ffi::slice_from_ptr_len(metadata, metadata.mKeys, n) };
+        let values = unsafe { ffi::slice_from_ptr_len(metadata, metadata.mValues, n) };
         if keys.len() != n || values.len() != n {
             return Err(Error::invalid_scene(
                 "Invalid metadata key or value array layout",
@@ -358,11 +358,6 @@ impl Metadata {
         }
 
         Ok(Self { entries })
-    }
-
-    pub(crate) fn from_sys_ptr(metadata_ptr: *const sys::aiMetadata) -> Result<Self> {
-        // SAFETY: The crate only calls this with pointers coming from an Assimp-owned scene.
-        unsafe { Self::from_raw_sys(metadata_ptr) }
     }
 
     /// Create metadata from a raw Assimp metadata pointer (requires `raw-sys`).
@@ -418,7 +413,8 @@ impl Metadata {
             }
             sys::aiMetadataType::AI_AIMETADATA => {
                 data()?;
-                let nested_metadata = Self::from_sys_ptr(entry.mData as *const sys::aiMetadata)?;
+                let nested_metadata =
+                    unsafe { Self::from_raw_sys(entry.mData as *const sys::aiMetadata) }?;
                 Ok(MetadataEntry::Metadata(nested_metadata))
             }
             sys::aiMetadataType::AI_INT64 => {

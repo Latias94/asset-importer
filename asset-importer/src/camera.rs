@@ -16,8 +16,15 @@ pub struct Camera {
 }
 
 impl Camera {
-    pub(crate) fn from_sys_ptr(scene: Scene, camera_ptr: *mut sys::aiCamera) -> Option<Self> {
-        let camera_ptr = SharedPtr::new(camera_ptr as *const sys::aiCamera)?;
+    /// # Safety
+    /// A non-null, aligned `camera_ptr` must point to an initialized `aiCamera`
+    /// owned by `scene`. The pointee and all reachable data must remain valid and
+    /// read-only for the lifetime of `scene` and its clones.
+    pub(crate) unsafe fn from_sys_ptr(
+        scene: Scene,
+        camera_ptr: *mut sys::aiCamera,
+    ) -> Option<Self> {
+        let camera_ptr = unsafe { SharedPtr::new(camera_ptr as *const sys::aiCamera) }?;
         Some(Self { scene, camera_ptr })
     }
 

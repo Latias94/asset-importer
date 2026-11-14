@@ -391,6 +391,14 @@ static bool scene_can_be_copied(const aiScene* scene, bool include_scene_data = 
     return true;
 }
 
+static bool postprocess_is_supported(unsigned int flags) {
+    if (flags & aiProcess_SplitLargeMeshes) {
+        g_last_error_msg = "SplitLargeMeshes is unsupported because Assimp 6.0.6 can retain freed meshes, write through null channel pointers, or fail to advance";
+        return false;
+    }
+    return true;
+}
+
 #ifndef ASSIMP_BUILD_NO_EXPORT
 using ExportSceneCopy = std::unique_ptr<aiScene, decltype(&aiFreeScene)>;
 
@@ -456,6 +464,9 @@ static aiRustScene* import_with_bridge(
 
     // Properties
     apply_properties(importer, props, props_count);
+    if (!postprocess_is_supported(flags)) {
+        return nullptr;
+    }
 
     const bool guard_scene_copy = (flags & aiProcess_PreTransformVertices) &&
         importer.GetPropertyBool(AI_CONFIG_PP_PTV_KEEP_HIERARCHY, false);
@@ -573,6 +584,9 @@ bool aiApplyPostProcessingRust(struct aiRustScene* owner, unsigned int flags) {
             set_bridge_error("Scene owner is empty");
             return false;
         }
+        if (!postprocess_is_supported(flags)) {
+            return false;
+        }
         if ((flags & aiProcess_PreTransformVertices) &&
             owner->importer.GetPropertyBool(AI_CONFIG_PP_PTV_KEEP_HIERARCHY, false) &&
             !scene_can_be_copied(owner->importer.GetScene(), false)) {
@@ -641,6 +655,10 @@ enum aiReturn aiExportSceneExWithPropertiesRust(
         g_last_error_msg = "Format ID or path is null";
         return aiReturn_FAILURE;
     }
+    if (preprocessing != 0) {
+        g_last_error_msg = "Export preprocessing is unsupported; prepare the scene with its importer before exporting";
+        return aiReturn_FAILURE;
+    }
     if (file_io && std::strcmp(format_id, "3mf") == 0) {
         g_last_error_msg = "3MF export does not support a custom file system because its ZIP writer writes directly to the host file system";
         return aiReturn_FAILURE;
@@ -663,12 +681,15 @@ enum aiReturn aiExportSceneExWithPropertiesRust(
 
     apply_export_properties(export_props, props, props_count);
 
-    const aiReturn r = exporter.Export(scene, format_id, path, preprocessing, &export_props);
+    const aiReturn r = exporter.Export(scene, format_id, path, 0, &export_props);
     if (r != aiReturn_SUCCESS) {
         g_last_error_msg = exporter.GetErrorString();
     }
     return r;
 #endif
+    } catch (const std::bad_alloc& e) {
+        set_exception_error("aiExportSceneExWithPropertiesRust", e);
+        return aiReturn_OUTOFMEMORY;
     } catch (const std::exception& e) {
         set_exception_error("aiExportSceneExWithPropertiesRust", e);
         return aiReturn_FAILURE;
@@ -705,6 +726,10 @@ const struct aiExportDataBlob* aiExportSceneToBlobWithPropertiesRust(
         g_last_error_msg = "Format ID is null";
         return nullptr;
     }
+    if (preprocessing != 0) {
+        g_last_error_msg = "Export preprocessing is unsupported; prepare the scene with its importer before exporting";
+        return nullptr;
+    }
     if (std::strcmp(format_id, "3mf") == 0) {
         g_last_error_msg = "3MF blob export is unsupported because its ZIP writer writes directly to the host file system";
         return nullptr;
@@ -722,7 +747,7 @@ const struct aiExportDataBlob* aiExportSceneToBlobWithPropertiesRust(
 
     apply_export_properties(export_props, props, props_count);
 
-    const aiExportDataBlob* blob = exporter.ExportToBlob(scene, format_id, preprocessing, &export_props);
+    const aiExportDataBlob* blob = exporter.ExportToBlob(scene, format_id, 0, &export_props);
     if (!blob) {
         g_last_error_msg = exporter.GetErrorString();
         return nullptr;

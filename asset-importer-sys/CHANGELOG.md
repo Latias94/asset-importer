@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Local prebuilt extraction caches track the archive's canonical path and contents, and Cargo watches the selected archive for replacement.
 - Bundled Assimp is now [6.0.6](https://github.com/assimp/assimp/releases/tag/v6.0.6) (`a79ff6bbce54d3e01186a918dc6374ed55317426`). Bindings are regenerated with bindgen 0.73.2; source overrides and prebuilt packages must match this version.
 - **Breaking:** The custom import bridge returns an opaque `aiRustScene` owner. Use `aiGetSceneRust` to borrow its scene, `aiApplyPostProcessingRust` for exclusive post-processing, and `aiReleaseSceneRust` to release it. Upstream C API bindings remain available.
+- **Breaking:** Bridge export functions reject nonzero preprocessing arguments because Assimp's exporter skips property initialization for those steps. Prepare the scene with its importer before exporting.
 - The package tool uses Cargo's current `OUT_DIR`, target, and CRT settings, removing directory scans and runtime target guesses. Archives include `revision.h` and are checked against their actual build version before packaging.
 - Updated build/download dependencies and added `BUNDLED_ASSIMP_VERSION`. macOS fallback deployment targets now match Rust's supported baseline: 10.13 for Intel and 11.0 for ARM64.
 
@@ -22,6 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Native Doxygen code blocks render as text in generated Rust documentation, so diagrams and C/C++ examples are not compiled as Rust doctests.
 - System header version parsing now skips unrelated defines and include guards. Prebuilt packages whose version cannot be determined are rejected.
 - The bridge retains importer ownership after post-processing failures, releases custom I/O streams on every destruction path, and preserves progress cancellation and C++ exception boundaries.
+- The bridge rejects `aiProcess_SplitLargeMeshes` before import or scene mutation: Assimp 6.0.6 can retain freed meshes, write through null sparse-channel pointers, or fail to advance. This guard applies to source, prebuilt, and system providers; raw upstream bindings remain available.
+- File export maps bridge allocation failures to `aiReturn_OUTOFMEMORY`.
 - `aiMaterialProperty::default()` initializes `aiPTI_Float`, matching the C++ constructor; generated integer newtypes also eliminate invalid native enum discriminants.
 - Windows GNU source static builds now link bundled `zlibstatic` archives, including debug-suffixed libraries.
 - Windows runtime DLL placement supports both Cargo build directory layouts instead of assuming a fixed `OUT_DIR` depth, and reports copy failures.

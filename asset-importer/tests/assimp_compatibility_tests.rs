@@ -101,20 +101,6 @@ fn test_extension_list() {
 }
 
 #[test]
-fn test_property_store_functionality() {
-    // Test property store functionality through ImportBuilder
-    let importer = Importer::new();
-    let _builder = importer
-        .read_from_memory(SIMPLE_OBJ_CUBE.as_bytes())
-        .with_property_int("AI_CONFIG_PP_RVC_FLAGS", 42)
-        .with_property_float("AI_CONFIG_PP_CT_MAX_SMOOTHING_ANGLE", std::f32::consts::PI)
-        .with_property_string("AI_CONFIG_IMPORT_FBX_READ_ALL_GEOMETRY_LAYERS", "true")
-        .with_property_bool("AI_CONFIG_PP_FD_REMOVE", true);
-
-    println!("✅ Property store functionality test passed");
-}
-
-#[test]
 fn test_memory_import_obj_cube() {
     // Test importing from memory (based on ImporterTest::testMemoryRead)
     let importer = Importer::new();

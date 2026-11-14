@@ -6,7 +6,10 @@ use crate::sys;
 use bitflags::bitflags;
 
 bitflags! {
-    /// Post-processing steps that can be applied to imported scenes
+    /// Supported post-processing steps that can be applied to imported scenes.
+    ///
+    /// Assimp 6.0.6's SplitLargeMeshes step is excluded because it can invalidate
+    /// scene ownership or write through null channel pointers.
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
     pub struct PostProcessSteps: u32 {
         /// Calculates the tangents and bitangents for the imported meshes.
@@ -29,9 +32,6 @@ bitflags! {
 
         /// Generates smooth normals for all vertices in the mesh.
         const GEN_SMOOTH_NORMALS = sys::aiPostProcessSteps::aiProcess_GenSmoothNormals.0 as u32;
-
-        /// Splits large meshes into smaller sub-meshes.
-        const SPLIT_LARGE_MESHES = sys::aiPostProcessSteps::aiProcess_SplitLargeMeshes.0 as u32;
 
         /// Removes the node graph and pre-transforms all vertices with the local transformation matrices of their nodes.
         const PRE_TRANSFORM_VERTICES = sys::aiPostProcessSteps::aiProcess_PreTransformVertices.0 as u32;
@@ -84,19 +84,19 @@ bitflags! {
         /// Flips face winding order from CCW to CW or vice versa.
         const FLIP_WINDING_ORDER = sys::aiPostProcessSteps::aiProcess_FlipWindingOrder.0 as u32;
 
-        /// Splits meshes with more than one primitive type in homogeneous sub-meshes.
+        /// Splits meshes into sub-meshes whose bone counts do not exceed the configured limit.
         const SPLIT_BY_BONE_COUNT = sys::aiPostProcessSteps::aiProcess_SplitByBoneCount.0 as u32;
 
         /// Removes bones losslessly or according to some threshold.
         const DEBONE = sys::aiPostProcessSteps::aiProcess_Debone.0 as u32;
 
-        /// Converts absolute morphing animations into relative ones.
+        /// Scales the scene using the configured global and application scale factors.
         const GLOBAL_SCALE = sys::aiPostProcessSteps::aiProcess_GlobalScale.0 as u32;
 
         /// Embeds textures into the scene.
         const EMBED_TEXTURES = sys::aiPostProcessSteps::aiProcess_EmbedTextures.0 as u32;
 
-        /// Forces the loader to ignore up-direction.
+        /// Regenerates existing normals when combined with GEN_NORMALS or GEN_SMOOTH_NORMALS.
         const FORCE_GEN_NORMALS = sys::aiPostProcessSteps::aiProcess_ForceGenNormals.0 as u32;
 
         /// Drops normals for all faces of all meshes.
@@ -113,9 +113,9 @@ impl PostProcessSteps {
         self.bits()
     }
 
-    /// Create from raw value
+    /// Create from a raw value, retaining unsupported bits so validation can reject them.
     pub fn from_raw(value: u32) -> Self {
-        Self::from_bits_truncate(value)
+        Self::from_bits_retain(value)
     }
 
     /// Validate that the post-processing flags are compatible
@@ -123,6 +123,12 @@ impl PostProcessSteps {
     /// Some post-processing steps are mutually exclusive and cannot be used together.
     /// This function checks for such conflicts and returns an error if any are found.
     pub fn validate(&self) -> Result<(), String> {
+        if self.bits() & !Self::all().bits() != 0 {
+            return Err(
+                "Unsupported post-processing flags; SplitLargeMeshes is disabled because Assimp 6.0.6 cannot execute it safely"
+                    .to_owned(),
+            );
+        }
         // Check for mutually exclusive flags
         if self.contains(PostProcessSteps::GEN_SMOOTH_NORMALS)
             && self.contains(PostProcessSteps::GEN_NORMALS)
@@ -191,8 +197,7 @@ impl PostProcessSteps {
             | Self::SORT_BY_PTYPE.bits()
             | Self::GEN_NORMALS.bits()
             | Self::IMPROVE_CACHE_LOCALITY.bits()
-            | Self::LIMIT_BONE_WEIGHTS.bits()
-            | Self::SPLIT_LARGE_MESHES.bits(),
+            | Self::LIMIT_BONE_WEIGHTS.bits(),
     );
 
     /// Preset for left-handed coordinate systems (like DirectX)

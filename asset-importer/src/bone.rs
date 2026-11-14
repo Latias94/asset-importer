@@ -76,8 +76,13 @@ pub struct Bone {
 }
 
 impl Bone {
-    pub(crate) fn from_sys_ptr(scene: Scene, bone_ptr: *mut sys::aiBone) -> Result<Self> {
-        let bone_ptr = SharedPtr::new(bone_ptr as *const sys::aiBone)
+    /// # Safety
+    /// A non-null, aligned `bone_ptr` must point to an initialized `aiBone` owned by
+    /// `scene`. Its non-null arrays must be valid for their declared lengths, and all
+    /// reachable data must remain valid and read-only for the lifetime of `scene`
+    /// and its clones.
+    pub(crate) unsafe fn from_sys_ptr(scene: Scene, bone_ptr: *mut sys::aiBone) -> Result<Self> {
+        let bone_ptr = unsafe { SharedPtr::new(bone_ptr as *const sys::aiBone) }
             .ok_or_else(|| Error::invalid_scene("Bone pointer is null"))?;
         Ok(Self { scene, bone_ptr })
     }
@@ -127,21 +132,25 @@ impl Bone {
     pub fn weights_raw(&self) -> &[raw::AiVertexWeight] {
         let bone = self.raw();
         debug_assert!(bone.mNumWeights == 0 || !bone.mWeights.is_null());
-        ffi::slice_from_ptr_len(
-            self,
-            bone.mWeights as *const raw::AiVertexWeight,
-            bone.mNumWeights as usize,
-        )
+        unsafe {
+            ffi::slice_from_ptr_len(
+                self,
+                bone.mWeights as *const raw::AiVertexWeight,
+                bone.mNumWeights as usize,
+            )
+        }
     }
 
     /// Get the raw vertex weight array (zero-copy), returning `None` when absent.
     pub fn weights_raw_opt(&self) -> Option<&[raw::AiVertexWeight]> {
         let bone = self.raw();
-        ffi::slice_from_ptr_len_opt(
-            self,
-            bone.mWeights as *const raw::AiVertexWeight,
-            bone.mNumWeights as usize,
-        )
+        unsafe {
+            ffi::slice_from_ptr_len_opt(
+                self,
+                bone.mWeights as *const raw::AiVertexWeight,
+                bone.mNumWeights as usize,
+            )
+        }
     }
 
     /// Iterate vertex weights without allocation.
@@ -264,8 +273,14 @@ pub struct BoneIterator {
 
 impl BoneIterator {
     /// Create a new bone iterator
-    pub(crate) fn new(scene: Scene, bones: *mut *mut sys::aiBone, count: usize) -> Self {
-        let bones_ptr = SharedPtr::new(bones as *const *const sys::aiBone);
+    ///
+    /// # Safety
+    /// A non-null, aligned `bones` must point to `count` initialized bone pointers
+    /// owned by `scene`. The array, each non-null, aligned bone, and all reachable
+    /// data must remain valid and read-only for the lifetime of `scene` and its
+    /// clones. Non-null nested arrays must be valid for their declared lengths.
+    pub(crate) unsafe fn new(scene: Scene, bones: *mut *mut sys::aiBone, count: usize) -> Self {
+        let bones_ptr = unsafe { SharedPtr::new(bones as *const *const sys::aiBone) };
         let count = if bones_ptr.is_some() { count } else { 0 };
         Self {
             scene,
@@ -281,14 +296,17 @@ impl Iterator for BoneIterator {
 
     fn next(&mut self) -> Option<Self::Item> {
         let bones = self.bones?;
-        let slice = crate::ffi::slice_from_ptr_len_opt(&(), bones.as_ptr(), self.count)?;
+        let slice =
+            unsafe { crate::ffi::slice_from_ptr_len_opt(&self.scene, bones.as_ptr(), self.count) }?;
         while self.index < slice.len() {
             let bone_ptr = slice[self.index];
             self.index += 1;
             if bone_ptr.is_null() {
                 continue;
             }
-            if let Ok(bone) = Bone::from_sys_ptr(self.scene.clone(), bone_ptr as *mut sys::aiBone) {
+            if let Ok(bone) =
+                unsafe { Bone::from_sys_ptr(self.scene.clone(), bone_ptr as *mut sys::aiBone) }
+            {
                 return Some(bone);
             }
         }
