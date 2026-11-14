@@ -653,7 +653,7 @@ impl Camera {
     }
 
     pub fn view_matrix(&self) -> Mat4 {
-        Mat4::look_at_rh(self.position, self.position + self.front, self.up)
+        glam::camera::rh::view::look_at_mat4(self.position, self.position + self.front, self.up)
     }
 
     pub fn process_keyboard(&mut self, direction: CameraMovement, delta_time: f32) {
@@ -960,7 +960,7 @@ impl App {
 
         // Set up matrices
         let size = self.window.inner_size();
-        let projection = Mat4::perspective_rh_gl(
+        let projection = glam::camera::rh::proj::opengl::perspective(
             self.camera.zoom.to_radians(),
             size.width as f32 / size.height as f32,
             0.1,

@@ -1,14 +1,10 @@
-use std::{env, fs, path::PathBuf};
+use std::{fs, path::PathBuf};
 
 use crate::build_support::{
     config::BuildConfig,
     plan::{BuildMethod, BuildPlan, LinkKind},
-    util,
+    util, version,
 };
-
-fn expected_assimp_version() -> &'static str {
-    include_str!("../assimp-version.txt").trim()
-}
 
 pub fn build(cfg: &BuildConfig, link_kind: LinkKind) -> BuildPlan {
     let assimp_src = cfg.assimp_source_dir();
@@ -16,6 +12,16 @@ pub fn build(cfg: &BuildConfig, link_kind: LinkKind) -> BuildPlan {
     reset_stale_cmake_output(cfg, &assimp_src, link_kind);
 
     let dst = build_assimp_with_cmake(cfg, &assimp_src, link_kind);
+    let revision_header = dst.join("build/include/assimp/revision.h");
+    let actual_version = fs::read_to_string(&revision_header)
+        .ok()
+        .and_then(|contents| version::parse_header(&contents));
+    assert_eq!(
+        actual_version.as_deref(),
+        Some(version::BUNDLED_VERSION),
+        "Assimp source version must match the bundled bindings. Check ASSIMP_DIR and initialize the pinned submodule. Header: {}",
+        revision_header.display()
+    );
     write_build_stamp(cfg, &assimp_src, link_kind);
 
     let include_dir = dst.join("include");
@@ -45,23 +51,19 @@ pub fn build(cfg: &BuildConfig, link_kind: LinkKind) -> BuildPlan {
         "assimp".to_string()
     };
 
-    // For unix static builds, link system zlib explicitly when enabled.
-    if !cfg.is_windows() && matches!(link_kind, LinkKind::Static) && !cfg!(feature = "nozlib") {
+    // Unix static builds require explicit linkage to the system zlib.
+    if !cfg.is_windows() && matches!(link_kind, LinkKind::Static) {
         println!("cargo:rustc-link-lib=z");
     }
 
     // For Windows static builds, link bundled zlib if present.
-    if cfg.is_windows()
-        && cfg.is_msvc()
-        && matches!(link_kind, LinkKind::Static)
-        && !cfg!(feature = "nozlib")
-    {
+    if cfg.is_windows() && matches!(link_kind, LinkKind::Static) {
         link_windows_zlib(&dst, cfg);
     }
 
     // For Windows shared builds, copy DLLs next to test binaries.
     if cfg.is_windows() && cfg.is_msvc() && matches!(link_kind, LinkKind::Dynamic) {
-        copy_windows_dlls(&dst);
+        util::copy_windows_dlls(&cfg.out_dir, &dst);
     }
 
     BuildPlan {
@@ -91,7 +93,7 @@ fn build_stamp_contents(
 ) -> String {
     format!(
         "assimp_version={}\nlink_kind={:?}\ncmake_profile={}\nsource={}\n",
-        expected_assimp_version(),
+        version::BUNDLED_VERSION,
         link_kind,
         cfg.cmake_profile(),
         assimp_src.display()
@@ -112,7 +114,7 @@ fn reset_stale_cmake_output(cfg: &BuildConfig, assimp_src: &std::path::Path, lin
     if cfg.verbose {
         util::warn(format!(
             "Assimp build cache stamp changed; rebuilding vendored Assimp {}",
-            expected_assimp_version()
+            version::BUNDLED_VERSION
         ));
     }
 
@@ -172,16 +174,14 @@ fn build_assimp_with_cmake(
 
     // Keep Assimp's C "export" API enabled even when the Rust `export` feature is off.
     //
-    // Assimp gates `aiCopyScene` / `aiFreeScene` behind `ASSIMP_BUILD_NO_EXPORT`, and this crate
-    // relies on them for safe deep-copy/ownership behavior (e.g. postprocess on shared scenes).
+    // Assimp gates `aiCopyScene` / `aiFreeScene` behind `ASSIMP_BUILD_NO_EXPORT`.
+    // Keep these available for raw scene adoption and a consistent low-level C API.
     cmake_config.define("ASSIMP_NO_EXPORT", "OFF");
 
     // zlib strategy:
     // - Windows: build bundled zlib (default for Assimp)
     // - Unix: use system zlib (faster and more predictable); link `-lz` for static builds.
-    if cfg!(feature = "nozlib") {
-        cmake_config.define("ASSIMP_BUILD_ZLIB", "OFF");
-    } else if cfg.is_windows() {
+    if cfg.is_windows() {
         cmake_config.define("ASSIMP_BUILD_ZLIB", "ON");
     } else {
         cmake_config.define("ASSIMP_BUILD_ZLIB", "OFF");
@@ -337,42 +337,23 @@ fn link_windows_zlib(dst: &std::path::Path, cfg: &BuildConfig) {
                 continue;
             };
             let lower = name.to_ascii_lowercase();
-            if lower.ends_with(".lib") && (lower.contains("zlibstatic") || lower == "zlib.lib") {
+            let is_zlib = if cfg.is_msvc() {
+                lower.ends_with(".lib") && (lower.contains("zlibstatic") || lower == "zlib.lib")
+            } else {
+                lower.starts_with("libzlibstatic")
+                    && lower.ends_with(".a")
+                    && !lower.ends_with(".dll.a")
+            };
+            if is_zlib {
                 if let Some(stem) = p.file_stem().and_then(|s| s.to_str()) {
+                    let stem = if cfg.is_msvc() {
+                        stem
+                    } else {
+                        stem.strip_prefix("lib").unwrap_or(stem)
+                    };
                     println!("cargo:rustc-link-search=native={}", dir.display());
                     println!("cargo:rustc-link-lib=static={}", stem);
                     return;
-                }
-            }
-        }
-    }
-}
-
-fn copy_windows_dlls(dst: &std::path::Path) {
-    let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap_or_default());
-    let profile_dir = out_dir
-        .ancestors()
-        .nth(3)
-        .map(|p| p.to_path_buf())
-        .unwrap_or_else(|| out_dir.clone());
-    let deps_dir = profile_dir.join("deps");
-
-    let candidates = [dst.join("bin"), dst.join("build").join("bin")];
-    for bin_dir in candidates.iter() {
-        if !bin_dir.exists() {
-            continue;
-        }
-        if let Ok(read) = fs::read_dir(bin_dir) {
-            for entry in read.flatten() {
-                let p = entry.path();
-                if p.extension()
-                    .and_then(|s| s.to_str())
-                    .is_some_and(|e| e.eq_ignore_ascii_case("dll"))
-                {
-                    let fname = p.file_name().unwrap();
-                    let _ = fs::create_dir_all(&deps_dir);
-                    let _ = fs::copy(&p, deps_dir.join(fname));
-                    let _ = fs::copy(&p, profile_dir.join(fname));
                 }
             }
         }

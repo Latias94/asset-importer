@@ -9,7 +9,7 @@ use crate::{
     error::{Error, Result},
     ffi,
     importer::{PropertyStore, PropertyValue},
-    io::{AssimpFileIO, FileSystem},
+    io::{FileSystem, OwnedAiFileIO},
     ptr::SharedPtr,
     scene::Scene,
     sys,
@@ -129,7 +129,7 @@ impl ExportBuilder {
         self.with_property(name, PropertyValue::Matrix(value))
     }
 
-    /// Use a custom file system for exporting (uses aiExportSceneEx).
+    /// Use a custom file system for exporting through the C++ bridge.
     pub fn with_file_system<F>(self, file_system: F) -> Self
     where
         F: FileSystem + 'static,
@@ -154,58 +154,40 @@ impl ExportBuilder {
         let c_format = CString::new(self.format_id.as_str())
             .map_err(|_| Error::invalid_parameter("Invalid format ID"))?;
 
-        let used_bridge = !self.properties.is_empty();
-        let result = if !used_bridge {
-            if let Some(fs) = &self.file_system {
-                let mut file_io = AssimpFileIO::new(fs.clone()).create_ai_file_io();
-                unsafe {
-                    sys::aiExportSceneEx(
-                        scene.as_raw_sys(),
-                        c_format.as_ptr(),
-                        c_path.as_ptr(),
-                        file_io.as_mut_ptr_sys(),
-                        self.preprocessing,
-                    )
-                }
-            } else {
-                unsafe {
-                    sys::aiExportScene(
-                        scene.as_raw_sys(),
-                        c_format.as_ptr(),
-                        c_path.as_ptr(),
-                        self.preprocessing,
-                    )
-                }
+        let file_io = self
+            .file_system
+            .as_ref()
+            .map(|fs| OwnedAiFileIO::new(fs.clone()));
+        let used_bridge = !self.properties.is_empty() || file_io.is_some();
+        let result = if used_bridge {
+            let buffers = build_rust_properties(&self.properties)?;
+            unsafe {
+                sys::aiExportSceneExWithPropertiesRust(
+                    scene.as_raw_sys(),
+                    c_format.as_ptr(),
+                    c_path.as_ptr(),
+                    file_io
+                        .as_ref()
+                        .map_or(std::ptr::null(), |io| io.as_ptr_sys()),
+                    self.preprocessing,
+                    buffers.ffi_props.as_ptr(),
+                    buffers.ffi_props.len(),
+                )
             }
         } else {
-            let buffers = build_rust_properties(&self.properties)?;
-            if let Some(fs) = &self.file_system {
-                let file_io = AssimpFileIO::new(fs.clone()).create_ai_file_io();
-                unsafe {
-                    sys::aiExportSceneExWithPropertiesRust(
-                        scene.as_raw_sys(),
-                        c_format.as_ptr(),
-                        c_path.as_ptr(),
-                        file_io.as_ptr_sys(),
-                        self.preprocessing,
-                        buffers.ffi_props.as_ptr(),
-                        buffers.ffi_props.len(),
-                    )
-                }
-            } else {
-                unsafe {
-                    sys::aiExportSceneExWithPropertiesRust(
-                        scene.as_raw_sys(),
-                        c_format.as_ptr(),
-                        c_path.as_ptr(),
-                        std::ptr::null(),
-                        self.preprocessing,
-                        buffers.ffi_props.as_ptr(),
-                        buffers.ffi_props.len(),
-                    )
-                }
+            unsafe {
+                sys::aiExportScene(
+                    scene.as_raw_sys(),
+                    c_format.as_ptr(),
+                    c_path.as_ptr(),
+                    self.preprocessing,
+                )
             }
         };
+
+        if file_io.as_ref().is_some_and(|io| io.has_error()) {
+            return Err(Error::io_error("Custom IO callback failed during export"));
+        }
 
         if result == sys::aiReturn::aiReturn_SUCCESS {
             Ok(())

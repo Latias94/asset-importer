@@ -30,6 +30,8 @@ pub(crate) unsafe trait SharedPtrTarget {}
 
 // Scene-backed Assimp structs we expose through the safe API.
 unsafe impl SharedPtrTarget for crate::sys::aiScene {}
+// The importer is queried immutably while shared; post-processing requires unique Arc ownership.
+unsafe impl SharedPtrTarget for crate::sys::aiRustScene {}
 unsafe impl SharedPtrTarget for crate::sys::aiNode {}
 unsafe impl SharedPtrTarget for crate::sys::aiMesh {}
 unsafe impl SharedPtrTarget for crate::sys::aiMaterial {}
@@ -93,6 +95,11 @@ impl<T> SharedPtr<T> {
 // as read-only through this crate's API.
 unsafe impl<T: SharedPtrTarget> Send for SharedPtr<T> {}
 unsafe impl<T: SharedPtrTarget> Sync for SharedPtr<T> {}
+
+// The callback table stays at a stable heap address, and every callback accesses Rust
+// state through Mutex/AtomicBool. Raw callers must not mutate the table while shared.
+unsafe impl Send for crate::io::OwnedAiFileIO {}
+unsafe impl Sync for crate::io::OwnedAiFileIO {}
 
 #[cfg(test)]
 mod tests {

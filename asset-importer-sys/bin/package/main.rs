@@ -6,9 +6,8 @@ use std::{
 
 use flate2::{Compression, write::GzEncoder};
 
-fn vendored_assimp_version() -> &'static str {
-    include_str!("../../assimp-version.txt").trim()
-}
+#[path = "../../build_support/version.rs"]
+mod version;
 
 fn target_os_from_triple(target: &str) -> &'static str {
     if target.contains("-windows-") {
@@ -31,56 +30,17 @@ const fn static_lib() -> &'static str {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
-    let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let workspace_root = manifest_dir.parent().unwrap();
-    let ar_dst_dir = PathBuf::from(
-        env::var("ASSET_IMPORTER_PACKAGE_DIR").unwrap_or_else(|_| env::var("OUT_DIR").unwrap()),
-    );
-
-    // Get target from environment variable or use built-in target
-    let target = env::var("TARGET").unwrap_or_else(|_| {
-        // Fallback to built-in target if TARGET env var is not set
-        env::var("CARGO_CFG_TARGET_TRIPLE").unwrap_or_else(|_| {
-            // Last resort: construct a reasonable default target
-            let arch = std::env::consts::ARCH;
-            let os = std::env::consts::OS;
-            match os {
-                "windows" => format!("{}-pc-windows-msvc", arch),
-                "macos" => format!("{}-apple-darwin", arch),
-                "linux" => format!("{}-unknown-linux-gnu", arch),
-                _ => format!("{}-unknown-{}", arch, os),
-            }
-        })
-    });
-    let crate_version = env::var("CARGO_PKG_VERSION").unwrap();
+    let from_dir = PathBuf::from(env!("OUT_DIR"));
+    let ar_dst_dir = env::var_os("ASSET_IMPORTER_PACKAGE_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| from_dir.clone());
+    let target = env!("ASSET_IMPORTER_BUILD_TARGET");
+    let crate_version = env!("CARGO_PKG_VERSION");
     let link_type = static_lib();
-    // Note: Cargo does not guarantee that `CARGO_CFG_TARGET_*` env vars are present when running
-    // `cargo run` binaries. Prefer deriving the OS from the target triple.
-    let target_os = env::var("CARGO_CFG_TARGET_OS")
-        .unwrap_or_else(|_| target_os_from_triple(&target).to_string());
-    let target_env = env::var("CARGO_CFG_TARGET_ENV").unwrap_or_default();
-    let target_features = env::var("CARGO_CFG_TARGET_FEATURE").unwrap_or_default();
-
-    // Packaging for Windows needs to distinguish CRT variants (md/mt). Allow explicit override
-    // from CI, because `CARGO_CFG_TARGET_FEATURE` may be missing at runtime.
-    let crt = if target_os == "windows" {
-        if let Ok(v) = env::var("ASSET_IMPORTER_PKG_CRT") {
-            if !v.trim().is_empty() {
-                Box::leak(v.trim().to_string().into_boxed_str())
-            } else {
-                ""
-            }
-        } else if target_env == "msvc" && target_features.split(',').any(|f| f == "crt-static") {
-            "mt"
-        } else if target_env == "msvc" {
-            "md"
-        } else {
-            ""
-        }
-    } else {
-        ""
-    };
+    let target_os = target_os_from_triple(target);
+    let crt = env!("ASSET_IMPORTER_BUILD_CRT");
 
     println!("Package configuration:");
     println!("  Target: {}", target);
@@ -103,21 +63,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         )
     };
 
-    // Determine the source directory based on build type
-    let from_dir = if cfg!(feature = "build-assimp") {
-        // We need the CMake install prefix produced by build.rs (cmake::Config::build())
-        // That path is target/<triple>/<profile>/build/asset-importer-sys-*/out
-        // Prefer environment override if set (useful in CI)
-        if let Ok(dir) = env::var("ASSET_IMPORTER_BUILD_OUT_DIR") {
-            PathBuf::from(dir)
-        } else {
-            locate_build_out_dir(workspace_root, &target, link_type, &target_os)?
-        }
-    } else {
-        // This shouldn't happen in package mode, but fallback
-        return Err("Package tool requires build-assimp feature".into());
-    };
-
     fs::create_dir_all(&ar_dst_dir)?;
     println!("Packaging at: {}", ar_dst_dir.display());
 
@@ -128,6 +73,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let include_dir = from_dir.join("include");
     append_assimp_headers(&mut archive, &include_dir)?;
+    // Assimp does not install revision.h, but prebuilt consumers need its version macros.
+    archive.append_path_with_name(
+        from_dir.join("build/include/assimp/revision.h"),
+        "include/assimp/revision.h",
+    )?;
 
     let lib_root = pick_lib_root(&from_dir)?;
     append_assimp_libs(&mut archive, &lib_root, link_type, &target_os)?;
@@ -142,7 +92,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         &crate_version,
         link_type,
         crt,
-        vendored_assimp_version(),
+        version::BUNDLED_VERSION,
     )?;
 
     // Add license files
@@ -163,7 +113,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    archive.finish()?;
+    archive.into_inner()?.finish()?;
 
     println!(
         "Package created at: {}\nTarget: {}\nLink type: {}",
@@ -363,6 +313,17 @@ fn validate_from_dir(
         .into());
     }
 
+    let revision_header = from_dir.join("build/include/assimp/revision.h");
+    let actual_version = version::parse_header(&fs::read_to_string(&revision_header)?);
+    if actual_version.as_deref() != Some(version::BUNDLED_VERSION) {
+        return Err(format!(
+            "Assimp build version {:?} does not match {}; refusing to mislabel the package",
+            actual_version,
+            version::BUNDLED_VERSION
+        )
+        .into());
+    }
+
     let lib_dir = from_dir.join("lib");
     let lib64_dir = from_dir.join("lib64");
     let bin_dir = from_dir.join("bin");
@@ -460,167 +421,4 @@ fn validate_from_dir(
     }
 
     Ok(())
-}
-
-fn locate_build_out_dir(
-    workspace_root: &std::path::Path,
-    target: &str,
-    link_type: &str,
-    target_os: &str,
-) -> Result<PathBuf, Box<dyn std::error::Error>> {
-    // Determine profile used for this run
-    let profile = env::var("PROFILE").unwrap_or_else(|_| "release".into());
-    // Prefer CARGO_TARGET_DIR, else workspace_root/target
-    let target_dir = env::var("CARGO_TARGET_DIR")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| workspace_root.join("target"));
-
-    // Cargo uses different target directory layouts depending on whether `--target` is passed:
-    // - with `--target <triple>`: target/<triple>/<profile>/build
-    // - without `--target` (native): target/<profile>/build
-    let build_roots = [
-        target_dir.join(target).join(&profile).join("build"),
-        target_dir.join(&profile).join("build"),
-    ];
-
-    let mut candidates: Vec<PathBuf> = Vec::new();
-    for build_root in build_roots.iter().filter(|p| p.exists()) {
-        if let Ok(rd) = std::fs::read_dir(build_root) {
-            candidates.extend(rd.filter_map(|e| e.ok()).filter_map(|e| {
-                let p = e.path();
-                let name = p.file_name()?.to_string_lossy().to_string();
-                if !name.starts_with("asset-importer-sys-") {
-                    return None;
-                }
-                let out = p.join("out");
-                out.join("include").exists().then_some(out)
-            }));
-        }
-    }
-
-    if candidates.is_empty() {
-        let attempted = build_roots
-            .iter()
-            .map(|p| p.display().to_string())
-            .collect::<Vec<_>>()
-            .join(", ");
-        return Err(format!(
-            "No asset-importer-sys build out directories found under any of: {}",
-            attempted
-        )
-        .into());
-    }
-
-    let desired = match link_type {
-        "static" => PackageKind::Static,
-        "dylib" => PackageKind::Dylib,
-        _ => PackageKind::Unknown,
-    };
-
-    let mut matching: Vec<PathBuf> = candidates
-        .into_iter()
-        .filter(|p| detect_package_kind(p, target_os) == desired)
-        .collect();
-
-    if matching.is_empty() {
-        return Err(format!(
-            "No asset-importer-sys build out directories match requested link type {link_type} for {target}.\n\
-             Hint: build the sys crate with matching features before packaging (static: enable `static-link`, dylib: disable it)."
-        )
-        .into());
-    }
-
-    // Choose the most recently modified among the matching candidates.
-    matching.sort_by_key(|p| std::fs::metadata(p).and_then(|m| m.modified()).ok());
-    let from_dir = matching.pop().unwrap();
-    println!("Using build out dir: {}", from_dir.display());
-    Ok(from_dir)
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum PackageKind {
-    Static,
-    Dylib,
-    Unknown,
-}
-
-fn detect_package_kind(from_dir: &Path, target_os: &str) -> PackageKind {
-    let include_version = from_dir.join("include").join("assimp").join("version.h");
-    if !include_version.exists() {
-        return PackageKind::Unknown;
-    }
-
-    let lib_dir = from_dir.join("lib");
-    let lib64_dir = from_dir.join("lib64");
-    let bin_dir = from_dir.join("bin");
-
-    if target_os == "windows" {
-        let has_lib = [lib_dir.as_path(), lib64_dir.as_path()]
-            .into_iter()
-            .filter(|p| p.exists())
-            .flat_map(|p| fs::read_dir(p).ok().into_iter().flatten().flatten())
-            .any(|e| {
-                e.path()
-                    .file_name()
-                    .and_then(|s| s.to_str())
-                    .is_some_and(|n| {
-                        n.to_ascii_lowercase().starts_with("assimp")
-                            && n.to_ascii_lowercase().ends_with(".lib")
-                    })
-            });
-
-        let has_dll = bin_dir.exists()
-            && fs::read_dir(&bin_dir)
-                .ok()
-                .into_iter()
-                .flatten()
-                .flatten()
-                .any(|e| {
-                    e.path()
-                        .extension()
-                        .and_then(|s| s.to_str())
-                        .is_some_and(|ext| ext.eq_ignore_ascii_case("dll"))
-                });
-
-        if has_lib && has_dll {
-            return PackageKind::Dylib;
-        }
-        if has_lib {
-            return PackageKind::Static;
-        }
-        return PackageKind::Unknown;
-    }
-
-    let mut has_static = false;
-    let mut has_shared = false;
-    for root in [lib_dir.as_path(), lib64_dir.as_path()] {
-        if !root.exists() {
-            continue;
-        }
-        if let Ok(rd) = fs::read_dir(root) {
-            for entry in rd.flatten() {
-                let p = entry.path();
-                let Some(name) = p.file_name().and_then(|s| s.to_str()) else {
-                    continue;
-                };
-                let lower = name.to_ascii_lowercase();
-                if lower.starts_with("libassimp") && lower.ends_with(".a") {
-                    has_static = true;
-                }
-                if lower.starts_with("libassimp")
-                    && (lower.ends_with(".dylib") || lower.contains(".so"))
-                {
-                    has_shared = true;
-                }
-            }
-        }
-    }
-
-    if has_shared {
-        PackageKind::Dylib
-    } else if has_static {
-        PackageKind::Static
-    } else {
-        PackageKind::Unknown
-    }
 }

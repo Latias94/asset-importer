@@ -29,6 +29,19 @@ compile_error!(
 // Include the generated bindings
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 
+impl Default for aiMaterialProperty {
+    fn default() -> Self {
+        Self {
+            mKey: aiString::default(),
+            mSemantic: 0,
+            mIndex: 0,
+            mDataLength: 0,
+            mType: aiPropertyTypeInfo::aiPTI_Float,
+            mData: std::ptr::null_mut(),
+        }
+    }
+}
+
 // Re-export commonly used types for convenience
 pub use aiImporterDesc as ImporterDesc;
 pub use aiScene as Scene;
@@ -39,6 +52,9 @@ pub use aiReleaseImport as release_import;
 
 /// Version information for this crate
 pub const CRATE_VERSION: &str = env!("CARGO_PKG_VERSION");
+
+/// Assimp version bundled with this crate. System builds may link a different version.
+pub const BUNDLED_ASSIMP_VERSION: &str = include_str!("../assimp-version.txt").trim_ascii();
 
 // Include tests
 mod test;

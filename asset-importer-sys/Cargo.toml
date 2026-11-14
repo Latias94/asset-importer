@@ -1,13 +1,12 @@
 [package]
 name = "asset-importer-sys"
-version = "0.8.0"
+version = "0.9.0"
 edition.workspace = true
 rust-version.workspace = true
 authors.workspace = true
 license.workspace = true
 description = "Low-level FFI bindings for the Assimp 3D asset import library"
-homepage = "https://github.com/Latias94/asset-importer"
-repository = "https://github.com/Latias94/asset-importer"
+repository.workspace = true
 documentation = "https://docs.rs/asset-importer-sys"
 categories = ["external-ffi-bindings", "rendering"]
 keywords = ["assimp", "3d", "ffi", "bindings"]
@@ -72,22 +71,26 @@ name = "package"
 path = "bin/package/main.rs"
 required-features = ["build-assimp", "package"]
 
+[[test]]
+name = "build_version"
+path = "build_support/version.rs"
+
 [dependencies]
 mint = { version = "0.5.9", optional = true }
 # For `package` binary only
-tar = { version = "0.4.44", optional = true }
-flate2 = { version = "1.1.8", optional = true }
+tar = { version = "0.4.46", optional = true }
+flate2 = { version = "1.1.11", optional = true }
 
 [build-dependencies]
-bindgen = { version = "0.72.1", optional = true }
-cc = "1.2.53"
+bindgen = { version = "0.73.2", optional = true }
+cc = "1.11.2"
 cmake = "0.1.57"
-pkg-config = { version = "0.3.32", optional = true }
+pkg-config = { version = "0.3.34", optional = true }
 vcpkg = { version = "0.2.15", optional = true }
 # Prebuilt binary support (download + extract) is only needed when `prebuilt` is enabled.
-ureq = { version = "3.1.4", default-features = false, features = ["rustls"], optional = true }
-tar = { version = "0.4.44", optional = true }
-flate2 = { version = "1.1.8", optional = true }
+ureq = { version = "3.5.2", default-features = false, features = ["rustls"], optional = true }
+tar = { version = "0.4.46", optional = true }
+flate2 = { version = "1.1.11", optional = true }
 
 [features]
 default = []
@@ -113,8 +116,6 @@ build-assimp = []
 package = ["dep:tar", "dep:flate2"]
 # Use prebuilt binaries (requires release artifacts)
 prebuilt = ["dep:ureq", "dep:tar", "dep:flate2"]
-# Control zlib linking
-nozlib = []
 static-link = []
 
 [package.metadata.docs.rs]

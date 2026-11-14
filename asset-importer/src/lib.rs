@@ -46,7 +46,7 @@
 //! - `build-assimp`: explicitly build Assimp from source via CMake
 //! - `system`: link against a system-installed Assimp (requires libclang/bindgen)
 //!
-//! For the default source build, `asset-importer = "0.7"` is enough.
+//! For the default source build, `asset-importer = "0.9"` is enough.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![warn(missing_docs)]
@@ -153,6 +153,9 @@ mod ptr;
 pub mod version {
     /// Version of this crate
     pub const CRATE_VERSION: &str = env!("CARGO_PKG_VERSION");
+
+    /// Assimp version bundled with this crate. System builds may link a different version.
+    pub const BUNDLED_ASSIMP_VERSION: &str = crate::sys::BUNDLED_ASSIMP_VERSION;
 
     /// Version of the underlying Assimp library
     pub fn assimp_version() -> String {

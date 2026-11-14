@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Bundled Assimp is now [6.0.6](https://github.com/assimp/assimp/releases/tag/v6.0.6) (`a79ff6bbce54d3e01186a918dc6374ed55317426`). Bindings are regenerated with bindgen 0.73.2; source overrides and prebuilt packages must match this version.
+- **Breaking:** The custom import bridge returns an opaque `aiRustScene` owner. Use `aiGetSceneRust` to borrow its scene, `aiApplyPostProcessingRust` for exclusive post-processing, and `aiReleaseSceneRust` to release it. Upstream C API bindings remain available.
+- The package tool uses Cargo's current `OUT_DIR`, target, and CRT settings, removing directory scans and runtime target guesses. Archives include `revision.h` and are checked against their actual build version before packaging.
+- Updated build/download dependencies and added `BUNDLED_ASSIMP_VERSION`. macOS fallback deployment targets now match Rust's supported baseline: 10.13 for Intel and 11.0 for ARM64.
+
+### Fixed
+- System header version parsing now skips unrelated defines and include guards. Prebuilt packages whose version cannot be determined are rejected.
+- The bridge retains importer ownership after post-processing failures, releases custom I/O streams on every destruction path, and preserves progress cancellation and C++ exception boundaries.
+- `aiMaterialProperty::default()` now initializes a valid `aiPTI_Float` value instead of zero-initializing a Rust enum with no zero variant; regeneration preserves this fix.
+- Windows GNU source static builds now link bundled `zlibstatic` archives, including debug-suffixed libraries.
+- Windows runtime DLL placement supports both Cargo build directory layouts instead of assuming a fixed `OUT_DIR` depth, and reports copy failures.
+- Changes to pregenerated bindings now retrigger the build script.
+
+### Removed
+- **Breaking:** Removed the ineffective `nozlib` feature. Assimp requires zlib; static builds always link the platform's required library.
+
 ## [0.8.0] - 2026-05-04
 
 ### Added

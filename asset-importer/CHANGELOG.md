@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Bundled Assimp is now [6.0.6](https://github.com/assimp/assimp/releases/tag/v6.0.6), with updated bindings and regression coverage for glTF normalized skin weights, mixed joint accessors, and texture transforms.
+- **Breaking:** The optional `glam` integration now uses 0.34. The minimum supported Rust version remains 1.85, and workspace dependency resolution respects it.
+- **Breaking:** `Scene::apply_postprocess` requires exclusive scene ownership and a scene created by the import builder. Drop clones, views, and owning iterators first, or configure post-processing before import. Raw adopted scenes are rejected.
+- Progress imports retain their native importer without deep-copying the scene, enabling later post-processing and memory queries. Progress callbacks are detached before the import returns; custom I/O stays with the scene, including later texture embedding, and is released after the importer.
+- **Breaking:** `Error::IoError` preserves the original `std::io::Error` in its `source` field. Custom file systems must return `std::io::ErrorKind::NotFound` through `Error::from` for missing optional files; other open errors fail the operation instead of silently discarding sidecar data.
+
+### Fixed
+- Scene ownership no longer uses Assimp's C post-processing failure path, which can access an already-deleted scene. Importer cleanup remains valid after a failed processing step.
+- Custom I/O streams are closed when Assimp deletes them directly or leaves them open during an exporter exception. Import/export now report callback panics, write/flush failures, and panicking stream destructors instead of silently succeeding; partial reads and writes are supported.
+- Progress cancellation is retained across stage notifications, stops subsequent user callbacks, and prevents returning a scene after cancellation. Panic payload destructors cannot unwind across the C ABI.
+- Default file streams now support writing and flushing, preserve `r+`, `w+`, and `a+` semantics, and do not flush read-only streams on close. In-memory imports resolve external resources through the configured custom file system.
+- Zero-copy views check size, alignment, and field offsets against generated bindings at compile time, and the byte-view example correctly reads indices from individual faces.
+
+### Removed
+- **Breaking:** Removed the `tokio` feature and runtime dependency. Scene types remain `Send + Sync`; use your application's runtime and `spawn_blocking` for imports.
+- **Breaking:** Removed `nozlib`, which did not disable Assimp's zlib dependency. Source and prebuilt static builds now link the required zlib consistently.
+
 ## [0.8.0] - 2026-05-04
 
 ### Added

@@ -12,7 +12,7 @@
 
 A comprehensive Rust binding for the latest [Assimp](https://github.com/assimp/assimp) 3D asset import library.
 
-This crate provides safe, high-level Rust bindings for **Assimp v6.0.5**, implementing the vast majority of the C API with idiomatic Rust interfaces.
+This crate provides safe, high-level Rust bindings for **Assimp v6.0.6**, implementing the vast majority of the C API with idiomatic Rust interfaces.
 
 ## Example Application
 
@@ -24,7 +24,7 @@ See **[Model Viewer](https://github.com/Latias94/model-viewer)** (asset-importer
 
 ## Features
 
-- **Comprehensive API Coverage**: Implements the vast majority of [Assimp v6.0.5](https://github.com/assimp/assimp/releases/tag/v6.0.5) C API
+- **Comprehensive API Coverage**: Implements the vast majority of [Assimp v6.0.6](https://github.com/assimp/assimp/releases/tag/v6.0.6) C API
 - **Import Support**: 71+ 3D file formats (OBJ, FBX, glTF, DAE, etc.)
 - **Export Support**: 22+ output formats (optional)
 - **Memory Safe**: Safe Rust API over unsafe FFI bindings
@@ -39,16 +39,16 @@ Add to your `Cargo.toml`:
 ```toml
 [dependencies]
 # Default: build bundled Assimp from source (most reliable)
-asset-importer = "0.8"
+asset-importer = "0.9"
 
 # Or explicitly select the source build mode
-asset-importer = { version = "0.8", features = ["build-assimp"] }
+asset-importer = { version = "0.9", features = ["build-assimp"] }
 
 # Or use prebuilt binaries (fastest, but requires matching release artifacts)
-asset-importer = { version = "0.8", features = ["prebuilt"] }
+asset-importer = { version = "0.9", features = ["prebuilt"] }
 
 # Or link a system-installed Assimp (requires libclang/bindgen; mutually exclusive build mode)
-asset-importer = { version = "0.8", features = ["system"] }
+asset-importer = { version = "0.9", features = ["system"] }
 ```
 
 Basic usage:
@@ -103,12 +103,23 @@ Practical guidance:
 - Only enable `raw-sys` when you explicitly need raw bindings, and treat the returned pointers as read-only.
 - Do not call Assimp APIs that mutate or free the scene (e.g. post-processing, freeing, replacing pointers) on a scene that is still alive on the Rust side.
 
+## Migrating to 0.9
+
+- Bundled source and prebuilt packages now use Assimp 6.0.6. Source overrides must match this version; system builds generate bindings from their installed headers.
+- The optional `glam` integration now uses `glam` 0.34. The minimum Rust version remains 1.85.
+- The ineffective `nozlib` feature was removed; Assimp requires zlib. Windows builds bundle it, and Unix builds use the system library.
+- The `tokio` feature was removed: asynchronous use only depends on the scene types being `Send + Sync`. Use your application's runtime and run blocking imports with `spawn_blocking`.
+- `Scene::apply_postprocess` requires exclusive ownership. Drop scene clones, views, and owning iterators first, or configure post-processing on the import builder. Scenes adopted through raw constructors cannot be post-processed through the safe API.
+- Imports with progress callbacks now retain their native importer, so later post-processing and memory queries work without copying the scene. Progress state is released before the import returns. Custom I/O remains owned by the scene for later post-processing.
+- `Error::IoError` now carries the original `std::io::Error` in `source`. Custom file systems should preserve `NotFound` through `Error::from` for optional missing files; other I/O errors fail the operation.
+- Prebuilt 0.9 packages must be generated for this release. Until published, use the default source build or provide local packages with `ASSET_IMPORTER_PACKAGE_DIR`.
+
 ## Build Options
 
 ### Default: Build from Source (Recommended)
 
 ```toml
-asset-importer = "0.8"
+asset-importer = "0.9"
 ```
 
 - **Most reliable**: Uses the bundled Assimp source that matches this crate
@@ -118,13 +129,13 @@ asset-importer = "0.8"
 You can also select the same vendored source build explicitly:
 
 ```toml
-asset-importer = { version = "0.8", features = ["build-assimp"] }
+asset-importer = { version = "0.9", features = ["build-assimp"] }
 ```
 
 ### Prebuilt Binaries (Opt-in)
 
 ```toml
-asset-importer = { version = "0.8", features = ["prebuilt"] }
+asset-importer = { version = "0.9", features = ["prebuilt"] }
 ```
 
 - **Fastest**: No native Assimp compilation
@@ -135,7 +146,7 @@ asset-importer = { version = "0.8", features = ["prebuilt"] }
 ### System Library
 
 ```toml
-asset-importer = { version = "0.8", features = ["system"] }
+asset-importer = { version = "0.9", features = ["system"] }
 ```
 
 - **Lightweight**: Uses existing system installation
@@ -146,7 +157,7 @@ asset-importer = { version = "0.8", features = ["system"] }
 
 ```toml
 asset-importer = {
-    version = "0.8",
+    version = "0.9",
     features = [
         "build-assimp",    # Optional explicit source build mode; omit for the default source build
         "export",          # Enable export functionality
@@ -156,7 +167,6 @@ asset-importer = {
         "mint",            # Enable mint math library integration
         "bytemuck",        # Enable zero-copy byte casts for raw views
         "static-link",     # Prefer static linking (source/prebuilt)
-        "nozlib"           # Disable zlib compression support
     ]
 }
 ```
@@ -172,7 +182,7 @@ commands for each build mode.
 
 When using the default source build or the explicit `build-assimp` feature, you'll need:
 
-- **CMake** (3.10 or later)
+- **CMake** (3.22 or later)
 - **C++ Compiler** (MSVC on Windows, GCC/Clang on Linux/macOS)
 - **Git** (for submodules)
 
@@ -227,7 +237,7 @@ For maximum compatibility, keep the default source build. For a system package, 
 For development work, the default source build is recommended:
 
 ```toml
-asset-importer = "0.8"
+asset-importer = "0.9"
 ```
 
 This ensures local builds do not depend on release artifact availability. Use `features = ["prebuilt"]`

@@ -50,10 +50,11 @@ pub enum Error {
     },
 
     /// I/O operation failed
-    #[error("I/O error: {message}")]
+    #[error("I/O error: {source}")]
     IoError {
-        /// Error message describing the I/O error
-        message: String,
+        /// The original I/O error, including its kind and source.
+        #[from]
+        source: std::io::Error,
     },
 
     /// Logging operation failed
@@ -126,7 +127,7 @@ impl Error {
     /// Create a new I/O error
     pub fn io_error<S: Into<String>>(message: S) -> Self {
         Self::IoError {
-            message: message.into(),
+            source: std::io::Error::other(message.into()),
         }
     }
 
@@ -228,10 +229,11 @@ mod tests {
     #[test]
     fn from_assimp_does_not_reuse_stale_bridge_error() {
         unsafe {
-            let _ = crate::sys::aiImportFileFromMemoryWithProgressRust(
+            let _ = crate::sys::aiImportFileFromMemoryRust(
                 std::ptr::null(),
                 0,
                 0,
+                std::ptr::null(),
                 std::ptr::null(),
                 std::ptr::null(),
                 0,

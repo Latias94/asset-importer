@@ -82,7 +82,14 @@ impl BuildConfig {
     }
 
     pub fn macos_deployment_target(&self) -> String {
-        env::var("MACOSX_DEPLOYMENT_TARGET").unwrap_or_else(|_| "10.12".to_string())
+        env::var("MACOSX_DEPLOYMENT_TARGET").unwrap_or_else(|_| {
+            if self.target.starts_with("aarch64-") {
+                "11.0"
+            } else {
+                "10.13"
+            }
+            .to_string()
+        })
     }
 
     pub fn assimp_source_dir(&self) -> PathBuf {
@@ -96,6 +103,7 @@ impl BuildConfig {
         println!("cargo:rerun-if-changed=assimp-version.txt");
         println!("cargo:rerun-if-changed=wrapper.h");
         println!("cargo:rerun-if-changed=wrapper.cpp");
+        println!("cargo:rerun-if-changed=src/bindings_pregenerated.rs");
 
         // When building from vendored sources, ensure changes to the Assimp checkout retrigger builds.
         // (Cargo does not automatically watch git submodules.)

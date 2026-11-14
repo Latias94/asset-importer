@@ -14,30 +14,30 @@ fn assert_close(actual: f32, expected: f32) {
     );
 }
 
-fn gltf_605_regressions_available() -> bool {
+fn regressions_available(minimum: (u32, u32, u32)) -> bool {
     let runtime = (
         version::assimp_version_major(),
         version::assimp_version_minor(),
         version::assimp_version_patch(),
     );
 
-    if runtime >= (6, 0, 5) {
+    if runtime >= minimum {
         return true;
     }
 
     let message = format!(
-        "glTF 6.0.5 regression tests require Assimp >= 6.0.5, but runtime is {}.{}.{}",
-        runtime.0, runtime.1, runtime.2
+        "glTF regression requires Assimp >= {}.{}.{}, but runtime is {}.{}.{}",
+        minimum.0, minimum.1, minimum.2, runtime.0, runtime.1, runtime.2
     );
 
-    if cfg!(feature = "build-assimp") || !cfg!(any(feature = "system", feature = "prebuilt")) {
+    if !cfg!(feature = "system") {
         panic!(
-            "{message}; build-assimp/default source builds should use the vendored 6.0.5 tree. \
+            "{message}; source/prebuilt builds must match the bundled Assimp version. \
              If this happens in CI, clear restored target artifacts and verify submodules."
         );
     }
 
-    eprintln!("{message}; skipping system/prebuilt runtime-specific glTF 6.0.5 regression");
+    eprintln!("{message}; skipping regression for this system library");
     false
 }
 
@@ -149,7 +149,7 @@ fn cubic_spline_animation_gltf() -> String {
 
 #[test]
 fn gltf_import_preserves_normal_scale_and_occlusion_strength() {
-    if !gltf_605_regressions_available() {
+    if !regressions_available((6, 0, 5)) {
         return;
     }
 
@@ -173,7 +173,7 @@ fn gltf_import_preserves_normal_scale_and_occlusion_strength() {
 
 #[test]
 fn gltf_import_preserves_cubic_spline_translation_tangents() {
-    if !gltf_605_regressions_available() {
+    if !regressions_available((6, 0, 5)) {
         return;
     }
 
@@ -202,4 +202,84 @@ fn gltf_import_preserves_cubic_spline_translation_tangents() {
     assert_close(keys[3].value.x, 0.0);
     assert_close(keys[4].value.x, 2.0);
     assert_close(keys[5].value.x, 0.0);
+}
+
+#[test]
+fn gltf_texture_transform_accounts_for_assimp_coordinate_space() {
+    if !regressions_available((6, 0, 6)) {
+        return;
+    }
+
+    let gltf = material_texture_metadata_gltf()
+        .replacen('{', r#"{"extensionsUsed":["KHR_texture_transform"],"#, 1)
+        .replace(
+            "\"baseColorFactor\": [1, 1, 1, 1]",
+            r#""baseColorFactor": [1, 1, 1, 1], "baseColorTexture": {
+          "index": 0,
+          "extensions": { "KHR_texture_transform": {
+            "offset": [0.2, 0.3], "scale": [2, 3]
+          } }
+        }"#,
+        );
+    let scene =
+        Scene::from_memory(gltf.as_bytes(), Some("gltf")).expect("import texture transform");
+    let material = scene.material(0).expect("material 0");
+    let texture = material.base_color_texture(0).expect("base color texture");
+    let transform = texture.uv_transform.expect("UV transform");
+
+    assert_close(transform.translation.x, 0.35);
+    assert_close(transform.translation.y, -0.433_333_34);
+    assert_close(transform.scaling.x, 2.0);
+    assert_close(transform.scaling.y, 3.0);
+    assert_close(transform.rotation, 0.0);
+}
+
+// Fixtures originate from Assimp v6.0.6's glTF2 tests under its BSD-3-Clause license.
+#[test]
+fn gltf_normalized_unsigned_short_skin_weights() {
+    if !regressions_available((6, 0, 6)) {
+        return;
+    }
+
+    let scene = Scene::from_memory(
+        include_bytes!("fixtures/gltf/normalized_skin_weights.gltf"),
+        Some("gltf"),
+    )
+    .expect("import normalized skin weights");
+    let mesh = scene.mesh(0).expect("mesh 0");
+    let bones: Vec<_> = mesh.bones().collect();
+    assert_eq!(bones.len(), 1);
+    assert_eq!(bones[0].name(), "joint0");
+    let weights = bones[0].weights_raw();
+    assert_eq!(weights.len(), 3);
+    for (index, expected) in [1.0, 32768.0 / 65535.0, 16384.0 / 65535.0]
+        .into_iter()
+        .enumerate()
+    {
+        assert_eq!(weights[index].mVertexId, index as u32);
+        assert_close(weights[index].mWeight, expected);
+    }
+}
+
+#[test]
+fn gltf_mixed_joint_component_types_preserve_weights() {
+    if !regressions_available((6, 0, 6)) {
+        return;
+    }
+
+    let scene = Scene::from_memory(
+        include_bytes!("fixtures/gltf/mixed_skin_joints.gltf"),
+        Some("gltf"),
+    )
+    .expect("import mixed joint accessors");
+    let mesh = scene.mesh(0).expect("mesh 0");
+    let bones: Vec<_> = mesh.bones().collect();
+    assert_eq!(bones.len(), 2);
+    assert_eq!(bones[0].weights_raw().len(), 3);
+    let weights = bones[1].weights_raw();
+    assert_eq!(weights.len(), 2);
+    assert_eq!(weights[0].mVertexId, 1);
+    assert_close(weights[0].mWeight, 32767.0 / 65535.0);
+    assert_eq!(weights[1].mVertexId, 2);
+    assert_close(weights[1].mWeight, 49151.0 / 65535.0);
 }

@@ -5,7 +5,7 @@
 
 Low-level FFI bindings for the [Assimp](https://github.com/assimp/assimp) 3D asset import library.
 
-This crate provides unsafe Rust FFI bindings for **Assimp v6.0.5**, implementing the vast majority of the C API functions, types, and constants.
+This crate provides unsafe Rust FFI bindings for **Assimp v6.0.6**, implementing the vast majority of the C API functions, types, and constants.
 
 ## Status
 
@@ -13,7 +13,7 @@ This crate provides unsafe Rust FFI bindings for **Assimp v6.0.5**, implementing
 
 ## Overview
 
-This crate provides unsafe Rust bindings to the [Assimp v6.0.5](https://github.com/assimp/assimp/releases/tag/v6.0.5) C API, implementing the vast majority of functions, types, and constants. For a safe, high-level API, use the [`asset-importer`](../asset-importer/) crate instead.
+This crate provides unsafe Rust bindings to the [Assimp v6.0.6](https://github.com/assimp/assimp/releases/tag/v6.0.6) C API, implementing the vast majority of functions, types, and constants. For a safe, high-level API, use the [`asset-importer`](../asset-importer/) crate instead.
 
 ### API Coverage
 
@@ -35,10 +35,10 @@ policy. Enable `prebuilt` only when you explicitly want matching release artifac
 ### Build from Source
 ```toml
 [dependencies]
-asset-importer-sys = "0.8"
+asset-importer-sys = "0.9"
 
 # Equivalent explicit source-build mode:
-asset-importer-sys = { version = "0.8", features = ["build-assimp"] }
+asset-importer-sys = { version = "0.9", features = ["build-assimp"] }
 ```
 - Builds Assimp from bundled source
 - Requires: CMake, C++ compiler, Git
@@ -47,7 +47,7 @@ asset-importer-sys = { version = "0.8", features = ["build-assimp"] }
 ### Prebuilt Binaries
 ```toml
 [dependencies]
-asset-importer-sys = { version = "0.8", features = ["prebuilt"] }
+asset-importer-sys = { version = "0.9", features = ["prebuilt"] }
 ```
 - Downloads prebuilt libraries from GitHub releases
 - No build dependencies required
@@ -56,7 +56,7 @@ asset-importer-sys = { version = "0.8", features = ["prebuilt"] }
 
 ### System Library
 ```toml
-asset-importer-sys = { version = "0.8", features = ["system", "generate-bindings"] }
+asset-importer-sys = { version = "0.9", features = ["system", "generate-bindings"] }
 ```
 Uses system-installed assimp. Install via package manager:
 - **macOS**: `brew install assimp`
@@ -81,7 +81,7 @@ rustflags = ["-C", "target-feature=+crt-static"]
 
 ### Static Linking
 ```toml
-asset-importer-sys = { version = "0.8", features = ["static-link", "build-assimp"] }
+asset-importer-sys = { version = "0.9", features = ["static-link", "build-assimp"] }
 ```
 - Creates single executable with fewer external runtime dependencies
 - Larger binary size
@@ -89,11 +89,10 @@ asset-importer-sys = { version = "0.8", features = ["static-link", "build-assimp
 ### Additional Options
 ```toml
 asset-importer-sys = {
-    version = "0.8",
+    version = "0.9",
     features = [
         "build-assimp",
         "export",        # Enable export functionality
-        "nozlib",        # Don't link zlib
         "mint",          # Math library interop
         "type-extensions" # Convenience methods
     ]
@@ -102,7 +101,7 @@ asset-importer-sys = {
 
 ## Environment Variables
 
-- `ASSIMP_DIR`: Path to an Assimp source tree to use when the `assimp` submodule is not present (builds from this directory).
+- `ASSIMP_DIR`: Path to an Assimp source tree to use when the `assimp` submodule is not present (builds from this directory; must match the bundled Assimp 6.0.6 version).
 - `ASSET_IMPORTER_PACKAGE_DIR`: Use local prebuilt packages
   - On Windows we publish both `-md` and `-mt` suffixed archives; the build script selects the right one automatically and falls back to the old name if not found.
 - `ASSET_IMPORTER_FORCE_GENERATE_BINDINGS=1`: Maintainer override to regenerate vendored bindings when `generate-bindings` is enabled.
@@ -119,15 +118,15 @@ asset-importer-sys = {
 
 | Feature | Requirements |
 |---------|-------------|
-| Default vendored source | CMake (≥3.10), C++ compiler, Git |
+| Default vendored source | CMake (≥3.22), C++ compiler, Git |
 | `prebuilt` | None |
 | `system` | System assimp installation, libclang/bindgen |
-| `build-assimp` | CMake (≥3.10), C++ compiler, Git |
+| `build-assimp` | CMake (≥3.22), C++ compiler, Git |
 
 #### Detailed Requirements for Source Build
 
 **Essential Tools:**
-- **CMake 3.10+**: Build system generator
+- **CMake 3.22+**: Build system generator
 - **C++ Compiler**:
   - Windows: MSVC 2019+ (Visual Studio Build Tools)
   - macOS: Clang (Xcode Command Line Tools)
@@ -169,21 +168,20 @@ sudo yum install cmake3 git
 ```rust
 use asset_importer_sys as sys;
 use std::ffi::CString;
-use std::ptr;
 
 unsafe {
-    let importer = sys::aiCreateImporter();
     let filename = CString::new("model.obj").unwrap();
     
     let scene = sys::aiImportFile(
         filename.as_ptr(),
-        sys::aiProcess_Triangulate | sys::aiProcess_FlipUVs
+        (sys::aiPostProcessSteps::aiProcess_Triangulate as u32)
+            | (sys::aiPostProcessSteps::aiProcess_FlipUVs as u32)
     );
     
     if !scene.is_null() {
         let scene_ref = &*scene;
         println!("Loaded {} meshes", scene_ref.mNumMeshes);
-        sys::aiReleaseImporter(importer);
+        sys::aiReleaseImport(scene);
     }
 }
 ```
@@ -203,6 +201,8 @@ Bindings are generated using [bindgen](https://github.com/rust-lang/rust-bindgen
 ## Safety
 
 This crate provides `unsafe` bindings. Memory management, null pointer checks, and proper API usage are the caller's responsibility. Consider using the safe [`asset-importer`](../asset-importer/) wrapper instead.
+
+The Rust bridge import functions return an opaque `aiRustScene` owner. Borrow its scene with `aiGetSceneRust` and release the owner with `aiReleaseSceneRust`; the borrowed scene must not be released through Assimp's C API. Custom `aiFileIO` tables and their user data must remain alive until the owner is released, including any later post-processing. Progress callbacks are detached before the import returns. Use `aiApplyPostProcessingRust` and `aiGetMemoryRequirementsRust` with bridge-owned scenes.
 
 ## Contributing
 

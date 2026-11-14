@@ -50,33 +50,52 @@ typedef struct aiRustProperty {
 // Progress callback signature used by the bridge. Return false to cancel.
 typedef bool (*aiRustProgressCallback)(float percentage, const char* message, void* user);
 
+// Owns the C++ Importer and its scene. Access is read-only except for exclusive post-processing.
+typedef struct aiRustScene aiRustScene;
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 // Import a file with optional custom IO, properties and a progress callback.
-// Returns a deep-copied aiScene which can be freed with aiFreeScene.
-const struct aiScene* aiImportFileExWithProgressRust(
+// Release the returned owner with aiReleaseSceneRust.
+// The custom IO table and its user data must outlive the owner. Progress state is
+// only used during this call and is detached before returning.
+struct aiRustScene* aiImportFileRust(
     const char* path,
     unsigned int flags,
-    const struct aiFileIO* file_io, // nullable
+    const struct aiFileIO* file_io, // nullable; must outlive the returned owner
     const struct aiRustProperty* props,
     size_t props_count,
     aiRustProgressCallback progress_cb, // nullable
     void* progress_user // nullable
 );
 
-// Import from memory with properties + progress callback support.
-const struct aiScene* aiImportFileFromMemoryWithProgressRust(
+// Import from memory with custom IO for external resources, properties, and progress.
+struct aiRustScene* aiImportFileFromMemoryRust(
     const char* data,
     unsigned int length,
     unsigned int flags,
     const char* hint, // nullable
+    const struct aiFileIO* file_io, // nullable; must outlive the returned owner
     const struct aiRustProperty* props,
     size_t props_count,
     aiRustProgressCallback progress_cb, // nullable
     void* progress_user // nullable
 );
+
+// Borrow the scene while its owner is alive.
+const struct aiScene* aiGetSceneRust(const struct aiRustScene* owner);
+
+// Release the owner, including the scene. A null owner is allowed.
+void aiReleaseSceneRust(struct aiRustScene* owner);
+
+// Requires exclusive access to the owner and all scene data. Failure invalidates the scene,
+// but the owner remains valid and must still be released with aiReleaseSceneRust.
+bool aiApplyPostProcessingRust(struct aiRustScene* owner, unsigned int flags);
+
+// Query the current scene's memory requirements without relying on C API private data.
+bool aiGetMemoryRequirementsRust(const struct aiRustScene* owner, struct aiMemoryInfo* info);
 
 // === Export bridging ===
 

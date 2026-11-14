@@ -1,6 +1,6 @@
 [workspace]
 members = ["asset-importer-sys", "asset-importer"]
-resolver = "2"
+resolver = "3"
 
 # Exclude workspace-level development files from all packages
 exclude = [
@@ -21,6 +21,5 @@ rust-version = "1.85"
 authors = ["Mingzhen Zhuang <superfrankie621@gmail.com>"]
 license = "MIT OR Apache-2.0"
 description = "Comprehensive Rust bindings for the Assimp library"
-homepage = "https://github.com/Latias94/asset-importer"
 repository = "https://github.com/Latias94/asset-importer"
 keywords = ["assimp", "3d", "mesh", "animation", "graphics"]

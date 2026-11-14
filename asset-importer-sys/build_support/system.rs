@@ -1,7 +1,7 @@
 use crate::build_support::{
     config::BuildConfig,
     plan::{BuildMethod, BuildPlan, LinkKind},
-    util,
+    util, version,
 };
 
 use std::{fs, path::PathBuf};
@@ -323,24 +323,7 @@ fn read_assimp_major_from_headers(include_dirs: &[std::path::PathBuf]) -> Option
         std::fs::read_to_string(&p).ok()
     })?;
 
-    parse_define_u32(&contents, "VER_MAJOR")
-        .or_else(|| parse_define_u32(&contents, "ASSIMP_VERSION_MAJOR"))
-}
-
-fn parse_define_u32(contents: &str, name: &str) -> Option<u32> {
-    for line in contents.lines() {
-        let line = line.trim();
-        if !line.starts_with("#define") {
-            continue;
-        }
-        let rest = line.strip_prefix("#define")?.trim_start();
-        let rest = rest.strip_prefix(name)?.trim_start();
-        let value = rest.split_whitespace().next()?;
-        if let Ok(v) = value.parse::<u32>() {
-            return Some(v);
-        }
-    }
-    None
+    parse_major_from_version(&version::parse_header(&contents)?)
 }
 
 fn common_include_roots() -> Vec<std::path::PathBuf> {

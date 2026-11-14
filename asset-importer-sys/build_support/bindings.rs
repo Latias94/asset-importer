@@ -99,7 +99,9 @@ fn run_bindgen(cfg: &BuildConfig, plan: &BuildPlan) {
     let include_dirs = ensure_config_h(cfg, &plan.include_dirs);
 
     let mut builder = bindgen::Builder::default()
+        .rust_target(bindgen::RustTarget::stable(85, 0).expect("valid crate MSRV"))
         .header(wrapper_h.to_string_lossy())
+        .clang_arg("-fretain-comments-from-system-headers")
         .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()));
 
     for dir in &include_dirs {
@@ -112,6 +114,8 @@ fn run_bindgen(cfg: &BuildConfig, plan: &BuildPlan) {
         .allowlist_var("ai.*")
         .allowlist_var("AI_.*")
         .derive_default(true)
+        // Zero is not a valid aiPropertyTypeInfo discriminant; provide a valid default in lib.rs.
+        .no_default("aiMaterialProperty")
         .derive_debug(true)
         .derive_copy(true)
         .derive_eq(true)

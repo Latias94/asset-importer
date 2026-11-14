@@ -57,7 +57,11 @@ fn main() -> Result<(), Box<dyn Error>> {
     #[cfg(feature = "bytemuck")]
     {
         println!("Vertex bytes: {} bytes", mesh.vertices_bytes().len());
-        println!("Index bytes: {} bytes", mesh.indices_bytes().len());
+        let index_bytes: usize = mesh
+            .faces_iter()
+            .map(|face| face.indices_bytes().len())
+            .sum();
+        println!("Index bytes (across faces): {} bytes", index_bytes);
     }
 
     common::shutdown_logging();

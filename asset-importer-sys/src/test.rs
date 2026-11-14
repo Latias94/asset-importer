@@ -3,6 +3,14 @@ mod tests {
     use crate::{aiImporterDesc, aiScene};
 
     #[test]
+    fn material_property_default_has_a_valid_type() {
+        let property = crate::aiMaterialProperty::default();
+        assert_eq!(property.mType, crate::aiPropertyTypeInfo::aiPTI_Float);
+        assert!(property.mData.is_null());
+        assert_eq!(property.mDataLength, 0);
+    }
+
+    #[test]
     fn test_basic_types_exist() {
         // Test that our basic types are available
         let _scene: *const aiScene = std::ptr::null();

@@ -5,11 +5,14 @@ pub trait ProgressHandler: Send {
     /// Called to report progress
     ///
     /// # Parameters
-    /// - `percentage`: Progress as a value between 0.0 and 1.0
+    /// - `percentage`: Progress between 0.0 and 1.0, or negative if unknown
     /// - `message`: Optional descriptive message about the current operation
     ///
     /// # Returns
-    /// Return `true` to continue the operation, `false` to cancel
+    /// Return `true` to continue the operation, `false` to cancel. Cancellation
+    /// is permanent for the current import and suppresses further callbacks.
+    /// Assimp may finish its current work before returning an error. A panic in
+    /// this callback is caught and also cancels the import when unwinding is enabled.
     fn update(&mut self, percentage: f32, message: Option<&str>) -> bool;
 }
 

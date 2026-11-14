@@ -125,83 +125,39 @@ pub struct AiVertexWeight {
     pub mWeight: f32,
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::sys;
-
-    #[test]
-    fn test_layout_matches_sys() {
-        assert_eq!(
-            std::mem::size_of::<AiVector3D>(),
-            std::mem::size_of::<sys::aiVector3D>()
-        );
-        assert_eq!(
-            std::mem::align_of::<AiVector3D>(),
-            std::mem::align_of::<sys::aiVector3D>()
-        );
-
-        assert_eq!(
-            std::mem::size_of::<AiColor4D>(),
-            std::mem::size_of::<sys::aiColor4D>()
-        );
-        assert_eq!(
-            std::mem::align_of::<AiColor4D>(),
-            std::mem::align_of::<sys::aiColor4D>()
-        );
-
-        assert_eq!(
-            std::mem::size_of::<AiFace>(),
-            std::mem::size_of::<sys::aiFace>()
-        );
-        assert_eq!(
-            std::mem::align_of::<AiFace>(),
-            std::mem::align_of::<sys::aiFace>()
-        );
-
-        assert_eq!(
-            std::mem::size_of::<AiTexel>(),
-            std::mem::size_of::<sys::aiTexel>()
-        );
-        assert_eq!(
-            std::mem::align_of::<AiTexel>(),
-            std::mem::align_of::<sys::aiTexel>()
-        );
-
-        assert_eq!(
-            std::mem::size_of::<AiQuaternion>(),
-            std::mem::size_of::<sys::aiQuaternion>()
-        );
-        assert_eq!(
-            std::mem::align_of::<AiQuaternion>(),
-            std::mem::align_of::<sys::aiQuaternion>()
-        );
-
-        assert_eq!(
-            std::mem::size_of::<AiVectorKey>(),
-            std::mem::size_of::<sys::aiVectorKey>()
-        );
-        assert_eq!(
-            std::mem::align_of::<AiVectorKey>(),
-            std::mem::align_of::<sys::aiVectorKey>()
-        );
-
-        assert_eq!(
-            std::mem::size_of::<AiQuatKey>(),
-            std::mem::size_of::<sys::aiQuatKey>()
-        );
-        assert_eq!(
-            std::mem::align_of::<AiQuatKey>(),
-            std::mem::align_of::<sys::aiQuatKey>()
-        );
-
-        assert_eq!(
-            std::mem::size_of::<AiVertexWeight>(),
-            std::mem::size_of::<sys::aiVertexWeight>()
-        );
-        assert_eq!(
-            std::mem::align_of::<AiVertexWeight>(),
-            std::mem::align_of::<sys::aiVertexWeight>()
-        );
-    }
+// Every zero-copy cast must preserve size, alignment, and field offsets in all builds.
+macro_rules! assert_layout {
+    ($view:ty, $native:ty, $($field:ident),+ $(,)?) => {
+        const _: () = {
+            assert!(std::mem::size_of::<$view>() == std::mem::size_of::<$native>());
+            assert!(std::mem::align_of::<$view>() == std::mem::align_of::<$native>());
+            $(assert!(std::mem::offset_of!($view, $field) == std::mem::offset_of!($native, $field));)+
+        };
+    };
 }
+
+assert_layout!(AiVector3D, crate::sys::aiVector3D, x, y, z);
+assert_layout!(AiColor4D, crate::sys::aiColor4D, r, g, b, a);
+assert_layout!(AiTexel, crate::sys::aiTexel, b, g, r, a);
+assert_layout!(AiFace, crate::sys::aiFace, mNumIndices, mIndices);
+assert_layout!(AiQuaternion, crate::sys::aiQuaternion, w, x, y, z);
+assert_layout!(
+    AiVectorKey,
+    crate::sys::aiVectorKey,
+    mTime,
+    mValue,
+    mInterpolation
+);
+assert_layout!(
+    AiQuatKey,
+    crate::sys::aiQuatKey,
+    mTime,
+    mValue,
+    mInterpolation
+);
+assert_layout!(
+    AiVertexWeight,
+    crate::sys::aiVertexWeight,
+    mVertexId,
+    mWeight
+);

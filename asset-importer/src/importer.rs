@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use crate::{
     error::{Error, Result},
-    io::{AssimpFileIO, FileSystem},
+    io::{FileSystem, OwnedAiFileIO, catch_unwind_or},
     postprocess::PostProcessSteps,
     progress::ProgressHandler,
     scene::Scene,
@@ -61,35 +61,13 @@ extern "C" fn progress_cb(percentage: f32, message: *const c_char, user: *mut c_
         unsafe { CStr::from_ptr(message) }.to_str().ok()
     };
 
-    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+    catch_unwind_or(false, || {
         let mutex = unsafe { &*user_ptr };
         let Ok(mut handler) = mutex.lock() else {
             return false;
         };
         handler.update(percentage, msg_opt)
-    }));
-    result.unwrap_or(false)
-}
-
-struct PropertyStoreGuard {
-    ptr: *mut sys::aiPropertyStore,
-}
-
-impl PropertyStoreGuard {
-    fn new(ptr: *mut sys::aiPropertyStore) -> Self {
-        Self { ptr }
-    }
-}
-
-impl Drop for PropertyStoreGuard {
-    fn drop(&mut self) {
-        if self.ptr.is_null() {
-            return;
-        }
-        unsafe {
-            sys::aiReleasePropertyStore(self.ptr);
-        }
-    }
+    })
 }
 
 /// A property store for configuring import behavior
@@ -528,6 +506,8 @@ impl ImportBuilder {
     ///
     /// Prefer this over [`ImportBuilder::with_file_system_shared`] unless you need to share a
     /// single file system instance across multiple importers/builders.
+    /// The imported scene retains this file system for later post-processing and
+    /// releases it after the native importer and its streams have been destroyed.
     pub fn with_file_system<F>(self, file_system: F) -> Self
     where
         F: FileSystem + 'static,
@@ -583,261 +563,81 @@ impl ImportBuilder {
         ))
     }
 
-    /// Import a scene from a file path
+    /// Import a scene from a file path.
     pub fn import_file<P: AsRef<Path>>(self, path: P) -> Result<Scene> {
+        self.post_process
+            .validate()
+            .map_err(Error::invalid_parameter)?;
         let path_str = path.as_ref().to_string_lossy();
         let c_path = CString::new(path_str.as_ref())
             .map_err(|_| Error::invalid_parameter("Invalid file path"))?;
-
-        // Determine if we will use the C++ bridge
-        let use_bridge = self.progress_handler.is_some();
-
-        // Create property store only for the pure C API path
-        let property_store = if use_bridge || self.properties.is_empty() {
-            std::ptr::null_mut()
-        } else {
-            self.create_property_store()
-        };
-        let _property_store_guard = PropertyStoreGuard::new(property_store);
-
-        // Create custom file I/O if specified
-        let mut file_io = self
+        let buffers = build_rust_properties(&self.properties)?;
+        let file_io = self
             .file_system
             .as_ref()
-            .map(|fs| AssimpFileIO::new(fs.clone()).create_ai_file_io());
-        let file_io_ptr_mut: *mut sys::aiFileIO = file_io
-            .as_mut()
-            .map_or(std::ptr::null_mut(), |io| io.as_mut_ptr_sys());
-        let file_io_ptr_const: *const sys::aiFileIO = file_io
-            .as_ref()
-            .map_or(std::ptr::null(), |io| io.as_ptr_sys());
-
-        // If a progress handler is provided, use the C++ bridge to set it.
-        let scene_ptr = if use_bridge {
-            let handler = self
-                .progress_handler
-                .ok_or_else(|| Error::invalid_parameter("progress handler missing"))?;
-            // Prepare property list for the bridge
-            let buffers = build_rust_properties(&self.properties)?;
-            let user = ProgressUser::new(handler);
-
-            unsafe {
-                sys::aiImportFileExWithProgressRust(
-                    c_path.as_ptr(),
-                    self.post_process.as_raw(),
-                    file_io_ptr_const,
-                    buffers.ffi_props.as_ptr(),
-                    buffers.ffi_props.len(),
-                    Some(progress_cb),
-                    user.as_void_ptr(),
-                )
-            }
-        } else {
-            // Fallback to C API paths
-            unsafe {
-                if property_store.is_null() && file_io_ptr_mut.is_null() {
-                    sys::aiImportFile(c_path.as_ptr(), self.post_process.as_raw())
-                } else if file_io_ptr_mut.is_null() {
-                    sys::aiImportFileExWithProperties(
-                        c_path.as_ptr(),
-                        self.post_process.as_raw(),
-                        std::ptr::null_mut(),
-                        property_store,
-                    )
-                } else if property_store.is_null() {
-                    sys::aiImportFileEx(
-                        c_path.as_ptr(),
-                        self.post_process.as_raw(),
-                        file_io_ptr_mut,
-                    )
-                } else {
-                    sys::aiImportFileExWithProperties(
-                        c_path.as_ptr(),
-                        self.post_process.as_raw(),
-                        file_io_ptr_mut,
-                        property_store,
-                    )
-                }
-            }
+            .map(|fs| OwnedAiFileIO::new(fs.clone()));
+        let user = self.progress_handler.map(ProgressUser::new);
+        let callback: sys::aiRustProgressCallback = user.as_ref().map(|_| progress_cb as _);
+        let owner = unsafe {
+            sys::aiImportFileRust(
+                c_path.as_ptr(),
+                self.post_process.as_raw(),
+                file_io
+                    .as_ref()
+                    .map_or(std::ptr::null(), |io| io.as_ptr_sys()),
+                buffers.ffi_props.as_ptr(),
+                buffers.ffi_props.len(),
+                callback,
+                user.as_ref()
+                    .map_or(std::ptr::null_mut(), ProgressUser::as_void_ptr),
+            )
         };
-
-        // Check if import was successful
-        if scene_ptr.is_null() {
-            if use_bridge {
-                return Err(Error::from_bridge_or_assimp());
-            }
-            return Err(Error::from_assimp());
-        }
-
-        // Create safe wrapper (bridge import is deep-copied -> FreeScene; C API -> ReleaseImport)
-        if use_bridge {
-            unsafe { Scene::from_raw_copied_sys(scene_ptr) }
-        } else {
-            unsafe { Scene::from_raw_import_sys(scene_ptr) }
-        }
+        // Adopt native ownership before invoking user destructors, which may panic.
+        let scene = unsafe { Scene::from_importer(owner, file_io) }?;
+        drop(user);
+        drop(self.file_system);
+        Ok(scene)
     }
 
-    /// Import a scene from memory buffer
+    /// Import a scene from a memory buffer.
     pub fn import_from_memory(self, data: &[u8], hint: Option<&str>) -> Result<Scene> {
-        if data.len() > u32::MAX as usize {
-            return Err(Error::invalid_parameter(
-                "Memory buffer is too large (assimp C API takes u32 length)".to_string(),
-            ));
-        }
-
-        let hint_cstr = if let Some(h) = hint {
-            Some(CString::new(h).map_err(|_| Error::invalid_parameter("Invalid hint"))?)
-        } else {
-            None
+        self.post_process
+            .validate()
+            .map_err(Error::invalid_parameter)?;
+        let length = u32::try_from(data.len()).map_err(|_| {
+            Error::invalid_parameter("Memory buffer is too large (assimp C API takes u32 length)")
+        })?;
+        let hint = hint
+            .map(CString::new)
+            .transpose()
+            .map_err(|_| Error::invalid_parameter("Invalid hint"))?;
+        let buffers = build_rust_properties(&self.properties)?;
+        let file_io = self
+            .file_system
+            .as_ref()
+            .map(|fs| OwnedAiFileIO::new(fs.clone()));
+        let user = self.progress_handler.map(ProgressUser::new);
+        let callback: sys::aiRustProgressCallback = user.as_ref().map(|_| progress_cb as _);
+        let owner = unsafe {
+            sys::aiImportFileFromMemoryRust(
+                data.as_ptr().cast::<c_char>(),
+                length,
+                self.post_process.as_raw(),
+                hint.as_ref().map_or(std::ptr::null(), |hint| hint.as_ptr()),
+                file_io
+                    .as_ref()
+                    .map_or(std::ptr::null(), |io| io.as_ptr_sys()),
+                buffers.ffi_props.as_ptr(),
+                buffers.ffi_props.len(),
+                callback,
+                user.as_ref()
+                    .map_or(std::ptr::null_mut(), ProgressUser::as_void_ptr),
+            )
         };
-
-        let hint_ptr = hint_cstr.as_ref().map_or(std::ptr::null(), |s| s.as_ptr());
-
-        // Determine if we will use the C++ bridge
-        let use_bridge = self.progress_handler.is_some();
-
-        // Create property store only for the pure C API path
-        let property_store = if use_bridge || self.properties.is_empty() {
-            std::ptr::null_mut()
-        } else {
-            self.create_property_store()
-        };
-        let _property_store_guard = PropertyStoreGuard::new(property_store);
-
-        // Import from memory (bridge if progress specified)
-        let scene_ptr = if use_bridge {
-            let handler = self
-                .progress_handler
-                .ok_or_else(|| Error::invalid_parameter("progress handler missing"))?;
-            // Prepare properties
-            let buffers = build_rust_properties(&self.properties)?;
-            let user = ProgressUser::new(handler);
-
-            unsafe {
-                sys::aiImportFileFromMemoryWithProgressRust(
-                    data.as_ptr() as *const c_char,
-                    data.len() as u32,
-                    self.post_process.as_raw(),
-                    hint_ptr,
-                    buffers.ffi_props.as_ptr(),
-                    buffers.ffi_props.len(),
-                    Some(progress_cb),
-                    user.as_void_ptr(),
-                )
-            }
-        } else {
-            unsafe {
-                if property_store.is_null() {
-                    sys::aiImportFileFromMemory(
-                        data.as_ptr() as *const std::os::raw::c_char,
-                        data.len() as u32,
-                        self.post_process.as_raw(),
-                        hint_ptr,
-                    )
-                } else {
-                    sys::aiImportFileFromMemoryWithProperties(
-                        data.as_ptr() as *const std::os::raw::c_char,
-                        data.len() as u32,
-                        self.post_process.as_raw(),
-                        hint_ptr,
-                        property_store,
-                    )
-                }
-            }
-        };
-
-        // Check if import was successful
-        if scene_ptr.is_null() {
-            if use_bridge {
-                return Err(Error::from_bridge_or_assimp());
-            }
-            return Err(Error::from_assimp());
-        }
-
-        if use_bridge {
-            unsafe { Scene::from_raw_copied_sys(scene_ptr) }
-        } else {
-            unsafe { Scene::from_raw_import_sys(scene_ptr) }
-        }
-    }
-
-    /// Create a property store with the configured properties
-    fn create_property_store(&self) -> *mut sys::aiPropertyStore {
-        let store = unsafe { sys::aiCreatePropertyStore() };
-        if store.is_null() {
-            return std::ptr::null_mut();
-        }
-
-        for (name, value) in &self.properties {
-            let c_name = match CString::new(name.as_str()) {
-                Ok(name) => name,
-                Err(_) => continue, // Skip invalid property names
-            };
-
-            unsafe {
-                match value {
-                    PropertyValue::Integer(v) => {
-                        sys::aiSetImportPropertyInteger(store, c_name.as_ptr(), *v);
-                    }
-                    PropertyValue::Float(v) => {
-                        sys::aiSetImportPropertyFloat(store, c_name.as_ptr(), *v);
-                    }
-                    PropertyValue::String(v) => {
-                        if let Ok(c_value) = CString::new(v.as_str()) {
-                            // Create aiString from the string value
-                            let mut ai_string = sys::aiString {
-                                length: v.len() as u32,
-                                data: [0; 1024],
-                            };
-
-                            // Copy string data to aiString, ensuring we don't exceed buffer size
-                            let bytes = c_value.as_bytes();
-                            let copy_len = std::cmp::min(bytes.len(), 1023); // Leave space for null terminator
-
-                            // Convert u8 bytes to c_char (i8 on Windows)
-                            for (i, &byte) in bytes[..copy_len].iter().enumerate() {
-                                ai_string.data[i] = byte as std::os::raw::c_char;
-                            }
-                            ai_string.data[copy_len] = 0; // Null terminator
-                            ai_string.length = copy_len as u32;
-
-                            sys::aiSetImportPropertyString(store, c_name.as_ptr(), &ai_string);
-                        }
-                    }
-                    PropertyValue::Boolean(v) => {
-                        sys::aiSetImportPropertyInteger(
-                            store,
-                            c_name.as_ptr(),
-                            if *v { 1 } else { 0 },
-                        );
-                    }
-                    PropertyValue::Matrix(v) => {
-                        // Convert glam Mat4 to aiMatrix4x4
-                        let ai_matrix = sys::aiMatrix4x4 {
-                            a1: v.x_axis.x,
-                            a2: v.y_axis.x,
-                            a3: v.z_axis.x,
-                            a4: v.w_axis.x,
-                            b1: v.x_axis.y,
-                            b2: v.y_axis.y,
-                            b3: v.z_axis.y,
-                            b4: v.w_axis.y,
-                            c1: v.x_axis.z,
-                            c2: v.y_axis.z,
-                            c3: v.z_axis.z,
-                            c4: v.w_axis.z,
-                            d1: v.x_axis.w,
-                            d2: v.y_axis.w,
-                            d3: v.z_axis.w,
-                            d4: v.w_axis.w,
-                        };
-                        sys::aiSetImportPropertyMatrix(store, c_name.as_ptr(), &ai_matrix);
-                    }
-                }
-            }
-        }
-
-        store
+        let scene = unsafe { Scene::from_importer(owner, file_io) }?;
+        drop(user);
+        drop(self.file_system);
+        Ok(scene)
     }
 }
 

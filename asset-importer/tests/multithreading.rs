@@ -1,5 +1,5 @@
 // Integration tests for multi-threading support in asset-importer
-use asset_importer::Importer;
+use asset_importer::{Importer, postprocess::PostProcessSteps};
 use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
@@ -262,6 +262,12 @@ fn test_send_sync_compilation() {
     assert_send_sync::<asset_importer::Scene>();
     assert_send_sync::<asset_importer::node::Node>();
     assert_send_sync::<asset_importer::mesh::Mesh>();
+    assert_send_sync::<asset_importer::mesh::Face>();
+    assert_send_sync::<asset_importer::mesh::FaceIterator>();
+    assert_send_sync::<asset_importer::mesh::AnimMesh>();
+    assert_send_sync::<asset_importer::mesh::AnimMeshIterator>();
+    assert_send_sync::<asset_importer::node::NodeIterator>();
+    assert_send_sync::<asset_importer::node::MeshIndexIterator>();
     assert_send_sync::<asset_importer::Material>();
     assert_send_sync::<asset_importer::light::Light>();
     assert_send_sync::<asset_importer::camera::Camera>();
@@ -270,4 +276,39 @@ fn test_send_sync_compilation() {
     assert_send_sync::<asset_importer::Texture>();
 
     println!("✅ Compilation test passed: All types implement Send + Sync");
+}
+
+#[test]
+fn test_postprocess_rejects_scene_with_view_on_another_thread() {
+    let scene = Importer::new()
+        .read_from_memory(b"v 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\nf 1 2 3 4\n")
+        .with_memory_hint("obj")
+        .with_post_process(PostProcessSteps::empty())
+        .import()
+        .expect("failed to import quad");
+    let mesh = scene.mesh(0).expect("missing mesh");
+    let (ready_tx, ready_rx) = std::sync::mpsc::channel();
+    let (resume_tx, resume_rx) = std::sync::mpsc::channel();
+
+    let reader = thread::spawn(move || {
+        let vertices = mesh.vertices_raw();
+        let expected = vertices.to_vec();
+        ready_tx
+            .send(())
+            .expect("reader could not signal readiness");
+        resume_rx.recv().expect("reader was not resumed");
+        assert_eq!(vertices, expected.as_slice());
+        assert_eq!(mesh.num_faces(), 1);
+        assert_eq!(mesh.faces().next().expect("missing face").num_indices(), 4);
+    });
+
+    ready_rx.recv().expect("reader did not become ready");
+    let result = scene.apply_postprocess(PostProcessSteps::TRIANGULATE);
+    resume_tx.send(()).expect("could not resume reader");
+    reader.join().expect("reader thread panicked");
+    assert!(matches!(
+        result,
+        Err(asset_importer::Error::InvalidParameter { ref message })
+            if message.contains("exclusive scene ownership")
+    ));
 }

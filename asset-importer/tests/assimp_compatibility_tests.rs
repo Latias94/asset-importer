@@ -54,28 +54,18 @@ fn test_version_functions() {
     // Test version functions (based on AssimpAPITest)
     let major = version::assimp_version_major();
     let minor = version::assimp_version_minor();
-    let revision = version::assimp_version_revision();
+    let patch = version::assimp_version_patch();
 
-    println!("Assimp Version: {}.{}.{}", major, minor, revision);
-
-    // Assimp should be at least version 5.0
-    assert!(
-        major >= 5,
-        "Expected Assimp major version >= 5, got {}",
-        major
+    assert_eq!(
+        version::assimp_version(),
+        format!("{major}.{minor}.{patch}")
     );
 
-    // Version should be reasonable
-    assert!(
-        major <= 10,
-        "Assimp major version seems too high: {}",
-        major
-    );
-    assert!(
-        minor <= 99,
-        "Assimp minor version seems too high: {}",
-        minor
-    );
+    #[cfg(not(feature = "system"))]
+    assert_eq!(version::assimp_version(), version::BUNDLED_ASSIMP_VERSION);
+
+    #[cfg(feature = "system")]
+    assert!(major >= 6, "system builds require Assimp >= 6");
 }
 
 #[test]

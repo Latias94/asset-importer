@@ -6,6 +6,16 @@ fn main() {
     let cfg = BuildConfig::new();
     cfg.emit_rerun_triggers();
 
+    println!("cargo:rustc-env=ASSET_IMPORTER_BUILD_TARGET={}", cfg.target);
+    println!(
+        "cargo:rustc-env=ASSET_IMPORTER_BUILD_CRT={}",
+        if cfg.is_msvc() {
+            if cfg.use_static_crt() { "mt" } else { "md" }
+        } else {
+            ""
+        }
+    );
+
     if cfg.docs_rs {
         bindings::run_docsrs(&cfg);
         return;

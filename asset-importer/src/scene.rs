@@ -8,6 +8,7 @@ use crate::{
     error::{Error, Result},
     ffi,
     importer::{Importer, PropertyStore},
+    io::OwnedAiFileIO,
     light::Light,
     material::Material,
     mesh::Mesh,
@@ -117,43 +118,80 @@ pub struct Scene {
 pub(crate) struct SceneInner {
     scene_ptr: SharedPtr<sys::aiScene>,
     release_kind: SceneRelease,
+    // Dropped after the native importer, including any streams it closes during destruction.
+    file_io: Option<OwnedAiFileIO>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug)]
 enum SceneRelease {
+    /// Owns the C++ importer and its scene through the Rust bridge.
+    Importer(SharedPtr<sys::aiRustScene>),
     /// Scene returned by aiImportFile* family, free with aiReleaseImport
+    #[cfg(feature = "raw-sys")]
     ReleaseImport,
     /// Scene created via aiCopyScene, free with aiFreeScene
+    #[cfg(feature = "raw-sys")]
     FreeScene,
 }
 
 impl Scene {
+    /// Adopt exclusive ownership of a successful bridge import.
+    ///
+    /// # Safety
+    /// `owner` must be returned by a bridge import and not yet owned or released elsewhere.
+    /// `file_io` must own the callback table supplied to that import, if any.
+    pub(crate) unsafe fn from_importer(
+        owner: *mut sys::aiRustScene,
+        file_io: Option<OwnedAiFileIO>,
+    ) -> Result<Self> {
+        if owner.is_null() {
+            return Err(Error::from_bridge_or_assimp());
+        }
+        let owner = SharedPtr::new(owner).ok_or(Error::NullPointer)?;
+        let scene_ptr = unsafe { sys::aiGetSceneRust(owner.as_ptr()) };
+        let Some(scene_ptr) = SharedPtr::new(scene_ptr) else {
+            unsafe { sys::aiReleaseSceneRust(owner.as_ptr().cast_mut()) };
+            return Err(Error::NullPointer);
+        };
+        let scene = Self {
+            inner: Arc::new(SceneInner {
+                scene_ptr,
+                release_kind: SceneRelease::Importer(owner),
+                file_io,
+            }),
+        };
+        if scene
+            .inner
+            .file_io
+            .as_ref()
+            .is_some_and(|io| io.has_error())
+        {
+            return Err(Error::io_error("Custom IO callback failed during import"));
+        }
+        Ok(scene)
+    }
+
     /// Create a Scene from a raw Assimp scene pointer
     ///
     /// # Safety
     ///
     /// The caller must ensure that:
     /// - `scene_ptr` is a valid pointer to an aiScene
-    /// - The scene was allocated by Assimp and should be freed with aiReleaseImport
-    /// - The scene pointer remains valid for the lifetime of this Scene
-    pub(crate) unsafe fn from_raw_import_sys(scene_ptr: *const sys::aiScene) -> Result<Self> {
+    /// - The scene was returned by an aiImportFile* C API function and still has its
+    ///   original importer, which will be freed with aiReleaseImport
+    /// - Exclusive ownership of the scene and its importer is transferred to this Scene;
+    ///   no external code may release or mutate the scene or its reachable data
+    #[cfg(feature = "raw-sys")]
+    pub unsafe fn from_raw_import(scene_ptr: *const sys::aiScene) -> Result<Self> {
         let scene_ptr = SharedPtr::new(scene_ptr).ok_or(Error::NullPointer)?;
 
         Ok(Self {
             inner: Arc::new(SceneInner {
                 scene_ptr,
                 release_kind: SceneRelease::ReleaseImport,
+                file_io: None,
             }),
         })
-    }
-
-    /// Create a Scene from a raw Assimp scene pointer (requires `raw-sys`).
-    ///
-    /// # Safety
-    /// Same contract as `from_raw_import_sys`.
-    #[cfg(feature = "raw-sys")]
-    pub unsafe fn from_raw_import(scene_ptr: *const sys::aiScene) -> Result<Self> {
-        unsafe { Self::from_raw_import_sys(scene_ptr) }
     }
 
     /// Create a Scene from a deep-copied Assimp scene pointer (aiCopyScene)
@@ -161,23 +199,18 @@ impl Scene {
     ///
     /// # Safety
     /// Caller must ensure `scene_ptr` is valid and was allocated by aiCopyScene.
-    pub(crate) unsafe fn from_raw_copied_sys(scene_ptr: *const sys::aiScene) -> Result<Self> {
+    /// Exclusive ownership is transferred to this Scene; no external code may release
+    /// or mutate the scene or its reachable data.
+    #[cfg(feature = "raw-sys")]
+    pub unsafe fn from_raw_copied(scene_ptr: *const sys::aiScene) -> Result<Self> {
         let scene_ptr = SharedPtr::new(scene_ptr).ok_or(Error::NullPointer)?;
         Ok(Self {
             inner: Arc::new(SceneInner {
                 scene_ptr,
                 release_kind: SceneRelease::FreeScene,
+                file_io: None,
             }),
         })
-    }
-
-    /// Create a Scene from a deep-copied Assimp scene pointer (requires `raw-sys`).
-    ///
-    /// # Safety
-    /// Same contract as `from_raw_copied_sys`.
-    #[cfg(feature = "raw-sys")]
-    pub unsafe fn from_raw_copied(scene_ptr: *const sys::aiScene) -> Result<Self> {
-        unsafe { Self::from_raw_copied_sys(scene_ptr) }
     }
 
     #[allow(dead_code)]
@@ -201,38 +234,39 @@ impl Scene {
     /// This consumes the scene and returns the updated scene on success:
     /// `scene = scene.apply_postprocess(flags)?;`.
     ///
-    /// If the scene is shared (i.e. cloned), this function will post-process a deep copy
-    /// to avoid mutating shared scene memory.
+    /// Requires exclusive ownership of a scene created by this crate's import builder.
+    /// Returns an error if any scene clones, scene-backed views, or owning iterators
+    /// are still alive, or if the scene was adopted from a raw pointer. Set post-processing
+    /// steps before importing when you need to keep existing views alive.
     ///
-    /// Assimp documents that post-processing is in-place but may return `NULL` on failure
-    /// (notably for `aiProcess_ValidateDataStructure`), potentially invalidating the input
-    /// scene pointer. To avoid double-free or use-after-free in safe Rust, this API takes
-    /// ownership of the scene and will not drop the original pointer on failure.
+    /// The importer owns cleanup even when Assimp invalidates its scene on failure.
     pub fn apply_postprocess(self, flags: crate::postprocess::PostProcessSteps) -> Result<Self> {
-        let inner = match Arc::try_unwrap(self.inner) {
-            Ok(inner) => inner,
-            Err(shared) => {
-                // If the scene is shared, avoid mutating shared memory by post-processing a deep
-                // copy instead. This makes `apply_postprocess` deterministic and thread-friendly.
-                let copied = unsafe { copy_scene_sys(shared.scene_ptr.as_ptr()) }?;
-                SceneInner {
-                    scene_ptr: copied,
-                    release_kind: SceneRelease::FreeScene,
-                }
-            }
+        flags.validate().map_err(Error::invalid_parameter)?;
+        let mut inner = Arc::try_unwrap(self.inner).map_err(|_| {
+            Error::invalid_parameter(
+                "Post-processing requires exclusive scene ownership; drop all scene clones, views, and iterators first",
+            )
+        })?;
+        #[allow(irrefutable_let_patterns)]
+        let SceneRelease::Importer(owner) = &inner.release_kind else {
+            return Err(Error::invalid_parameter(
+                "Post-processing requires a scene created by the import builder; raw scenes have no bridge-owned importer",
+            ));
         };
-
-        // Assimp may invalidate the input pointer on failure. Prefer leaking over UB.
-        let inner = std::mem::ManuallyDrop::new(inner);
-
-        let new_ptr =
-            unsafe { sys::aiApplyPostProcessing(inner.scene_ptr.as_ptr(), flags.as_raw()) };
-        if new_ptr.is_null() {
-            return Err(Error::invalid_scene("Post-processing failed"));
+        let ok =
+            unsafe { sys::aiApplyPostProcessingRust(owner.as_ptr().cast_mut(), flags.as_raw()) };
+        if inner.file_io.as_ref().is_some_and(|io| io.has_error()) {
+            return Err(Error::io_error(
+                "Custom IO callback failed during post-processing",
+            ));
+        }
+        if !ok {
+            return Err(Error::invalid_scene(
+                Error::from_bridge_or_assimp().to_string(),
+            ));
         }
 
-        // Assimp promises this is the same scene pointer on success, but treat it as an update anyway.
-        let mut inner = std::mem::ManuallyDrop::into_inner(inner);
+        let new_ptr = unsafe { sys::aiGetSceneRust(owner.as_ptr()) };
         inner.scene_ptr = SharedPtr::new(new_ptr).ok_or(Error::NullPointer)?;
         Ok(Self {
             inner: Arc::new(inner),
@@ -357,6 +391,8 @@ impl Scene {
     ///
     /// Returns information about the memory consumption of different components
     /// of the imported scene.
+    ///
+    /// Returns an error for scenes adopted from deep-copied raw pointers, which have no importer.
     pub fn memory_requirements(&self) -> Result<MemoryInfo> {
         let mut info = sys::aiMemoryInfo {
             textures: 0,
@@ -369,8 +405,22 @@ impl Scene {
             total: 0,
         };
 
-        unsafe {
-            sys::aiGetMemoryRequirements(self.as_raw_sys(), &mut info);
+        match &self.inner.release_kind {
+            SceneRelease::Importer(owner) => {
+                if !unsafe { sys::aiGetMemoryRequirementsRust(owner.as_ptr(), &mut info) } {
+                    return Err(Error::from_bridge_or_assimp());
+                }
+            }
+            #[cfg(feature = "raw-sys")]
+            SceneRelease::ReleaseImport => unsafe {
+                sys::aiGetMemoryRequirements(self.as_raw_sys(), &mut info);
+            },
+            #[cfg(feature = "raw-sys")]
+            SceneRelease::FreeScene => {
+                return Err(Error::invalid_parameter(
+                    "Memory requirements are unavailable for copied raw scenes without an importer",
+                ));
+            }
         }
 
         Ok(MemoryInfo {
@@ -553,21 +603,16 @@ impl Scene {
     }
 }
 
-/// # Safety
-/// `scene_ptr` must point to a valid `aiScene`.
-unsafe fn copy_scene_sys(scene_ptr: *const sys::aiScene) -> Result<SharedPtr<sys::aiScene>> {
-    debug_assert!(!scene_ptr.is_null());
-    let mut out: *mut sys::aiScene = std::ptr::null_mut();
-    unsafe { sys::aiCopyScene(scene_ptr, &mut out) };
-    let out = SharedPtr::new(out).ok_or(Error::invalid_scene("aiCopyScene returned null"))?;
-    Ok(out)
-}
-
 impl Drop for SceneInner {
     fn drop(&mut self) {
         unsafe {
-            match self.release_kind {
+            match &self.release_kind {
+                SceneRelease::Importer(owner) => {
+                    sys::aiReleaseSceneRust(owner.as_ptr().cast_mut());
+                }
+                #[cfg(feature = "raw-sys")]
                 SceneRelease::ReleaseImport => sys::release_import(self.scene_ptr.as_ptr()),
+                #[cfg(feature = "raw-sys")]
                 SceneRelease::FreeScene => sys::aiFreeScene(self.scene_ptr.as_ptr()),
             }
         }

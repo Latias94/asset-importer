@@ -3,17 +3,13 @@ use std::{env, fs, path::PathBuf};
 use crate::build_support::{
     config::BuildConfig,
     plan::{BuildMethod, BuildPlan, LinkKind},
-    util,
+    util, version,
 };
 
 use flate2::read::GzDecoder;
 use tar::Archive;
 
 const PACKAGE_PREFIX: &str = "asset-importer";
-
-fn vendored_assimp_version() -> &'static str {
-    include_str!("../assimp-version.txt").trim()
-}
 
 pub fn prepare(cfg: &BuildConfig, link_kind: LinkKind) -> BuildPlan {
     let crate_version = env::var("CARGO_PKG_VERSION").unwrap();
@@ -81,7 +77,7 @@ pub fn prepare(cfg: &BuildConfig, link_kind: LinkKind) -> BuildPlan {
     validate_prebuilt_libs(cfg, &extract_dir, &lib_dir, link_kind, &lib_name);
 
     // Prebuilt static libs may require linking zlib explicitly.
-    if matches!(link_kind, LinkKind::Static) && !cfg!(feature = "nozlib") {
+    if matches!(link_kind, LinkKind::Static) {
         if cfg.is_windows() && cfg.is_msvc() {
             link_windows_zlib_if_present(&lib_dir);
         } else {
@@ -149,13 +145,12 @@ fn validate_prebuilt_headers(include_dir: &std::path::Path) {
         )
     });
 
-    let Some(version) = parse_assimp_version_from_header(&contents) else {
-        util::warn(format!(
-            "could not parse Assimp version from {}; skipping version check",
+    let version = version::parse_header(&contents).unwrap_or_else(|| {
+        panic!(
+            "could not determine Assimp version from {}; refusing an unverified prebuilt package. Rebuild the package with the current package tool.",
             header.display()
-        ));
-        return;
-    };
+        )
+    });
 
     require_prebuilt_assimp_version(&version);
 }
@@ -168,7 +163,7 @@ fn parse_manifest_value<'a>(contents: &'a str, key: &str) -> Option<&'a str> {
 }
 
 fn require_prebuilt_assimp_version(version: &str) {
-    let expected = vendored_assimp_version();
+    let expected = version::BUNDLED_VERSION;
     if version == expected {
         return;
     }
@@ -178,34 +173,6 @@ fn require_prebuilt_assimp_version(version: &str) {
          Hint: rebuild the prebuilt package for this crate version, remove `prebuilt` to use the default vendored build, or use `--features system`.",
         version, expected
     );
-}
-
-fn parse_assimp_version_from_header(contents: &str) -> Option<String> {
-    fn find_num(contents: &str, key: &str) -> Option<u32> {
-        for line in contents.lines() {
-            let line = line.trim();
-            if !line.starts_with("#define") {
-                continue;
-            }
-            let mut it = line.split_whitespace();
-            let _define = it.next()?;
-            let name = it.next()?;
-            let value = it.next()?;
-            if name != key {
-                continue;
-            }
-            return value.parse::<u32>().ok();
-        }
-        None
-    }
-
-    let major =
-        find_num(contents, "VER_MAJOR").or_else(|| find_num(contents, "ASSIMP_VERSION_MAJOR"))?;
-    let minor =
-        find_num(contents, "VER_MINOR").or_else(|| find_num(contents, "ASSIMP_VERSION_MINOR"))?;
-    let patch =
-        find_num(contents, "VER_PATCH").or_else(|| find_num(contents, "ASSIMP_VERSION_PATCH"))?;
-    Some(format!("{major}.{minor}.{patch}"))
 }
 
 fn detect_unix_link_name(lib_dir: &std::path::Path, prefer_debug: bool) -> Option<String> {
@@ -501,7 +468,7 @@ fn detect_windows_import_lib(lib_dir: &std::path::Path) -> Option<String> {
 
 fn ensure_runtime_libs(cfg: &BuildConfig, extract_dir: &std::path::Path) {
     if cfg.is_windows() && cfg.is_msvc() {
-        copy_windows_dlls(extract_dir);
+        util::copy_windows_dlls(&cfg.out_dir, extract_dir);
         return;
     }
 
@@ -550,37 +517,6 @@ fn link_windows_zlib_if_present(lib_dir: &std::path::Path) {
             println!("cargo:rustc-link-search=native={}", lib_dir.display());
             println!("cargo:rustc-link-lib=static={}", stem);
             return;
-        }
-    }
-}
-
-fn copy_windows_dlls(src_root: &std::path::Path) {
-    let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap_or_default());
-    let profile_dir = out_dir
-        .ancestors()
-        .nth(3)
-        .map(|p| p.to_path_buf())
-        .unwrap_or_else(|| out_dir.clone());
-    let deps_dir = profile_dir.join("deps");
-
-    let candidates = [src_root.join("bin"), src_root.join("build").join("bin")];
-    for bin_dir in candidates.iter() {
-        if !bin_dir.exists() {
-            continue;
-        }
-        if let Ok(read) = fs::read_dir(bin_dir) {
-            for entry in read.flatten() {
-                let p = entry.path();
-                if p.extension()
-                    .and_then(|s| s.to_str())
-                    .is_some_and(|e| e.eq_ignore_ascii_case("dll"))
-                {
-                    let fname = p.file_name().unwrap();
-                    let _ = fs::create_dir_all(&deps_dir);
-                    let _ = fs::copy(&p, deps_dir.join(fname));
-                    let _ = fs::copy(&p, profile_dir.join(fname));
-                }
-            }
         }
     }
 }

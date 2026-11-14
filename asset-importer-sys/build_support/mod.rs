@@ -12,3 +12,4 @@ pub mod prebuilt;
 pub mod system;
 
 pub mod vendored;
+pub mod version;

@@ -16,35 +16,46 @@
 #include <assimp/IOSystem.hpp>
 #include <assimp/IOStream.hpp>
 #include <assimp/ProgressHandler.hpp>
-#include <assimp/cexport.h> // aiCopyScene
 #include <cstdio>
 #include <cstring>
 #include <exception>
+#include <memory>
 #include <mutex>
+#include <unordered_set>
 #include <string>
 
 // Store a thread-local last-error message for the bridge
 static thread_local std::string g_last_error_msg;
+
+struct aiRustScene {
+    Assimp::Importer importer;
+};
 
 namespace {
 
 struct BridgeProgressHandler final : public Assimp::ProgressHandler {
     aiRustProgressCallback cb{nullptr};
     void* user{nullptr};
+    bool cancelled{false};
 
     explicit BridgeProgressHandler(aiRustProgressCallback c, void* u) : cb(c), user(u) {}
 
+    bool report(float percentage, const char* message) {
+        if (cancelled) return false;
+        if (cb && !cb(percentage, message, user)) cancelled = true;
+        return !cancelled;
+    }
+
     bool Update(float percentage = -1.f) override {
-        if (!cb) return true;
         // No message variant
-        return cb(percentage, nullptr, user);
+        return report(percentage, nullptr);
     }
 
     void UpdateFileRead(int currentStep = 0, int numberOfSteps = 0) override {
         if (!cb) return;
         char buf[64];
         std::snprintf(buf, sizeof(buf), "read %d/%d", currentStep, numberOfSteps);
-        (void)cb(numberOfSteps ? (currentStep / (float)numberOfSteps) * 0.5f : 0.0f, buf, user);
+        (void)report(numberOfSteps ? (currentStep / (float)numberOfSteps) * 0.5f : 0.0f, buf);
     }
 
     void UpdatePostProcess(int currentStep = 0, int numberOfSteps = 0) override {
@@ -52,7 +63,7 @@ struct BridgeProgressHandler final : public Assimp::ProgressHandler {
         char buf[64];
         std::snprintf(buf, sizeof(buf), "post %d/%d", currentStep, numberOfSteps);
         float f = numberOfSteps ? (currentStep / (float)numberOfSteps) : 1.0f;
-        (void)cb(f * 0.5f + 0.5f, buf, user);
+        (void)report(f * 0.5f + 0.5f, buf);
     }
 
     void UpdateFileWrite(int currentStep = 0, int numberOfSteps = 0) override {
@@ -60,18 +71,22 @@ struct BridgeProgressHandler final : public Assimp::ProgressHandler {
         char buf[64];
         std::snprintf(buf, sizeof(buf), "write %d/%d", currentStep, numberOfSteps);
         float f = numberOfSteps ? (currentStep / (float)numberOfSteps) : 1.0f;
-        (void)cb(f * 0.5f, buf, user);
+        (void)report(f * 0.5f, buf);
     }
 };
+
+class RustIOSystem;
 
 // IOStream wrapper
 class RustIOStream final : public Assimp::IOStream {
 public:
+    RustIOSystem* m_system;
     const aiFileIO* m_fileio;
     aiFile* m_handle;
 
-    RustIOStream(const aiFileIO* fio, aiFile* file) : m_fileio(fio), m_handle(file) {}
-    ~RustIOStream() override = default;
+    RustIOStream(RustIOSystem* system, const aiFileIO* fio, aiFile* file)
+        : m_system(system), m_fileio(fio), m_handle(file) {}
+    ~RustIOStream() override;
 
     size_t Read(void* pvBuffer, size_t pSize, size_t pCount) override {
         if (!m_handle || !m_handle->ReadProc) return 0u;
@@ -108,8 +123,31 @@ class RustIOSystem final : public Assimp::IOSystem {
 public:
     const aiFileIO* m_fileio; // non-owning
 
+    std::mutex m_streams_mutex;
+    std::unordered_set<RustIOStream*> m_streams;
+
     explicit RustIOSystem(const aiFileIO* fio) : m_fileio(fio) {}
-    ~RustIOSystem() override = default;
+    ~RustIOSystem() override {
+        // Some exporters throw while holding an unowned stream. Reclaim leftovers
+        // while the Rust callback table is still alive.
+        for (;;) {
+            RustIOStream* stream;
+            {
+                std::lock_guard<std::mutex> lock(m_streams_mutex);
+                if (m_streams.empty()) break;
+                auto it = m_streams.begin();
+                stream = *it;
+                m_streams.erase(it);
+                stream->m_system = nullptr;
+            }
+            delete stream;
+        }
+    }
+
+    void forget(RustIOStream* stream) {
+        std::lock_guard<std::mutex> lock(m_streams_mutex);
+        m_streams.erase(stream);
+    }
 
     // Try open/close to check existence
     bool Exists(const char* pFile) const override {
@@ -129,22 +167,37 @@ public:
     }
 
     Assimp::IOStream* Open(const char* pFile, const char* pMode = "rb") override {
-        if (!m_fileio || !m_fileio->OpenProc) return nullptr;
+        if (!m_fileio || !m_fileio->OpenProc || !m_fileio->CloseProc) return nullptr;
         aiFile* f = m_fileio->OpenProc((aiFileIO*)m_fileio, pFile, pMode);
         if (!f) return nullptr;
-        return new RustIOStream(m_fileio, f);
+        std::unique_ptr<RustIOStream> stream;
+        try {
+            stream = std::make_unique<RustIOStream>(this, m_fileio, f);
+        } catch (...) {
+            m_fileio->CloseProc((aiFileIO*)m_fileio, f);
+            throw;
+        }
+        {
+            std::lock_guard<std::mutex> lock(m_streams_mutex);
+            m_streams.insert(stream.get());
+        }
+        return stream.release();
     }
 
     void Close(Assimp::IOStream* pFile) override {
-        if (!pFile) return;
-        auto* s = dynamic_cast<RustIOStream*>(pFile);
-        if (s && m_fileio && m_fileio->CloseProc && s->m_handle) {
-            m_fileio->CloseProc((aiFileIO*)m_fileio, s->m_handle);
-            s->m_handle = nullptr;
-        }
         delete pFile;
     }
 };
+
+RustIOStream::~RustIOStream() {
+    // Assimp may delete streams directly instead of calling IOSystem::Close.
+    if (m_system) m_system->forget(this);
+    if (m_handle && m_fileio && m_fileio->CloseProc) {
+        aiFile* handle = m_handle;
+        m_handle = nullptr;
+        m_fileio->CloseProc((aiFileIO*)m_fileio, handle);
+    }
+}
 
 static void apply_properties(Assimp::Importer& importer, const aiRustProperty* props, size_t count) {
     if (!props) return;
@@ -230,7 +283,7 @@ static void set_unknown_exception_error(const char* context) noexcept {
     }
 }
 
-static const aiScene* import_with_bridge(
+static aiRustScene* import_with_bridge(
     const char* path,
     const char* mem,
     unsigned int mem_len,
@@ -242,7 +295,8 @@ static const aiScene* import_with_bridge(
     void* progress_user,
     const char* hint)
 {
-    Assimp::Importer importer;
+    auto owner = std::make_unique<aiRustScene>();
+    Assimp::Importer& importer = owner->importer;
 
     // IO bridge
     if (file_io) {
@@ -251,8 +305,10 @@ static const aiScene* import_with_bridge(
     }
 
     // Progress bridge
+    BridgeProgressHandler* progress = nullptr;
     if (progress_cb) {
-        importer.SetProgressHandler(new BridgeProgressHandler(progress_cb, progress_user));
+        progress = new BridgeProgressHandler(progress_cb, progress_user);
+        importer.SetProgressHandler(progress);
     }
 
     // Properties
@@ -265,19 +321,25 @@ static const aiScene* import_with_bridge(
         scene = importer.ReadFileFromMemory(mem, (size_t)mem_len, flags, hint ? hint : "");
     }
 
+    // Assimp's void stage notifications ignore Update's return value. Let its
+    // normal cleanup complete, then reject any scene produced after cancellation.
+    if (progress && progress->cancelled) {
+        g_last_error_msg = "Import cancelled by progress handler";
+        return nullptr;
+    }
+
     if (!scene) {
         g_last_error_msg = importer.GetErrorString();
         return nullptr;
     }
 
-    // Deep copy to decouple from Importer lifetime
-    aiScene* out = nullptr;
-    aiCopyScene(scene, &out);
-    if (!out) {
-        g_last_error_msg = "aiCopyScene returned null";
-        return nullptr;
+    // Progress belongs to this import call. Custom IO stays with the scene owner
+    // so later post-processing cannot fall back to the host file system.
+    if (progress) {
+        progress->cb = nullptr;
+        progress->user = nullptr;
     }
-    return out;
+    return owner.release();
 }
 
 } // namespace
@@ -285,7 +347,7 @@ static const aiScene* import_with_bridge(
 extern "C" {
 
 // Implementation of functions declared in wrapper.h
-const struct aiScene* aiImportFileExWithProgressRust(
+struct aiRustScene* aiImportFileRust(
     const char* path,
     unsigned int flags,
     const struct aiFileIO* file_io,
@@ -302,19 +364,20 @@ const struct aiScene* aiImportFileExWithProgressRust(
         }
         return import_with_bridge(path, nullptr, 0u, flags, file_io, props, props_count, progress_cb, progress_user, nullptr);
     } catch (const std::exception& e) {
-        set_exception_error("aiImportFileExWithProgressRust", e);
+        set_exception_error("aiImportFileRust", e);
         return nullptr;
     } catch (...) {
-        set_unknown_exception_error("aiImportFileExWithProgressRust");
+        set_unknown_exception_error("aiImportFileRust");
         return nullptr;
     }
 }
 
-const struct aiScene* aiImportFileFromMemoryWithProgressRust(
+struct aiRustScene* aiImportFileFromMemoryRust(
     const char* data,
     unsigned int length,
     unsigned int flags,
     const char* hint,
+    const struct aiFileIO* file_io,
     const struct aiRustProperty* props,
     size_t props_count,
     aiRustProgressCallback progress_cb,
@@ -326,13 +389,60 @@ const struct aiScene* aiImportFileFromMemoryWithProgressRust(
             g_last_error_msg = "Memory buffer is empty";
             return nullptr;
         }
-        return import_with_bridge(nullptr, data, length, flags, nullptr, props, props_count, progress_cb, progress_user, hint);
+        return import_with_bridge(nullptr, data, length, flags, file_io, props, props_count, progress_cb, progress_user, hint);
     } catch (const std::exception& e) {
-        set_exception_error("aiImportFileFromMemoryWithProgressRust", e);
+        set_exception_error("aiImportFileFromMemoryRust", e);
         return nullptr;
     } catch (...) {
-        set_unknown_exception_error("aiImportFileFromMemoryWithProgressRust");
+        set_unknown_exception_error("aiImportFileFromMemoryRust");
         return nullptr;
+    }
+}
+
+const struct aiScene* aiGetSceneRust(const struct aiRustScene* owner) {
+    return owner ? owner->importer.GetScene() : nullptr;
+}
+
+void aiReleaseSceneRust(struct aiRustScene* owner) {
+    delete owner;
+}
+
+bool aiApplyPostProcessingRust(struct aiRustScene* owner, unsigned int flags) {
+    g_last_error_msg.clear();
+    try {
+        if (!owner || !owner->importer.GetScene()) {
+            set_bridge_error("Scene owner is empty");
+            return false;
+        }
+        if (!owner->importer.ApplyPostProcessing(flags)) {
+            set_bridge_error(owner->importer.GetErrorString());
+            return false;
+        }
+        return true;
+    } catch (const std::exception& e) {
+        set_exception_error("aiApplyPostProcessingRust", e);
+        return false;
+    } catch (...) {
+        set_unknown_exception_error("aiApplyPostProcessingRust");
+        return false;
+    }
+}
+
+bool aiGetMemoryRequirementsRust(const struct aiRustScene* owner, struct aiMemoryInfo* info) {
+    g_last_error_msg.clear();
+    try {
+        if (!owner || !owner->importer.GetScene() || !info) {
+            set_bridge_error("Scene owner or memory info is empty");
+            return false;
+        }
+        owner->importer.GetMemoryRequirements(*info);
+        return true;
+    } catch (const std::exception& e) {
+        set_exception_error("aiGetMemoryRequirementsRust", e);
+        return false;
+    } catch (...) {
+        set_unknown_exception_error("aiGetMemoryRequirementsRust");
+        return false;
     }
 }
 

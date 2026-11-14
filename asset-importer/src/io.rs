@@ -7,14 +7,20 @@
 use std::ffi::CStr;
 use std::os::raw::c_char;
 use std::ptr;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 use crate::{error::Result, ffi, sys};
 
 type FileSystemHandle = Arc<Mutex<dyn FileSystem>>;
 
+struct FileSystemState {
+    file_system: FileSystemHandle,
+    failed: Arc<AtomicBool>,
+}
+
 #[inline]
-unsafe fn file_system_ptr(file_io: *mut sys::aiFileIO) -> Option<*const FileSystemHandle> {
+unsafe fn file_system_ptr(file_io: *mut sys::aiFileIO) -> Option<*const FileSystemState> {
     if file_io.is_null() {
         return None;
     }
@@ -22,12 +28,12 @@ unsafe fn file_system_ptr(file_io: *mut sys::aiFileIO) -> Option<*const FileSyst
     if align > 1 && (file_io as usize) % align != 0 {
         return None;
     }
-    let ptr = unsafe { (*file_io).UserData as *mut FileSystemHandle };
+    let ptr = unsafe { (*file_io).UserData as *mut FileSystemState };
     if ptr.is_null() {
         return None;
     }
 
-    let align = std::mem::align_of::<FileSystemHandle>();
+    let align = std::mem::align_of::<FileSystemState>();
     if align > 1 && (ptr as usize) % align != 0 {
         return None;
     }
@@ -36,8 +42,20 @@ unsafe fn file_system_ptr(file_io: *mut sys::aiFileIO) -> Option<*const FileSyst
 }
 
 #[inline]
-fn catch_unwind_or<R: Copy>(default: R, f: impl FnOnce() -> R) -> R {
-    std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)).unwrap_or(default)
+pub(crate) fn catch_unwind_or<R>(default: R, f: impl FnOnce() -> R) -> R {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)) {
+        Ok(result) => result,
+        Err(payload) => {
+            // Dropping a user-provided panic payload can also panic. Only leak the
+            // second payload if necessary to keep unwinding inside Rust.
+            if let Err(payload) =
+                std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| drop(payload)))
+            {
+                std::mem::forget(payload);
+            }
+            default
+        }
+    }
 }
 
 /// Trait for custom file I/O implementations
@@ -45,13 +63,16 @@ pub trait FileSystem: std::fmt::Debug + Send + Sync {
     /// Check if a file exists
     fn exists(&self, path: &str) -> bool;
 
-    /// Open a file for reading
+    /// Open a file for reading.
+    ///
+    /// Return `std::io::ErrorKind::NotFound` through [`crate::Error::from`] when a path
+    /// does not exist. Assimp probes optional sidecar files; other errors fail the operation.
     fn open(&self, path: &str) -> Result<Box<dyn FileStream>>;
 
     /// Open a file with explicit mode (e.g., "rb", "wb", "ab", "r+b").
     /// Default implementation falls back to `open` for read-only modes.
     fn open_with_mode(&self, path: &str, mode: &str) -> Result<Box<dyn FileStream>> {
-        if mode.starts_with('r') {
+        if mode.starts_with('r') && !mode.contains('+') {
             self.open(path)
         } else {
             Err(crate::error::Error::io_error(format!(
@@ -69,10 +90,12 @@ pub trait FileSystem: std::fmt::Debug + Send + Sync {
 
 /// Trait for file stream operations
 pub trait FileStream: Send {
-    /// Read data from the stream
+    /// Read data from the stream, returning the number of bytes read.
+    /// Partial reads are supported; return zero at end of file.
     fn read(&mut self, buffer: &mut [u8]) -> Result<usize>;
 
-    /// Write data to the stream
+    /// Write data to the stream, returning the number of bytes written.
+    /// Partial writes are supported; returning zero fails a nonempty write.
     fn write(&mut self, buffer: &[u8]) -> Result<usize> {
         // Default implementation for read-only streams
         let _ = buffer;
@@ -106,42 +129,32 @@ impl FileSystem for DefaultFileSystem {
     }
 
     fn open(&self, path: &str) -> Result<Box<dyn FileStream>> {
-        let file =
-            std::fs::File::open(path).map_err(|e| crate::error::Error::io_error(e.to_string()))?;
+        let file = std::fs::File::open(path).map_err(crate::error::Error::from)?;
         Ok(Box::new(StdFileStream::new(file)))
     }
 
     fn open_with_mode(&self, path: &str, mode: &str) -> Result<Box<dyn FileStream>> {
         use std::fs::OpenOptions;
         let mut options = OpenOptions::new();
-        let mut read = false;
-        let mut write = false;
-        let mut append = false;
-        let mut truncate = false;
-        // Basic parsing of mode
-        if mode.contains('+') {
-            read = true;
-            write = true;
-        } else if mode.starts_with('r') {
-            read = true;
-        } else if mode.starts_with('w') {
-            write = true;
-            truncate = true;
-        } else if mode.starts_with('a') {
-            write = true;
-            append = true;
+        let update = mode.contains('+');
+        match mode.as_bytes().first() {
+            Some(b'r') => {
+                options.read(true).write(update);
+            }
+            Some(b'w') => {
+                options.read(update).write(true).truncate(true).create(true);
+            }
+            Some(b'a') => {
+                options.read(update).append(true).create(true);
+            }
+            _ => {
+                return Err(crate::error::Error::io_error(format!(
+                    "Unsupported open mode: {mode}"
+                )));
+            }
         }
 
-        options
-            .read(read)
-            .write(write)
-            .append(append)
-            .truncate(truncate)
-            .create(write || append);
-
-        let file = options
-            .open(path)
-            .map_err(|e| crate::error::Error::io_error(e.to_string()))?;
+        let file = options.open(path).map_err(crate::error::Error::from)?;
         Ok(Box::new(StdFileStream::new(file)))
     }
 }
@@ -160,16 +173,18 @@ impl StdFileStream {
 impl FileStream for StdFileStream {
     fn read(&mut self, buffer: &mut [u8]) -> Result<usize> {
         use std::io::Read;
-        self.file
-            .read(buffer)
-            .map_err(|e| crate::error::Error::io_error(e.to_string()))
+        self.file.read(buffer).map_err(crate::error::Error::from)
+    }
+
+    fn write(&mut self, buffer: &[u8]) -> Result<usize> {
+        use std::io::Write;
+        self.file.write(buffer).map_err(crate::error::Error::from)
     }
 
     fn tell(&self) -> Result<u64> {
         use std::io::Seek;
         let mut file = &self.file;
-        file.stream_position()
-            .map_err(|e| crate::error::Error::io_error(e.to_string()))
+        file.stream_position().map_err(crate::error::Error::from)
     }
 
     fn seek(&mut self, position: u64) -> Result<()> {
@@ -177,14 +192,19 @@ impl FileStream for StdFileStream {
         self.file
             .seek(SeekFrom::Start(position))
             .map(|_| ())
-            .map_err(|e| crate::error::Error::io_error(e.to_string()))
+            .map_err(crate::error::Error::from)
     }
 
     fn size(&self) -> Result<u64> {
         self.file
             .metadata()
             .map(|m| m.len())
-            .map_err(|e| crate::error::Error::io_error(e.to_string()))
+            .map_err(crate::error::Error::from)
+    }
+
+    fn flush(&mut self) -> Result<()> {
+        use std::io::Write;
+        self.file.flush().map_err(crate::error::Error::from)
     }
 }
 
@@ -233,10 +253,11 @@ impl FileSystem for MemoryFileSystem {
         if let Some(data) = self.files.get(path) {
             Ok(Box::new(ReadOnlyMemoryFileStream::new(data.clone())))
         } else {
-            Err(crate::error::Error::file_error(format!(
-                "File not found: {}",
-                path
-            )))
+            Err(std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                format!("File not found: {path}"),
+            )
+            .into())
         }
     }
 }
@@ -372,32 +393,40 @@ pub struct AssimpFileIO {
 
 /// Owned aiFileIO wrapper which frees its `UserData` on drop.
 ///
-/// Assimp does not take ownership of `aiFileIO::UserData`, so the creator must
-/// ensure it is released after the import/export call completes.
+/// Assimp borrows the callback table and `UserData`. Keep this owner alive until
+/// the native importer/exporter and all of its streams have been destroyed.
+/// The safe import API transfers this owner into the returned scene automatically.
+#[derive(Debug)]
 pub struct OwnedAiFileIO {
-    file_io: sys::aiFileIO,
+    // Assimp retains this callback table; its address must survive moves of the Rust owner.
+    file_io: Box<sys::aiFileIO>,
+    failed: Arc<AtomicBool>,
 }
 
 impl OwnedAiFileIO {
-    fn new(file_system: Arc<Mutex<dyn FileSystem>>) -> Self {
-        let user_data = Box::into_raw(Box::new(file_system)) as *mut c_char;
+    pub(crate) fn new(file_system: Arc<Mutex<dyn FileSystem>>) -> Self {
+        let failed = Arc::new(AtomicBool::new(false));
+        let user_data = Box::into_raw(Box::new(FileSystemState {
+            file_system,
+            failed: failed.clone(),
+        })) as *mut c_char;
         Self {
-            file_io: sys::aiFileIO {
+            file_io: Box::new(sys::aiFileIO {
                 OpenProc: Some(file_open_proc),
                 CloseProc: Some(file_close_proc),
                 UserData: user_data,
-            },
+            }),
+            failed,
         }
+    }
+
+    pub(crate) fn has_error(&self) -> bool {
+        self.failed.load(Ordering::Relaxed)
     }
 
     /// Get a const pointer to the underlying `aiFileIO`.
     pub(crate) fn as_ptr_sys(&self) -> *const sys::aiFileIO {
-        &self.file_io as *const _
-    }
-
-    /// Get a mutable pointer to the underlying `aiFileIO`.
-    pub(crate) fn as_mut_ptr_sys(&mut self) -> *mut sys::aiFileIO {
-        &mut self.file_io as *mut _
+        &*self.file_io as *const _
     }
 
     /// Get a const pointer to the underlying `aiFileIO` (requires `raw-sys`).
@@ -409,16 +438,16 @@ impl OwnedAiFileIO {
     /// Get a mutable pointer to the underlying `aiFileIO` (requires `raw-sys`).
     #[cfg(feature = "raw-sys")]
     pub fn as_mut_ptr(&mut self) -> *mut sys::aiFileIO {
-        self.as_mut_ptr_sys()
+        &mut *self.file_io as *mut _
     }
 }
 
 impl Drop for OwnedAiFileIO {
     fn drop(&mut self) {
         unsafe {
-            let ptr = self.file_io.UserData as *mut Arc<Mutex<dyn FileSystem>>;
+            let ptr = self.file_io.UserData as *mut FileSystemState;
             if !ptr.is_null() {
-                let align = std::mem::align_of::<Arc<Mutex<dyn FileSystem>>>();
+                let align = std::mem::align_of::<FileSystemState>();
                 if align <= 1 || (ptr as usize) % align == 0 {
                     drop(Box::from_raw(ptr));
                 }
@@ -443,6 +472,8 @@ impl AssimpFileIO {
 /// Internal structure to hold file stream data
 struct FileWrapper {
     stream: Mutex<Box<dyn FileStream>>,
+    failed: Arc<AtomicBool>,
+    writable: bool,
 }
 
 #[inline]
@@ -471,19 +502,23 @@ unsafe fn file_wrapper_ptr(file: *mut sys::aiFile) -> Option<*const FileWrapper>
 fn with_stream<R: Copy>(
     file: *mut sys::aiFile,
     default: R,
-    f: impl FnOnce(&mut dyn FileStream) -> R,
+    f: impl FnOnce(&mut dyn FileStream) -> Option<R>,
 ) -> R {
-    catch_unwind_or(default, || unsafe {
+    unsafe {
         let wrapper_ptr = file_wrapper_ptr(file).unwrap_or(std::ptr::null());
         if wrapper_ptr.is_null() {
             return default;
         }
         let wrapper = &*wrapper_ptr;
-        let Ok(mut stream) = wrapper.stream.lock() else {
-            return default;
-        };
-        f(&mut **stream)
-    })
+        let result = catch_unwind_or(None, || {
+            let mut stream = wrapper.stream.lock().ok()?;
+            f(&mut **stream)
+        });
+        result.unwrap_or_else(|| {
+            wrapper.failed.store(true, Ordering::Relaxed);
+            default
+        })
+    }
 }
 
 /// C callback for opening files
@@ -501,7 +536,7 @@ extern "C" fn file_open_proc(
         if file_system_ptr.is_null() {
             return ptr::null_mut();
         }
-        let file_system = &*file_system_ptr;
+        let state = &*file_system_ptr;
 
         let filename_str = match CStr::from_ptr(filename).to_str() {
             Ok(s) => s,
@@ -512,16 +547,32 @@ extern "C" fn file_open_proc(
             Err(_) => return ptr::null_mut(),
         };
 
-        let stream = match file_system.lock() {
-            Ok(fs) => match fs.open_with_mode(filename_str, mode_str) {
-                Ok(stream) => stream,
-                Err(_) => return ptr::null_mut(),
-            },
-            Err(_) => return ptr::null_mut(),
+        // A missing file is normal during format/sidecar probing. Panics and
+        // poisoned locks are failures of the custom IO implementation.
+        let opened = catch_unwind_or(None, || {
+            let fs = state.file_system.lock().ok()?;
+            Some(fs.open_with_mode(filename_str, mode_str))
+        });
+        let stream = match opened {
+            Some(Ok(stream)) => stream,
+            Some(Err(error)) => {
+                if !matches!(&error, crate::Error::IoError { source }
+                    if source.kind() == std::io::ErrorKind::NotFound)
+                {
+                    state.failed.store(true, Ordering::Relaxed);
+                }
+                return ptr::null_mut();
+            }
+            None => {
+                state.failed.store(true, Ordering::Relaxed);
+                return ptr::null_mut();
+            }
         };
 
         let wrapper = Box::new(FileWrapper {
             stream: Mutex::new(stream),
+            failed: state.failed.clone(),
+            writable: !mode_str.starts_with('r') || mode_str.contains('+'),
         });
 
         let ai_file = Box::new(sys::aiFile {
@@ -549,15 +600,25 @@ extern "C" fn file_close_proc(_file_io: *mut sys::aiFileIO, file: *mut sys::aiFi
         return;
     }
 
-    let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| unsafe {
-        // Clean up the file wrapper
-        if let Some(wrapper_ptr) = file_wrapper_ptr(file) {
-            let _ = Box::from_raw(wrapper_ptr as *mut FileWrapper);
+    catch_unwind_or((), || unsafe {
+        // Own aiFile before running user code so a panicking stream destructor
+        // cannot skip releasing the callback table.
+        let mut file = Box::from_raw(file);
+        if let Some(wrapper_ptr) = file_wrapper_ptr(&mut *file) {
+            if (*wrapper_ptr).writable {
+                with_stream(&mut *file, (), |stream| stream.flush().ok());
+            }
+            let wrapper = Box::from_raw(wrapper_ptr as *mut FileWrapper);
+            file.UserData = ptr::null_mut();
+            let failed = wrapper.failed.clone();
+            if !catch_unwind_or(false, || {
+                drop(wrapper);
+                true
+            }) {
+                failed.store(true, Ordering::Relaxed);
+            }
         }
-
-        // Clean up the aiFile
-        let _ = Box::from_raw(file);
-    }));
+    });
 }
 
 /// C callback for reading from files
@@ -572,17 +633,26 @@ extern "C" fn file_read_proc(
     }
 
     with_stream(file, 0, |stream| {
-        let Some(total_bytes) = size.checked_mul(count) else {
-            return 0;
-        };
+        let total_bytes = size.checked_mul(count)?;
+        if total_bytes > isize::MAX as usize {
+            return None;
+        }
         let mut owner = buffer;
         let rust_buffer =
             unsafe { ffi::slice_from_mut_ptr_len(&mut owner, buffer as *mut u8, total_bytes) };
 
-        match stream.read(rust_buffer) {
-            Ok(bytes_read) => bytes_read.min(total_bytes) / size,
-            Err(_) => 0,
+        let mut bytes_read = 0;
+        while bytes_read < total_bytes {
+            let read = stream.read(&mut rust_buffer[bytes_read..]).ok()?;
+            if read == 0 {
+                break;
+            }
+            if read > total_bytes - bytes_read {
+                return None;
+            }
+            bytes_read += read;
         }
+        Some(bytes_read / size)
     })
 }
 
@@ -598,21 +668,23 @@ extern "C" fn file_write_proc(
     }
 
     with_stream(file, 0, |stream| {
-        let Some(total_bytes) = size.checked_mul(count) else {
-            return 0;
-        };
-
-        if total_bytes == 0 {
-            return 0;
+        let total_bytes = size.checked_mul(count)?;
+        if total_bytes > isize::MAX as usize {
+            return None;
         }
 
         let owner = &buffer;
         let data_slice = ffi::slice_from_ptr_len(owner, buffer as *const u8, total_bytes);
 
-        match stream.write(data_slice) {
-            Ok(bytes_written) => bytes_written.min(total_bytes) / size,
-            Err(_) => 0,
+        let mut bytes_written = 0;
+        while bytes_written < total_bytes {
+            let written = stream.write(&data_slice[bytes_written..]).ok()?;
+            if written == 0 || written > total_bytes - bytes_written {
+                return None;
+            }
+            bytes_written += written;
         }
+        Some(bytes_written / size)
     })
 }
 
@@ -622,10 +694,7 @@ extern "C" fn file_tell_proc(file: *mut sys::aiFile) -> usize {
         return 0;
     }
 
-    with_stream(file, 0, |stream| match stream.tell() {
-        Ok(pos) => usize::try_from(pos).unwrap_or(0),
-        Err(_) => 0,
-    })
+    with_stream(file, 0, |stream| usize::try_from(stream.tell().ok()?).ok())
 }
 
 /// C callback for getting file size
@@ -634,10 +703,7 @@ extern "C" fn file_size_proc(file: *mut sys::aiFile) -> usize {
         return 0;
     }
 
-    with_stream(file, 0, |stream| match stream.size() {
-        Ok(size) => usize::try_from(size).unwrap_or(0),
-        Err(_) => 0,
-    })
+    with_stream(file, 0, |stream| usize::try_from(stream.size().ok()?).ok())
 }
 
 /// C callback for seeking in files
@@ -651,37 +717,17 @@ extern "C" fn file_seek_proc(
     }
 
     with_stream(file, sys::aiReturn::aiReturn_FAILURE, |stream| {
-        let Ok(offset) = u64::try_from(offset) else {
-            return sys::aiReturn::aiReturn_FAILURE;
-        };
+        let offset = u64::try_from(offset).ok()?;
 
         let new_position = match origin {
             sys::aiOrigin::aiOrigin_SET => offset,
-            sys::aiOrigin::aiOrigin_CUR => match stream.tell() {
-                Ok(current) => {
-                    let Some(pos) = current.checked_add(offset) else {
-                        return sys::aiReturn::aiReturn_FAILURE;
-                    };
-                    pos
-                }
-                Err(_) => return sys::aiReturn::aiReturn_FAILURE,
-            },
-            sys::aiOrigin::aiOrigin_END => match stream.size() {
-                Ok(size) => {
-                    if offset > size {
-                        return sys::aiReturn::aiReturn_FAILURE;
-                    }
-                    size - offset
-                }
-                Err(_) => return sys::aiReturn::aiReturn_FAILURE,
-            },
-            _ => return sys::aiReturn::aiReturn_FAILURE,
+            sys::aiOrigin::aiOrigin_CUR => stream.tell().ok()?.checked_add(offset)?,
+            sys::aiOrigin::aiOrigin_END => stream.size().ok()?.checked_sub(offset)?,
+            _ => return None,
         };
 
-        match stream.seek(new_position) {
-            Ok(_) => sys::aiReturn::aiReturn_SUCCESS,
-            Err(_) => sys::aiReturn::aiReturn_FAILURE,
-        }
+        stream.seek(new_position).ok()?;
+        Some(sys::aiReturn::aiReturn_SUCCESS)
     })
 }
 
@@ -691,9 +737,7 @@ extern "C" fn file_flush_proc(_file: *mut sys::aiFile) {
         return;
     }
 
-    with_stream(_file, (), |stream| {
-        let _ = stream.flush();
-    })
+    with_stream(_file, (), |stream| stream.flush().ok())
 }
 
 #[cfg(test)]
@@ -720,7 +764,7 @@ mod tests {
 
         // Free the real userdata first to avoid a leak, then poison it with an unaligned pointer
         // and ensure Drop does not attempt to `Box::from_raw` it.
-        let ptr = owned.file_io.UserData as *mut Arc<Mutex<dyn FileSystem>>;
+        let ptr = owned.file_io.UserData as *mut FileSystemState;
         unsafe {
             drop(Box::from_raw(ptr));
         }
@@ -739,6 +783,7 @@ mod tests {
 
         assert!(fs.exists("test.txt"));
         assert!(!fs.exists("nonexistent.txt"));
+        assert!(fs.open_with_mode("test.txt", "r+b").is_err());
 
         let mut stream = fs.open("test.txt").unwrap();
         assert_eq!(stream.size().unwrap(), test_data.len() as u64);
@@ -757,5 +802,42 @@ mod tests {
         };
 
         assert!(stream.write(&[1]).is_err());
+    }
+
+    #[test]
+    fn default_file_system_preserves_update_mode_semantics() {
+        let unique = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let path = std::env::temp_dir().join(format!(
+            "asset-importer-io-{}-{unique}.tmp",
+            std::process::id()
+        ));
+        let path_str = path.to_str().unwrap();
+        let fs = DefaultFileSystem;
+
+        // r+ must not create a file that does not exist.
+        assert!(fs.open_with_mode(path_str, "r+b").is_err());
+        assert!(!path.exists());
+        std::fs::write(&path, b"previous contents").unwrap();
+
+        let mut stream = fs.open_with_mode(path_str, "w+b").unwrap();
+        assert_eq!(stream.size().unwrap(), 0);
+        assert_eq!(stream.write(b"new").unwrap(), 3);
+        stream.flush().unwrap();
+        stream.seek(0).unwrap();
+        let mut buffer = [0; 3];
+        assert_eq!(stream.read(&mut buffer).unwrap(), 3);
+        assert_eq!(&buffer, b"new");
+        drop(stream);
+
+        let mut stream = fs.open_with_mode(path_str, "a+b").unwrap();
+        stream.seek(0).unwrap();
+        assert_eq!(stream.write(b"!").unwrap(), 1);
+        stream.flush().unwrap();
+        drop(stream);
+        assert_eq!(std::fs::read(&path).unwrap(), b"new!");
+        std::fs::remove_file(path).unwrap();
     }
 }
