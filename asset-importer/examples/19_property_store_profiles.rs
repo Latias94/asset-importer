@@ -20,8 +20,6 @@ use asset_importer::{
 };
 
 fn main() -> Result<(), Box<dyn Error>> {
-    common::init_logging_from_env();
-
     let args: Vec<String> = std::env::args().collect();
     let path = if args.len() >= 2 {
         PathBuf::from(&args[1])
@@ -64,7 +62,6 @@ fn main() -> Result<(), Box<dyn Error>> {
         scene.num_animations()
     );
 
-    common::shutdown_logging();
     Ok(())
 }
 

@@ -637,6 +637,11 @@ extern "C" fn file_read_proc(
         if total_bytes > isize::MAX as usize {
             return None;
         }
+        // Assimp may pass uninitialized native storage. FileStream::read is safe
+        // Rust and may inspect every byte, including bytes left unread at EOF.
+        // SAFETY: Assimp supplies exclusive writable storage for size * count
+        // bytes. The checked length fits a slice, and u8 has alignment one.
+        unsafe { ptr::write_bytes(buffer.cast::<u8>(), 0, total_bytes) };
         let mut owner = buffer;
         let rust_buffer =
             unsafe { ffi::slice_from_mut_ptr_len(&mut owner, buffer as *mut u8, total_bytes) };
@@ -743,6 +748,92 @@ extern "C" fn file_flush_proc(_file: *mut sys::aiFile) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    struct InspectingReadStream {
+        position: usize,
+    }
+
+    impl FileStream for InspectingReadStream {
+        fn read(&mut self, buffer: &mut [u8]) -> Result<usize> {
+            assert!(buffer.iter().all(|&byte| byte == 0));
+            let data = b"abcde";
+            let len = buffer.len().min(2).min(data.len() - self.position);
+            buffer[..len].copy_from_slice(&data[self.position..self.position + len]);
+            self.position += len;
+            Ok(len)
+        }
+
+        fn tell(&self) -> Result<u64> {
+            Ok(self.position as u64)
+        }
+
+        fn seek(&mut self, position: u64) -> Result<()> {
+            self.position = usize::try_from(position).unwrap();
+            Ok(())
+        }
+
+        fn size(&self) -> Result<u64> {
+            Ok(5)
+        }
+    }
+
+    #[test]
+    fn read_callback_initializes_native_storage_before_partial_reads() {
+        use std::mem::MaybeUninit;
+
+        // The initialized case detects stale bytes without a memory checker;
+        // the uninitialized case also exercises the native allocation contract under Miri.
+        for mut buffer in [
+            [MaybeUninit::new(0xa5_u8); 8],
+            [MaybeUninit::<u8>::uninit(); 8],
+        ] {
+            let failed = Arc::new(AtomicBool::new(false));
+            let wrapper = FileWrapper {
+                stream: Mutex::new(Box::new(InspectingReadStream { position: 0 })),
+                failed: failed.clone(),
+                writable: false,
+            };
+            let mut file = sys::aiFile {
+                UserData: std::ptr::from_ref(&wrapper).cast_mut().cast(),
+                ..Default::default()
+            };
+
+            let read = file_read_proc(&mut file, buffer.as_mut_ptr().cast(), 2, 4);
+
+            assert_eq!(
+                read, 2,
+                "return complete elements after partial reads and EOF"
+            );
+            assert!(!failed.load(Ordering::Relaxed));
+            // SAFETY: A successful callback initializes the complete eight-byte destination.
+            let bytes = buffer.map(|byte| unsafe { byte.assume_init() });
+            assert_eq!(&bytes, b"abcde\0\0\0");
+        }
+    }
+
+    #[test]
+    fn read_callback_rejects_overflow_before_touching_storage() {
+        for (size, count) in [(usize::MAX, 2), (isize::MAX as usize + 1, 1)] {
+            let failed = Arc::new(AtomicBool::new(false));
+            let wrapper = FileWrapper {
+                stream: Mutex::new(Box::new(InspectingReadStream { position: 0 })),
+                failed: failed.clone(),
+                writable: false,
+            };
+            let mut file = sys::aiFile {
+                UserData: std::ptr::from_ref(&wrapper).cast_mut().cast(),
+                ..Default::default()
+            };
+            let mut buffer = [0xa5_u8];
+
+            assert_eq!(
+                file_read_proc(&mut file, buffer.as_mut_ptr().cast(), size, count),
+                0
+            );
+            assert_eq!(buffer, [0xa5]);
+            assert!(failed.load(Ordering::Relaxed));
+        }
+    }
 
     #[test]
     fn io_callbacks_reject_unaligned_pointers() {

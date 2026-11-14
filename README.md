@@ -112,6 +112,15 @@ Practical guidance:
 - `Scene::apply_postprocess` requires exclusive ownership. Drop scene clones, views, and owning iterators first, or configure post-processing on the import builder. Scenes adopted through raw constructors cannot be post-processed through the safe API.
 - Imports with progress callbacks now retain their native importer, so later post-processing and memory queries work without copying the scene. Progress state is released before the import returns. Custom I/O remains owned by the scene for later post-processing.
 - `Error::IoError` now carries the original `std::io::Error` in `source`. Custom file systems should preserve `NotFound` through `Error::from` for optional missing files; other I/O errors fail the operation.
+- Native `sys` enums are transparent integer newtypes. Replace native enum casts such as `value as u32` with `value.0`; associated constant names remain unchanged. The safe light, animation behavior, morphing, material and metadata APIs retain unrecognized values.
+- `ShadingModel::PbrBrdf` replaces the two workflow-specific PBR variants: Assimp's mode 11 does not distinguish metallic/roughness from specular/glossiness. Inspect material properties to select a workflow.
+- Metadata preserves `Unassigned` and unknown entries. Malformed known values now return an error containing the key instead of silently dropping it.
+- Export errors use `Error::ExportFailed` with the actual Exporter diagnostic. `Error::from_assimp()` was removed because its C-global import error is unrelated to bridge imports and exports.
+- 3MF blob export and 3MF export through custom I/O return an error before opening a file, because Assimp's ZIP writer bypasses I/O handlers. Explicit native-path 3MF export remains available.
+- Sparse morph UV/color channels are rejected before native scene copies used by export or hierarchy-preserving vertex pre-transformation. This prevents Assimp 6.0.6 from sharing and then freeing the source buffers.
+- Export also rejects node metadata and mesh-animation layouts that Assimp cannot deep-copy safely, including empty node metadata. These scenes remain readable; the error identifies the unsupported layout.
+- The native global logging facade (`Logger`, `LogStream`, `logging`, and `enable_verbose_logging`) was removed. Log operation results and progress in your application; native logging through `raw-sys` requires the caller to synchronize global Assimp state.
+- `ImportExtensions::raw_assimp_list()` now returns `&str`. Empty native capability lists remain empty instead of advertising fallback formats.
 - Prebuilt 0.9 packages must be generated for this release. Until published, use the default source build or provide local packages with `ASSET_IMPORTER_PACKAGE_DIR`.
 
 ## Build Options
@@ -139,7 +148,7 @@ asset-importer = { version = "0.9", features = ["prebuilt"] }
 ```
 
 - **Fastest**: No native Assimp compilation
-- **Convenient**: No native toolchain required when a matching package exists
+- **Convenient**: Skips CMake and the Assimp source build; a C++17 compiler is still required for the Rust bridge
 - **Requires**: Matching release artifacts from GitHub releases
 - **Version checked**: Stale packages are rejected if their manifest does not match the bundled Assimp version
 
@@ -228,7 +237,7 @@ Prebuilt binaries are useful when:
 
 - You are using a released crate version with matching published artifacts for your target.
 - You want faster local or CI builds and accept a downloaded native binary package.
-- You do not want to install CMake or a C++ compiler on that machine.
+- You want to skip CMake and compiling Assimp while retaining a C++17 compiler for the bridge.
 
 For maximum compatibility, keep the default source build. For a system package, use `--features system`.
 

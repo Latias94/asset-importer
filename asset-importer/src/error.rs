@@ -57,13 +57,6 @@ pub enum Error {
         source: std::io::Error,
     },
 
-    /// Logging operation failed
-    #[error("Logging error: {message}")]
-    LoggingError {
-        /// Error message describing the logging error
-        message: String,
-    },
-
     /// Invalid scene data
     #[error("Invalid scene: {message}")]
     InvalidScene {
@@ -131,13 +124,6 @@ impl Error {
         }
     }
 
-    /// Create a new logging error
-    pub fn logging_error<S: Into<String>>(message: S) -> Self {
-        Self::LoggingError {
-            message: message.into(),
-        }
-    }
-
     /// Create a new invalid scene error
     pub fn invalid_scene<S: Into<String>>(message: S) -> Self {
         Self::InvalidScene {
@@ -152,32 +138,10 @@ impl Error {
         }
     }
 
-    /// Get the last error from Assimp
-    pub fn from_assimp() -> Self {
-        unsafe {
-            let error_ptr = crate::sys::aiGetErrorString();
-            if error_ptr.is_null() {
-                Self::Other {
-                    message: "Unknown Assimp error".to_string(),
-                }
-            } else {
-                match CStr::from_ptr(error_ptr).to_str() {
-                    Ok(error_str) => Self::Other {
-                        message: error_str.to_string(),
-                    },
-                    Err(_) => Self::Other {
-                        message: "Invalid UTF-8 in Assimp error message".to_string(),
-                    },
-                }
-            }
-        }
-    }
-
-    pub(crate) fn from_bridge_or_assimp() -> Self {
-        if let Some(message) = bridge_error_string() {
-            return Self::Other { message };
-        }
-        Self::from_assimp()
+    pub(crate) fn from_bridge() -> Self {
+        Self::other(bridge_error_string().unwrap_or_else(|| {
+            "Assimp bridge operation failed without an error message".to_owned()
+        }))
     }
 }
 
@@ -227,25 +191,30 @@ mod tests {
     }
 
     #[test]
-    fn from_assimp_does_not_reuse_stale_bridge_error() {
-        unsafe {
-            let _ = crate::sys::aiImportFileFromMemoryRust(
-                std::ptr::null(),
-                0,
-                0,
-                std::ptr::null(),
-                std::ptr::null(),
-                std::ptr::null(),
-                0,
-                None,
-                std::ptr::null_mut(),
+    fn bridge_errors_are_local_to_the_calling_thread() {
+        assert!(bridge_error_string().is_none());
+        std::thread::spawn(|| {
+            unsafe {
+                let _ = crate::sys::aiImportFileFromMemoryRust(
+                    std::ptr::null(),
+                    0,
+                    0,
+                    std::ptr::null(),
+                    std::ptr::null(),
+                    std::ptr::null(),
+                    0,
+                    None,
+                    std::ptr::null_mut(),
+                );
+            }
+            assert!(
+                Error::from_bridge()
+                    .to_string()
+                    .contains("Memory buffer is empty")
             );
-        }
-
-        let bridge_error = Error::from_bridge_or_assimp().to_string();
-        assert!(bridge_error.contains("Memory buffer is empty"));
-
-        let assimp_error = Error::from_assimp().to_string();
-        assert!(!assimp_error.contains("Memory buffer is empty"));
+        })
+        .join()
+        .unwrap();
+        assert!(bridge_error_string().is_none());
     }
 }

@@ -1,4 +1,10 @@
-use std::{env, fs, path::PathBuf};
+use std::{
+    collections::hash_map::DefaultHasher,
+    env, fs,
+    hash::Hasher,
+    io::{Read, Seek},
+    path::{Path, PathBuf},
+};
 
 use crate::build_support::{
     config::BuildConfig,
@@ -48,8 +54,17 @@ pub fn prepare(cfg: &BuildConfig, link_kind: LinkKind) -> BuildPlan {
         download_if_needed(cfg, &cache_root, &archive_names);
     }
 
-    let extract_dir = extract_dir(cfg, link_type, crt_suffix);
-    extract_archive(&package_root, &archive_names, &extract_dir);
+    // Watch candidate additions too, e.g. a preferred MSVC CRT package replacing a fallback.
+    println!("cargo:rerun-if-changed={}", package_root.display());
+    let selected_archive = pick_archive_name(&package_root, &archive_names);
+    println!("cargo:rerun-if-changed={}", selected_archive.display());
+    let archive_path = selected_archive
+        .canonicalize()
+        .expect("Failed to resolve prebuilt archive path");
+    if archive_path != selected_archive {
+        println!("cargo:rerun-if-changed={}", archive_path.display());
+    }
+    let extract_dir = extract_archive(cfg, &archive_path);
 
     let include_dir = extract_dir.join("include");
     let lib_dir = if extract_dir.join("lib").exists() {
@@ -68,18 +83,15 @@ pub fn prepare(cfg: &BuildConfig, link_kind: LinkKind) -> BuildPlan {
 
     validate_prebuilt_package(&extract_dir, &include_dir);
 
-    let lib_name = if cfg.is_windows() {
-        detect_windows_import_lib(&lib_dir).unwrap_or_else(|| "assimp".to_string())
-    } else {
-        detect_unix_link_name(&lib_dir, cfg.is_debug()).unwrap_or_else(|| "assimp".to_string())
-    };
+    let lib_name =
+        detect_assimp_link_name(&lib_dir, cfg, link_kind).unwrap_or_else(|| "assimp".to_string());
 
     validate_prebuilt_libs(cfg, &extract_dir, &lib_dir, link_kind, &lib_name);
 
     // Prebuilt static libs may require linking zlib explicitly.
     if matches!(link_kind, LinkKind::Static) {
-        if cfg.is_windows() && cfg.is_msvc() {
-            link_windows_zlib_if_present(&lib_dir);
+        if cfg.is_windows() {
+            link_windows_zlib(&lib_dir, cfg);
         } else {
             println!("cargo:rustc-link-lib=z");
         }
@@ -175,135 +187,89 @@ fn require_prebuilt_assimp_version(version: &str) {
     );
 }
 
-fn detect_unix_link_name(lib_dir: &std::path::Path, prefer_debug: bool) -> Option<String> {
-    let Ok(read) = fs::read_dir(lib_dir) else {
-        return None;
-    };
-
-    let mut has_assimp = false;
-    let mut has_assimpd = false;
-
+fn detect_assimp_link_name(
+    lib_dir: &Path,
+    cfg: &BuildConfig,
+    link_kind: LinkKind,
+) -> Option<String> {
+    let read = fs::read_dir(lib_dir).ok()?;
+    let mut fallback = None;
     for entry in read.flatten() {
-        let p = entry.path();
-        let Some(name) = p.file_name().and_then(|s| s.to_str()) else {
+        let path = entry.path();
+        let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
             continue;
         };
-        let lower = name.to_ascii_lowercase();
-        let is_lib = lower.ends_with(".a") || lower.ends_with(".dylib") || lower.contains(".so");
-        if !is_lib {
+        let Some(stem) = util::library_filename::assimp_link_name(
+            name,
+            &cfg.target,
+            matches!(link_kind, LinkKind::Static),
+        ) else {
             continue;
+        };
+        let prefer_debug = cfg.is_debug() && !cfg.is_msvc();
+        if stem.starts_with("assimpd") == prefer_debug {
+            return Some(stem.to_string());
         }
-        if lower.starts_with("libassimpd") {
-            has_assimpd = true;
-        } else if lower.starts_with("libassimp") {
-            has_assimp = true;
-        }
+        fallback.get_or_insert_with(|| stem.to_string());
     }
-
-    if prefer_debug && has_assimpd {
-        Some("assimpd".to_string())
-    } else if has_assimp {
-        Some("assimp".to_string())
-    } else if has_assimpd {
-        Some("assimpd".to_string())
-    } else {
-        None
-    }
+    fallback
 }
 
 fn validate_prebuilt_libs(
     cfg: &BuildConfig,
-    extract_dir: &std::path::Path,
-    lib_dir: &std::path::Path,
+    extract_dir: &Path,
+    lib_dir: &Path,
     link_kind: LinkKind,
     link_name: &str,
 ) {
-    let Ok(read) = fs::read_dir(lib_dir) else {
+    let read = fs::read_dir(lib_dir).unwrap_or_else(|error| {
         panic!(
-            "prebuilt package is missing library directory: {}\n\
-             Hint: rebuild and upload the prebuilt package.",
+            "prebuilt package is missing library directory {}: {error}",
+            lib_dir.display()
+        )
+    });
+    let has_library = read.flatten().any(|entry| {
+        let path = entry.path();
+        path.file_name()
+            .and_then(|name| name.to_str())
+            .and_then(|name| {
+                util::library_filename::assimp_link_name(
+                    name,
+                    &cfg.target,
+                    matches!(link_kind, LinkKind::Static),
+                )
+            })
+            == Some(link_name)
+    });
+    if !has_library {
+        panic!(
+            "prebuilt package is missing a {:?} Assimp library for {} under {}.\n\
+             Hint: rebuild and upload the prebuilt package for this target ABI.",
+            link_kind,
+            cfg.target,
             lib_dir.display()
         );
-    };
-
-    let mut has_static = false;
-    let mut has_dynamic = false;
-    let mut has_windows_import_lib = false;
-
-    for entry in read.flatten() {
-        let p = entry.path();
-        let Some(name) = p.file_name().and_then(|s| s.to_str()) else {
-            continue;
-        };
-        let lower = name.to_ascii_lowercase();
-        if lower.ends_with(".a") && lower.contains(link_name) {
-            has_static = true;
-        }
-        if (lower.ends_with(".dylib") || lower.contains(".so")) && lower.contains(link_name) {
-            has_dynamic = true;
-        }
-        if cfg.is_windows() && lower.ends_with(".lib") && lower.contains("assimp") {
-            has_windows_import_lib = true;
-        }
     }
 
-    if cfg.is_windows() {
-        match link_kind {
-            LinkKind::Static | LinkKind::Dynamic => {
-                if !has_windows_import_lib {
-                    panic!(
-                        "prebuilt package is missing assimp import library (*.lib) under {}.\n\
-                         Hint: rebuild and upload the prebuilt package.",
-                        lib_dir.display()
-                    );
-                }
-            }
-        }
-
-        if matches!(link_kind, LinkKind::Dynamic) {
-            let bin_dir = extract_dir.join("bin");
-            let has_dll = bin_dir.exists()
-                && fs::read_dir(&bin_dir)
-                    .ok()
-                    .into_iter()
-                    .flatten()
-                    .flatten()
-                    .any(|e| {
-                        e.path()
-                            .extension()
-                            .and_then(|s| s.to_str())
-                            .is_some_and(|ext| ext.eq_ignore_ascii_case("dll"))
-                    });
-            if !has_dll {
-                panic!(
-                    "prebuilt package is missing assimp DLLs under {}.\n\
-                     Hint: rebuild and upload the prebuilt package.",
-                    bin_dir.display()
-                );
-            }
-        }
-
-        return;
-    }
-
-    match link_kind {
-        LinkKind::Static => {
-            if !has_static {
-                panic!(
-                    "prebuilt package is missing static assimp library under {}.\n\
-                     Hint: rebuild and upload the prebuilt package.",
-                    lib_dir.display()
-                );
-            }
-        }
-        LinkKind::Dynamic => {
-            if !has_dynamic {
-                panic!(
-                    "prebuilt package is missing shared assimp library under {}.\n\
-                     Hint: rebuild and upload the prebuilt package.",
-                    lib_dir.display()
-                );
-            }
+    if cfg.is_windows() && matches!(link_kind, LinkKind::Dynamic) {
+        let bin_dir = extract_dir.join("bin");
+        let has_dll = fs::read_dir(&bin_dir)
+            .ok()
+            .into_iter()
+            .flatten()
+            .flatten()
+            .any(|entry| {
+                entry.file_name().to_str().is_some_and(|name| {
+                    let lower = name.to_ascii_lowercase();
+                    lower.contains("assimp") && lower.ends_with(".dll")
+                })
+            });
+        if !has_dll {
+            panic!(
+                "prebuilt package is missing assimp DLLs under {}.\n\
+                 Hint: rebuild and upload the prebuilt package.",
+                bin_dir.display()
+            );
         }
     }
 }
@@ -321,17 +287,6 @@ fn cache_root(cfg: &BuildConfig) -> PathBuf {
                 .unwrap_or_else(|| cfg.manifest_dir.join("target"))
         });
     target_dir.join("asset-importer-prebuilt")
-}
-
-fn extract_dir(cfg: &BuildConfig, link_type: &str, crt_suffix: Option<&str>) -> PathBuf {
-    let root = cache_root(cfg);
-    let crate_version = env::var("CARGO_PKG_VERSION").unwrap();
-    let subdir = if let Some(crt) = crt_suffix {
-        format!("{}-{}", link_type, crt)
-    } else {
-        link_type.to_string()
-    };
-    root.join(crate_version).join(&cfg.target).join(subdir)
 }
 
 fn pick_archive_name(root: &std::path::Path, candidates: &[String]) -> PathBuf {
@@ -428,46 +383,63 @@ fn download_if_needed(cfg: &BuildConfig, cache_root: &std::path::Path, archive_n
     );
 }
 
-fn extract_archive(root: &std::path::Path, candidates: &[String], dst: &std::path::Path) {
-    let archive_path = pick_archive_name(root, candidates);
-    let include_ok = dst.join("include").exists();
-    let lib_ok = dst.join("lib").exists() || dst.join("lib64").exists();
-    if include_ok && lib_ok {
-        return;
+fn extract_archive(cfg: &BuildConfig, archive_path: &Path) -> PathBuf {
+    let dst = cfg.out_dir.join("prebuilt");
+    let stamp_path = dst.join(".asset-importer-archive");
+    let mut file = fs::File::open(archive_path).expect("Failed to open prebuilt archive");
+    // This digest only invalidates a local cache; it is not an authenticity check.
+    let mut digest = DefaultHasher::new();
+    let mut buffer = [0u8; 64 * 1024];
+    loop {
+        let count = file
+            .read(&mut buffer)
+            .expect("Failed to read prebuilt archive");
+        if count == 0 {
+            break;
+        }
+        digest.write(&buffer[..count]);
+    }
+    let identity = format!(
+        "archive={archive_path:?}\ncontent={:016x}\n",
+        digest.finish()
+    );
+    let include_ok = dst.join("include").is_dir();
+    let lib_ok = dst.join("lib").is_dir() || dst.join("lib64").is_dir();
+    if include_ok
+        && lib_ok
+        && fs::read_to_string(&stamp_path).ok().as_deref() == Some(identity.as_str())
+    {
+        return dst;
     }
 
-    if dst.exists() {
-        let _ = fs::remove_dir_all(dst);
+    if let Ok(metadata) = fs::symlink_metadata(&dst) {
+        let out_dir = cfg
+            .out_dir
+            .canonicalize()
+            .expect("Failed to resolve OUT_DIR");
+        let canonical_dst = dst
+            .canonicalize()
+            .expect("Failed to resolve extract directory");
+        assert!(
+            !metadata.file_type().is_symlink() && canonical_dst.parent() == Some(out_dir.as_path()),
+            "Refusing to remove a prebuilt extract directory outside OUT_DIR: {}",
+            dst.display()
+        );
+        fs::remove_dir_all(&dst).expect("Failed to clear stale prebuilt extract directory");
     }
-    fs::create_dir_all(dst).expect("Failed to create extract directory");
+    fs::create_dir_all(&dst).expect("Failed to create extract directory");
 
-    let file = fs::File::open(&archive_path).expect("Failed to open prebuilt archive");
+    file.rewind().expect("Failed to rewind prebuilt archive");
     let mut archive = Archive::new(GzDecoder::new(file));
     archive
-        .unpack(dst)
+        .unpack(&dst)
         .expect("Failed to extract prebuilt archive");
-}
-
-fn detect_windows_import_lib(lib_dir: &std::path::Path) -> Option<String> {
-    let Ok(read) = fs::read_dir(lib_dir) else {
-        return None;
-    };
-    for entry in read.flatten() {
-        let p = entry.path();
-        let name = p.file_name().and_then(|s| s.to_str())?;
-        let lower = name.to_ascii_lowercase();
-        if lower.starts_with("assimp") && lower.ends_with(".lib") {
-            return p
-                .file_stem()
-                .and_then(|s| s.to_str())
-                .map(|s| s.to_string());
-        }
-    }
-    None
+    fs::write(stamp_path, identity).expect("Failed to record prebuilt archive identity");
+    dst
 }
 
 fn ensure_runtime_libs(cfg: &BuildConfig, extract_dir: &std::path::Path) {
-    if cfg.is_windows() && cfg.is_msvc() {
+    if cfg.is_windows() {
         util::copy_windows_dlls(&cfg.out_dir, extract_dir);
         return;
     }
@@ -500,23 +472,22 @@ fn ensure_runtime_libs(cfg: &BuildConfig, extract_dir: &std::path::Path) {
     }
 }
 
-fn link_windows_zlib_if_present(lib_dir: &std::path::Path) {
-    let Ok(read) = fs::read_dir(lib_dir) else {
-        return;
-    };
+fn link_windows_zlib(lib_dir: &Path, cfg: &BuildConfig) {
+    let read = fs::read_dir(lib_dir).expect("Failed to read prebuilt library directory");
     for entry in read.flatten() {
-        let p = entry.path();
-        let Some(name) = p.file_name().and_then(|s| s.to_str()) else {
+        let path = entry.path();
+        let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
             continue;
         };
-        let lower = name.to_ascii_lowercase();
-        if !lower.ends_with(".lib") || !lower.contains("zlib") {
-            continue;
-        }
-        if let Some(stem) = p.file_stem().and_then(|s| s.to_str()) {
+        if let Some(stem) = util::library_filename::windows_zlib_link_name(name, &cfg.target) {
             println!("cargo:rustc-link-search=native={}", lib_dir.display());
             println!("cargo:rustc-link-lib=static={}", stem);
             return;
         }
     }
+    panic!(
+        "prebuilt static package is missing bundled zlib for {} under {}. Rebuild the package with the current package tool.",
+        cfg.target,
+        lib_dir.display()
+    );
 }

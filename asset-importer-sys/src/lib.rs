@@ -2,6 +2,8 @@
 //!
 //! This crate provides raw, unsafe bindings to the Assimp C API.
 //! For safe, idiomatic Rust bindings, use the `asset-importer` crate instead.
+//! Native enums are transparent integer newtypes with associated constants; `.0` exposes the
+//! underlying value and the tuple constructor can represent unknown native values.
 
 #![allow(non_upper_case_globals)]
 #![allow(non_camel_case_types)]

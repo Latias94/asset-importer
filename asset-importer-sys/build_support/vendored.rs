@@ -43,13 +43,7 @@ pub fn build(cfg: &BuildConfig, link_kind: LinkKind) -> BuildPlan {
         link_search.push(dst.join("build").join("lib").join(cmake_dir));
     }
 
-    let lib_name = if cfg.is_windows() && cfg.is_msvc() {
-        detect_windows_assimp_lib(&dst, cfg).unwrap_or_else(|| "assimp".to_string())
-    } else if let Some(name) = detect_unix_assimp_lib(&dst, cfg) {
-        name
-    } else {
-        "assimp".to_string()
-    };
+    let lib_name = detect_assimp_lib(&dst, cfg, link_kind).unwrap_or_else(|| "assimp".to_string());
 
     // Unix static builds require explicit linkage to the system zlib.
     if !cfg.is_windows() && matches!(link_kind, LinkKind::Static) {
@@ -62,7 +56,7 @@ pub fn build(cfg: &BuildConfig, link_kind: LinkKind) -> BuildPlan {
     }
 
     // For Windows shared builds, copy DLLs next to test binaries.
-    if cfg.is_windows() && cfg.is_msvc() && matches!(link_kind, LinkKind::Dynamic) {
+    if cfg.is_windows() && matches!(link_kind, LinkKind::Dynamic) {
         util::copy_windows_dlls(&cfg.out_dir, &dst);
     }
 
@@ -92,7 +86,7 @@ fn build_stamp_contents(
     link_kind: LinkKind,
 ) -> String {
     format!(
-        "assimp_version={}\nlink_kind={:?}\ncmake_profile={}\nsource={}\n",
+        "assimp_version={}\nlink_kind={:?}\ncmake_profile={}\nsource={}\nminizip=bundled\n",
         version::BUNDLED_VERSION,
         link_kind,
         cfg.cmake_profile(),
@@ -170,6 +164,9 @@ fn build_assimp_with_cmake(
         .define("ASSIMP_BUILD_SAMPLES", "OFF")
         .define("ASSIMP_BUILD_ASSIMP_TOOLS", "OFF")
         .define("ASSIMP_WARNINGS_AS_ERRORS", "OFF")
+        // Assimp 6.0.6 otherwise probes system minizip when using system zlib.
+        .define("ASSIMP_BUILD_MINIZIP", "ON")
+        .define("UNZIP_FOUND", "OFF")
         .define("BUILD_SHARED_LIBS", if build_shared { "ON" } else { "OFF" });
 
     // Keep Assimp's C "export" API enabled even when the Rust `export` feature is off.
@@ -185,7 +182,6 @@ fn build_assimp_with_cmake(
         cmake_config.define("ASSIMP_BUILD_ZLIB", "ON");
     } else {
         cmake_config.define("ASSIMP_BUILD_ZLIB", "OFF");
-        cmake_config.define("ASSIMP_BUILD_NO_OWN_ZLIB", "ON");
     }
 
     // Toolchain/platform knobs
@@ -234,38 +230,15 @@ fn build_assimp_with_cmake(
     cmake_config.build()
 }
 
-fn detect_windows_assimp_lib(dst: &std::path::Path, cfg: &BuildConfig) -> Option<String> {
-    let cmake_dir = cfg.cmake_profile();
-    let candidates = [
-        dst.join("build").join("lib").join(cmake_dir),
-        dst.join("build").join("lib"),
-        dst.join("lib"),
-        dst.join("lib64"),
-    ];
-    for dir in candidates.iter() {
-        let Ok(read) = fs::read_dir(dir) else {
-            continue;
-        };
-        for entry in read.flatten() {
-            let p = entry.path();
-            let name = p.file_name().and_then(|s| s.to_str())?;
-            if name.to_ascii_lowercase().starts_with("assimp")
-                && name.to_ascii_lowercase().ends_with(".lib")
-            {
-                return p
-                    .file_stem()
-                    .and_then(|s| s.to_str())
-                    .map(|s| s.to_string());
-            }
-        }
-    }
-    None
-}
-
-fn detect_unix_assimp_lib(dst: &std::path::Path, cfg: &BuildConfig) -> Option<String> {
+fn detect_assimp_lib(
+    dst: &std::path::Path,
+    cfg: &BuildConfig,
+    link_kind: LinkKind,
+) -> Option<String> {
     let search_dirs = [
         dst.join("lib"),
         dst.join("lib64"),
+        dst.join("build").join("lib").join(cfg.cmake_profile()),
         dst.join("build").join("lib"),
         dst.join("build").join("lib64"),
         dst.join("build").join("bin"),
@@ -281,38 +254,23 @@ fn detect_unix_assimp_lib(dst: &std::path::Path, cfg: &BuildConfig) -> Option<St
             let Some(name) = p.file_name().and_then(|s| s.to_str()) else {
                 continue;
             };
-            let lower = name.to_ascii_lowercase();
-            let is_shared = lower.ends_with(".dylib") || lower.contains(".so");
-            let is_static = lower.ends_with(".a");
-            if !(is_shared || is_static) || !lower.contains("assimp") {
-                continue;
-            }
-
-            // Turn a versioned name like "libassimpd.6.0.x.dylib" into "assimpd".
-            let Some(stem) = p.file_stem().and_then(|s| s.to_str()) else {
+            let Some(stem) = util::library_filename::assimp_link_name(
+                name,
+                &cfg.target,
+                matches!(link_kind, LinkKind::Static),
+            ) else {
                 continue;
             };
-            let stem = stem.strip_prefix("lib").unwrap_or(stem);
 
-            // Prefer debug-suffixed library when building in debug mode.
-            if cfg.is_debug() {
-                if stem.contains("assimpd") {
-                    return Some("assimpd".to_string());
-                }
-                best.get_or_insert_with(|| stem.to_string());
-            } else {
-                if stem == "assimp" || stem.starts_with("assimp.") {
-                    return Some("assimp".to_string());
-                }
-                best.get_or_insert_with(|| stem.to_string());
+            let prefer_debug = cfg.is_debug() && !cfg.is_msvc();
+            if stem.starts_with("assimpd") == prefer_debug {
+                return Some(stem.to_string());
             }
+            best.get_or_insert_with(|| stem.to_string());
         }
     }
 
-    best.map(|s| {
-        // Strip accidental version suffix in "assimp.6" style stems.
-        s.split('.').next().unwrap_or(&s).to_string()
-    })
+    best
 }
 
 fn link_windows_zlib(dst: &std::path::Path, cfg: &BuildConfig) {
@@ -336,25 +294,10 @@ fn link_windows_zlib(dst: &std::path::Path, cfg: &BuildConfig) {
             let Some(name) = p.file_name().and_then(|s| s.to_str()) else {
                 continue;
             };
-            let lower = name.to_ascii_lowercase();
-            let is_zlib = if cfg.is_msvc() {
-                lower.ends_with(".lib") && (lower.contains("zlibstatic") || lower == "zlib.lib")
-            } else {
-                lower.starts_with("libzlibstatic")
-                    && lower.ends_with(".a")
-                    && !lower.ends_with(".dll.a")
-            };
-            if is_zlib {
-                if let Some(stem) = p.file_stem().and_then(|s| s.to_str()) {
-                    let stem = if cfg.is_msvc() {
-                        stem
-                    } else {
-                        stem.strip_prefix("lib").unwrap_or(stem)
-                    };
-                    println!("cargo:rustc-link-search=native={}", dir.display());
-                    println!("cargo:rustc-link-lib=static={}", stem);
-                    return;
-                }
+            if let Some(stem) = util::library_filename::windows_zlib_link_name(name, &cfg.target) {
+                println!("cargo:rustc-link-search=native={}", dir.display());
+                println!("cargo:rustc-link-lib=static={}", stem);
+                return;
             }
         }
     }

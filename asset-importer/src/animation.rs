@@ -1,5 +1,8 @@
 //! Animation data structures and utilities
 
+// Native enum signedness differs between MSVC and Unix bindings.
+#![allow(clippy::unnecessary_cast)]
+
 use crate::{
     ffi,
     ptr::SharedPtr,
@@ -334,12 +337,12 @@ pub enum AnimInterpolation {
 impl AnimInterpolation {
     fn from_raw(v: i32) -> Self {
         match v as u32 {
-            x if x == sys::aiAnimInterpolation::aiAnimInterpolation_Step as u32 => Self::Step,
-            x if x == sys::aiAnimInterpolation::aiAnimInterpolation_Linear as u32 => Self::Linear,
-            x if x == sys::aiAnimInterpolation::aiAnimInterpolation_Spherical_Linear as u32 => {
+            x if x == sys::aiAnimInterpolation::aiAnimInterpolation_Step.0 as u32 => Self::Step,
+            x if x == sys::aiAnimInterpolation::aiAnimInterpolation_Linear.0 as u32 => Self::Linear,
+            x if x == sys::aiAnimInterpolation::aiAnimInterpolation_Spherical_Linear.0 as u32 => {
                 Self::SphericalLinear
             }
-            x if x == sys::aiAnimInterpolation::aiAnimInterpolation_Cubic_Spline as u32 => {
+            x if x == sys::aiAnimInterpolation::aiAnimInterpolation_Cubic_Spline.0 as u32 => {
                 Self::CubicSpline
             }
             other => Self::Unknown(other),
@@ -358,6 +361,8 @@ pub enum AnimBehaviour {
     Linear,
     /// Repeat the animation cyclically
     Repeat,
+    /// Unrecognized native animation behavior.
+    Unknown(u32),
 }
 
 impl AnimBehaviour {
@@ -367,7 +372,7 @@ impl AnimBehaviour {
             sys::aiAnimBehaviour::aiAnimBehaviour_CONSTANT => Self::Constant,
             sys::aiAnimBehaviour::aiAnimBehaviour_LINEAR => Self::Linear,
             sys::aiAnimBehaviour::aiAnimBehaviour_REPEAT => Self::Repeat,
-            _ => Self::Default,
+            other => Self::Unknown(other.0 as u32),
         }
     }
 }

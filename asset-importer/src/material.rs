@@ -180,23 +180,7 @@ impl Material {
 
     /// Get a string property from the material (no heap allocation).
     pub fn get_string_property_ref(&self, key: &CStr) -> Option<MaterialStringRef> {
-        let mut ai_string = sys::aiString::default();
-
-        let result = unsafe {
-            sys::aiGetMaterialString(
-                self.as_raw_sys(),
-                key.as_ptr(),
-                0, // type
-                0, // index
-                &mut ai_string,
-            )
-        };
-
-        if result == sys::aiReturn::aiReturn_SUCCESS {
-            Some(MaterialStringRef { value: ai_string })
-        } else {
-            None
-        }
+        self.property_data(key, None, 0)?.string_ref()
     }
 
     /// Get a string property from the material (allocates).
@@ -211,27 +195,12 @@ impl Material {
         Ok(self.get_string_property(c_key.as_c_str()))
     }
 
-    /// Get a float property from the material
+    /// Get the first numeric property element as a float.
+    ///
+    /// Buffers contain native-endian `f32` values; integers and doubles are converted.
+    /// Numeric strings are parsed within their validated payload. Malformed data returns `None`.
     pub fn get_float_property(&self, key: &CStr) -> Option<f32> {
-        let mut value = 0.0f32;
-        let mut max = 1u32;
-
-        let result = unsafe {
-            sys::aiGetMaterialFloatArray(
-                self.as_raw_sys(),
-                key.as_ptr(),
-                0, // type
-                0, // index
-                &mut value,
-                &mut max,
-            )
-        };
-
-        if result == sys::aiReturn::aiReturn_SUCCESS && max > 0 {
-            Some(value)
-        } else {
-            None
-        }
+        Some(self.property_data(key, None, 0)?.read_f64(0)? as f32)
     }
 
     /// Get a float property from the material (allocates, convenience).
@@ -241,27 +210,13 @@ impl Material {
         Ok(self.get_float_property(c_key.as_c_str()))
     }
 
-    /// Get an integer property from the material
+    /// Get the first numeric property element as an integer.
+    ///
+    /// Floating-point values are truncated toward zero. Non-finite values, results outside
+    /// the `i32` range, malformed payloads, and non-numeric property types return `None`.
+    /// Buffers contain native-endian integers; strings must contain integer tokens.
     pub fn get_integer_property(&self, key: &CStr) -> Option<i32> {
-        let mut value = 0i32;
-        let mut max = 1u32;
-
-        let result = unsafe {
-            sys::aiGetMaterialIntegerArray(
-                self.as_raw_sys(),
-                key.as_ptr(),
-                0, // type
-                0, // index
-                &mut value,
-                &mut max,
-            )
-        };
-
-        if result == sys::aiReturn::aiReturn_SUCCESS && max > 0 {
-            Some(value)
-        } else {
-            None
-        }
+        self.property_data(key, None, 0)?.read_i32(0)
     }
 
     /// Get an integer property from the material (allocates, convenience).
@@ -271,30 +226,18 @@ impl Material {
         Ok(self.get_integer_property(c_key.as_c_str()))
     }
 
-    /// Get a color property from the material
+    /// Get three or four numeric components as a color, defaulting RGB alpha to one.
+    ///
+    /// Fewer than three components or malformed data return `None`.
     pub fn get_color_property(&self, key: &CStr) -> Option<Color4D> {
-        let mut color = sys::aiColor4D {
-            r: 0.0,
-            g: 0.0,
-            b: 0.0,
-            a: 1.0,
-        };
-
-        let result = unsafe {
-            sys::aiGetMaterialColor(
-                self.as_raw_sys(),
-                key.as_ptr(),
-                0, // type
-                0, // index
-                &mut color,
-            )
-        };
-
-        if result == sys::aiReturn::aiReturn_SUCCESS {
-            Some(Color4D::new(color.r, color.g, color.b, color.a))
+        let data = self.property_data(key, None, 0)?;
+        let [red, green, blue] = data.read_f32_array::<3>()?;
+        let alpha = if data.float_count()? == 3 {
+            1.0
         } else {
-            None
-        }
+            data.read_f64(3)? as f32
+        };
+        Some(Color4D::new(red, green, blue, alpha))
     }
 
     /// Get a color property from the material (allocates, convenience).
@@ -535,6 +478,16 @@ impl Material {
         (ok && !prop_ptr.is_null()).then_some(prop_ptr)
     }
 
+    fn property_data(
+        &self,
+        key: &CStr,
+        semantic: Option<TextureType>,
+        index: u32,
+    ) -> Option<MaterialPropertyData<'_>> {
+        let prop = ffi::ref_from_ptr(self, self.property_ptr(key, semantic, index)?)?;
+        unsafe { MaterialPropertyData::from_sys(prop) }
+    }
+
     /// Get the raw bytes of a property (as stored by Assimp)
     pub fn get_property_raw_ref(
         &self,
@@ -542,13 +495,7 @@ impl Material {
         semantic: Option<TextureType>,
         index: u32,
     ) -> Option<&[u8]> {
-        let prop_ptr = self.property_ptr(key, semantic, index)?;
-        let prop = ffi::ref_from_ptr(self, prop_ptr)?;
-        Some(ffi::slice_from_ptr_len(
-            self,
-            prop.mData as *const u8,
-            prop.mDataLength as usize,
-        ))
+        Some(self.property_data(key, semantic, index)?.bytes)
     }
 
     /// Get the raw bytes of a property (as stored by Assimp, allocates).
@@ -573,43 +520,23 @@ impl Material {
         self.get_property_raw(c_key.as_c_str(), semantic, index)
     }
 
-    /// Get an integer array property (converts from floats if necessary)
+    /// Get a numeric property as an integer array by decoding its raw bytes.
+    ///
+    /// Floating-point values are truncated toward zero. The entire query returns `None`
+    /// if any result is non-finite or outside the `i32` range, or the payload is malformed.
+    /// A one-byte integer payload follows Assimp's native `char` compatibility rule.
+    /// Buffers use the same integer layout; strings are parsed as whitespace-separated integers.
+    /// Unknown property types are not converted.
     pub fn get_property_i32_array(
         &self,
         key: &CStr,
         semantic: Option<TextureType>,
         index: u32,
     ) -> Option<Vec<i32>> {
-        let info = self.property_info(key, semantic, index)?;
-        // Determine element count using the stored type size
-        let elem_size = match info.type_info {
-            PropertyTypeInfo::Integer => std::mem::size_of::<i32>(),
-            PropertyTypeInfo::Float => std::mem::size_of::<f32>(),
-            PropertyTypeInfo::Double => std::mem::size_of::<f64>(),
-            _ => return None,
-        };
-        if elem_size == 0 {
-            return None;
-        }
-        let count = (info.data_length as usize) / elem_size;
-        let mut out = vec![0i32; count];
-        let mut max = count as u32;
-        let result = unsafe {
-            sys::aiGetMaterialIntegerArray(
-                self.as_raw_sys(),
-                key.as_ptr(),
-                semantic.map(TextureType::to_semantic).unwrap_or(0),
-                index,
-                out.as_mut_ptr(),
-                &mut max,
-            )
-        };
-        if result == sys::aiReturn::aiReturn_SUCCESS {
-            out.truncate(max as usize);
-            Some(out)
-        } else {
-            None
-        }
+        let data = self.property_data(key, semantic, index)?;
+        (0..data.i32_count()?)
+            .map(|index| data.read_i32(index))
+            .collect()
     }
 
     /// Get an integer array property (converts from floats if necessary, allocates, convenience).
@@ -623,47 +550,20 @@ impl Material {
         self.get_property_i32_array(c_key.as_c_str(), semantic, index)
     }
 
-    /// Get a 32-bit float array property. If the property is stored as doubles, it is converted.
+    /// Get a 32-bit float array property by bounded numeric conversion.
+    ///
+    /// Buffers contain native-endian `f32` values. Integer and double values are converted,
+    /// and strings are parsed as whitespace-separated numbers. Malformed data returns `None`.
     pub fn get_property_f32_array(
         &self,
         key: &CStr,
         semantic: Option<TextureType>,
         index: u32,
     ) -> Option<Vec<f32>> {
-        let info = self.property_info(key, semantic, index)?;
-        match info.type_info {
-            PropertyTypeInfo::Float | PropertyTypeInfo::Double | PropertyTypeInfo::Integer => {
-                // Use Assimp conversion for Float/Integer; for Double, we can also do a manual conversion for more precision.
-                // First, try the API path using aiGetMaterialFloatArray.
-                let elem_size = match info.type_info {
-                    PropertyTypeInfo::Float => std::mem::size_of::<f32>(),
-                    PropertyTypeInfo::Double => std::mem::size_of::<f64>(),
-                    PropertyTypeInfo::Integer => std::mem::size_of::<i32>(),
-                    _ => return None,
-                };
-                let count = (info.data_length as usize) / elem_size;
-                let mut out = vec![0f32; count];
-                let mut max = count as u32;
-                let result = unsafe {
-                    sys::aiGetMaterialFloatArray(
-                        self.as_raw_sys(),
-                        key.as_ptr(),
-                        semantic.map(TextureType::to_semantic).unwrap_or(0),
-                        index,
-                        out.as_mut_ptr(),
-                        &mut max,
-                    )
-                };
-                if result == sys::aiReturn::aiReturn_SUCCESS {
-                    out.truncate(max as usize);
-                    return Some(out);
-                }
-                // Fallback: manual conversion from raw data
-                self.get_property_f64_array(key, semantic, index)
-                    .map(|v| v.into_iter().map(|x| x as f32).collect())
-            }
-            _ => None,
-        }
+        let data = self.property_data(key, semantic, index)?;
+        (0..data.float_count()?)
+            .map(|index| data.read_f64(index).map(|value| value as f32))
+            .collect()
     }
 
     /// Get a 32-bit float array property (allocates, convenience).
@@ -678,57 +578,19 @@ impl Material {
     }
 
     /// Get a 64-bit float array property by decoding raw bytes.
-    /// If stored as f32, it will be widened; if stored as i32, it will be cast.
+    ///
+    /// Float and buffer values are widened from `f32`; integers are converted from `i32`.
+    /// Strings are parsed as whitespace-separated numbers. Malformed data returns `None`.
     pub fn get_property_f64_array(
         &self,
         key: &CStr,
         semantic: Option<TextureType>,
         index: u32,
     ) -> Option<Vec<f64>> {
-        let info = self.property_info(key, semantic, index)?;
-        let raw = self.get_property_raw_ref(key, semantic, index)?;
-        match info.type_info {
-            PropertyTypeInfo::Double => {
-                let sz = std::mem::size_of::<f64>();
-                if sz == 0 || raw.len() % sz != 0 {
-                    return None;
-                }
-                let mut out = Vec::with_capacity(raw.len() / sz);
-                for chunk in raw.chunks_exact(sz) {
-                    let mut arr = [0u8; 8];
-                    arr.copy_from_slice(chunk);
-                    out.push(f64::from_ne_bytes(arr));
-                }
-                Some(out)
-            }
-            PropertyTypeInfo::Float => {
-                let sz = std::mem::size_of::<f32>();
-                if sz == 0 || raw.len() % sz != 0 {
-                    return None;
-                }
-                let mut out = Vec::with_capacity(raw.len() / sz);
-                for chunk in raw.chunks_exact(sz) {
-                    let mut arr = [0u8; 4];
-                    arr.copy_from_slice(chunk);
-                    out.push(f32::from_ne_bytes(arr) as f64);
-                }
-                Some(out)
-            }
-            PropertyTypeInfo::Integer => {
-                let sz = std::mem::size_of::<i32>();
-                if sz == 0 || raw.len() % sz != 0 {
-                    return None;
-                }
-                let mut out = Vec::with_capacity(raw.len() / sz);
-                for chunk in raw.chunks_exact(sz) {
-                    let mut arr = [0u8; 4];
-                    arr.copy_from_slice(chunk);
-                    out.push(i32::from_ne_bytes(arr) as f64);
-                }
-                Some(out)
-            }
-            _ => None,
-        }
+        let data = self.property_data(key, semantic, index)?;
+        (0..data.float_count()?)
+            .map(|index| data.read_f64(index))
+            .collect()
     }
 
     /// Get a 64-bit float array property (allocates, convenience).
@@ -792,25 +654,10 @@ impl Material {
         index: usize,
     ) -> Option<f32> {
         let index = u32::try_from(index).ok()?;
-        let mut value = 0.0f32;
-        let mut max = 1u32;
-
-        let result = unsafe {
-            sys::aiGetMaterialFloatArray(
-                self.as_raw_sys(),
-                key.as_ptr(),
-                texture_type.to_semantic(),
-                index,
-                &mut value,
-                &mut max,
-            )
-        };
-
-        if result == sys::aiReturn::aiReturn_SUCCESS && max > 0 {
-            Some(value)
-        } else {
-            None
-        }
+        Some(
+            self.property_data(key, Some(texture_type), index)?
+                .read_f64(0)? as f32,
+        )
     }
 
     /// Get the glTF texture scale value for a texture slot.
@@ -847,107 +694,68 @@ impl Material {
     }
 
     /// Get texture information for a specific type and index (no heap allocation).
+    ///
+    /// Missing optional properties use UV mapping, channel 0, blend 1, Multiply, Wrap,
+    /// and no flags. Malformed optional properties use the same defaults.
+    /// Non-UV mappings keep the default UV channel. UV transforms require five values.
     pub fn texture_ref(&self, texture_type: TextureType, index: usize) -> Option<TextureInfoRef> {
-        if index >= self.texture_count(texture_type) {
+        let index = u32::try_from(index).ok()?;
+        if index as usize >= self.texture_count(texture_type) {
             return None;
         }
 
-        unsafe {
-            let mut path = sys::aiString::default();
-            let mut mapping = std::mem::MaybeUninit::<sys::aiTextureMapping>::uninit();
-            let mut uv_index = std::mem::MaybeUninit::<u32>::uninit();
-            let mut blend = std::mem::MaybeUninit::<f32>::uninit();
-            let mut op = std::mem::MaybeUninit::<sys::aiTextureOp>::uninit();
-            // Use the exact sys enum type to avoid platform-dependent
-            // signedness mismatches across compilers.
-            let mut map_mode: [sys::aiTextureMapMode; 3] =
-                [sys::aiTextureMapMode::aiTextureMapMode_Wrap; 3];
-            let mut tex_flags: u32 = 0;
+        let property = |key: &CStr| self.property_data(key, Some(texture_type), index);
+        let integer = |key: &CStr| property(key)?.read_i32(0);
+        let path = property(c"$tex.file")?.string_ref()?.value;
+        let mapping = TextureMapping::from_raw(
+            integer(c"$tex.mapping")
+                .map(|value| value as u32)
+                .unwrap_or(sys::aiTextureMapping::aiTextureMapping_UV.0 as u32),
+        );
+        let uv_index = if mapping == TextureMapping::UV {
+            integer(c"$tex.uvwsrc").unwrap_or(0) as u32
+        } else {
+            0
+        };
+        let blend_factor = property(c"$tex.blend")
+            .and_then(|data| data.read_f64(0))
+            .map(|value| value as f32)
+            .unwrap_or(1.0);
+        let operation = TextureOperation::from_raw(
+            integer(c"$tex.op")
+                .map(|value| value as u32)
+                .unwrap_or(sys::aiTextureOp::aiTextureOp_Multiply.0 as u32),
+        );
+        let [map_mode_u, map_mode_v] = [c"$tex.mapmodeu", c"$tex.mapmodev"].map(|key| {
+            TextureMapMode::from_raw(
+                integer(key)
+                    .map(|value| value as u32)
+                    .unwrap_or(sys::aiTextureMapMode::aiTextureMapMode_Wrap.0 as u32),
+            )
+        });
+        let flags = TextureFlags::from_bits_truncate(integer(c"$tex.flags").unwrap_or(0) as u32);
+        let uv_transform = property(c"$tex.uvtrafo")
+            .and_then(|data| data.read_f32_array::<5>())
+            .map(|[tx, ty, sx, sy, rotation]| UVTransform {
+                translation: Vector2D::new(tx, ty),
+                scaling: Vector2D::new(sx, sy),
+                rotation,
+            });
+        let axis = property(c"$tex.mapaxis")
+            .and_then(|data| data.read_f32_array::<3>())
+            .map(|[axis_x, axis_y, axis_z]| Vector3D::new(axis_x, axis_y, axis_z));
 
-            let result = sys::aiGetMaterialTexture(
-                self.as_raw_sys(),
-                texture_type.to_sys(),
-                index as u32,
-                &mut path,
-                mapping.as_mut_ptr(),
-                uv_index.as_mut_ptr(),
-                blend.as_mut_ptr(),
-                op.as_mut_ptr(),
-                map_mode.as_mut_ptr() as *mut _,
-                &mut tex_flags as *mut u32,
-            );
-
-            if result != sys::aiReturn::aiReturn_SUCCESS {
-                return None;
-            }
-
-            let mapping_val = mapping.assume_init();
-            let uv_index_val = uv_index.assume_init();
-            let blend_val = blend.assume_init();
-            let op_val = op.assume_init();
-
-            // Try read UV transform
-            let mut uv_transform = std::mem::MaybeUninit::<sys::aiUVTransform>::uninit();
-            let uv_key: &CStr = c"$tex.uvtrafo";
-            let uv_ok = sys::aiGetMaterialUVTransform(
-                self.as_raw_sys(),
-                uv_key.as_ptr(),
-                texture_type.to_semantic(),
-                index as u32,
-                uv_transform.as_mut_ptr(),
-            ) == sys::aiReturn::aiReturn_SUCCESS;
-
-            let uv_transform = if uv_ok {
-                let t = uv_transform.assume_init();
-                Some(UVTransform {
-                    translation: Vector2D::new(t.mTranslation.x, t.mTranslation.y),
-                    scaling: Vector2D::new(t.mScaling.x, t.mScaling.y),
-                    rotation: t.mRotation,
-                })
-            } else {
-                None
-            };
-
-            // Try read TEXMAP_AXIS via property API ("$tex.mapaxis")
-            let axis = {
-                let key: &CStr = c"$tex.mapaxis";
-                let mut prop_ptr: *const sys::aiMaterialProperty = std::ptr::null();
-                let ok = sys::aiGetMaterialProperty(
-                    self.as_raw_sys(),
-                    key.as_ptr(),
-                    texture_type.to_semantic(),
-                    index as u32,
-                    &mut prop_ptr,
-                ) == sys::aiReturn::aiReturn_SUCCESS;
-                if ok {
-                    if let Some(prop) = ffi::ref_from_ptr(self, prop_ptr) {
-                        MaterialPropertyData::from_sys(prop)
-                            .and_then(|d| d.read_ne_f32_array::<3>(0))
-                            .map(|[x, y, z]| Vector3D::new(x, y, z))
-                    } else {
-                        None
-                    }
-                } else {
-                    None
-                }
-            };
-
-            Some(TextureInfoRef {
-                path,
-                mapping: TextureMapping::from_raw(mapping_val),
-                uv_index: uv_index_val,
-                blend_factor: blend_val,
-                operation: TextureOperation::from_raw(op_val),
-                map_modes: [
-                    TextureMapMode::from_raw(map_mode[0]),
-                    TextureMapMode::from_raw(map_mode[1]),
-                    TextureMapMode::from_raw(map_mode[2]),
-                ],
-                flags: TextureFlags::from_bits_truncate(tex_flags),
-                uv_transform,
-                axis,
-            })
-        }
+        Some(TextureInfoRef {
+            path,
+            mapping,
+            uv_index,
+            blend_factor,
+            operation,
+            map_modes: [map_mode_u, map_mode_v, TextureMapMode::Wrap],
+            flags,
+            uv_transform,
+            axis,
+        })
     }
 
     /// Iterate textures of a given type (no heap allocation).
@@ -971,59 +779,59 @@ impl Material {
 #[repr(u32)]
 pub enum TextureType {
     /// Diffuse texture (base color)
-    Diffuse = sys::aiTextureType::aiTextureType_DIFFUSE as u32,
+    Diffuse = sys::aiTextureType::aiTextureType_DIFFUSE.0 as u32,
     /// Specular texture (reflectivity)
-    Specular = sys::aiTextureType::aiTextureType_SPECULAR as u32,
+    Specular = sys::aiTextureType::aiTextureType_SPECULAR.0 as u32,
     /// Ambient texture (ambient lighting)
-    Ambient = sys::aiTextureType::aiTextureType_AMBIENT as u32,
+    Ambient = sys::aiTextureType::aiTextureType_AMBIENT.0 as u32,
     /// Emissive texture (self-illumination)
-    Emissive = sys::aiTextureType::aiTextureType_EMISSIVE as u32,
+    Emissive = sys::aiTextureType::aiTextureType_EMISSIVE.0 as u32,
     /// Height texture (displacement mapping)
-    Height = sys::aiTextureType::aiTextureType_HEIGHT as u32,
+    Height = sys::aiTextureType::aiTextureType_HEIGHT.0 as u32,
     /// Normal texture (surface detail)
-    Normals = sys::aiTextureType::aiTextureType_NORMALS as u32,
+    Normals = sys::aiTextureType::aiTextureType_NORMALS.0 as u32,
     /// Shininess texture (specular power)
-    Shininess = sys::aiTextureType::aiTextureType_SHININESS as u32,
+    Shininess = sys::aiTextureType::aiTextureType_SHININESS.0 as u32,
     /// Opacity texture (transparency)
-    Opacity = sys::aiTextureType::aiTextureType_OPACITY as u32,
+    Opacity = sys::aiTextureType::aiTextureType_OPACITY.0 as u32,
     /// Displacement texture (geometry displacement)
-    Displacement = sys::aiTextureType::aiTextureType_DISPLACEMENT as u32,
+    Displacement = sys::aiTextureType::aiTextureType_DISPLACEMENT.0 as u32,
     /// Lightmap texture (pre-computed lighting)
-    Lightmap = sys::aiTextureType::aiTextureType_LIGHTMAP as u32,
+    Lightmap = sys::aiTextureType::aiTextureType_LIGHTMAP.0 as u32,
     /// Reflection texture (environment mapping)
-    Reflection = sys::aiTextureType::aiTextureType_REFLECTION as u32,
+    Reflection = sys::aiTextureType::aiTextureType_REFLECTION.0 as u32,
     /// Base color texture (PBR albedo)
-    BaseColor = sys::aiTextureType::aiTextureType_BASE_COLOR as u32,
+    BaseColor = sys::aiTextureType::aiTextureType_BASE_COLOR.0 as u32,
     /// Normal camera texture (camera-space normals)
-    NormalCamera = sys::aiTextureType::aiTextureType_NORMAL_CAMERA as u32,
+    NormalCamera = sys::aiTextureType::aiTextureType_NORMAL_CAMERA.0 as u32,
     /// Emission color texture (PBR emission)
-    EmissionColor = sys::aiTextureType::aiTextureType_EMISSION_COLOR as u32,
+    EmissionColor = sys::aiTextureType::aiTextureType_EMISSION_COLOR.0 as u32,
     /// Metalness texture (PBR metallic)
-    Metalness = sys::aiTextureType::aiTextureType_METALNESS as u32,
+    Metalness = sys::aiTextureType::aiTextureType_METALNESS.0 as u32,
     /// Diffuse roughness texture (PBR roughness)
-    DiffuseRoughness = sys::aiTextureType::aiTextureType_DIFFUSE_ROUGHNESS as u32,
+    DiffuseRoughness = sys::aiTextureType::aiTextureType_DIFFUSE_ROUGHNESS.0 as u32,
     /// Ambient occlusion texture (shadowing)
-    AmbientOcclusion = sys::aiTextureType::aiTextureType_AMBIENT_OCCLUSION as u32,
+    AmbientOcclusion = sys::aiTextureType::aiTextureType_AMBIENT_OCCLUSION.0 as u32,
     /// Unknown texture type
-    Unknown = sys::aiTextureType::aiTextureType_UNKNOWN as u32,
+    Unknown = sys::aiTextureType::aiTextureType_UNKNOWN.0 as u32,
     /// Sheen layer (PBR)
-    Sheen = sys::aiTextureType::aiTextureType_SHEEN as u32,
+    Sheen = sys::aiTextureType::aiTextureType_SHEEN.0 as u32,
     /// Clearcoat layer (PBR)
-    Clearcoat = sys::aiTextureType::aiTextureType_CLEARCOAT as u32,
+    Clearcoat = sys::aiTextureType::aiTextureType_CLEARCOAT.0 as u32,
     /// Transmission layer (PBR)
-    Transmission = sys::aiTextureType::aiTextureType_TRANSMISSION as u32,
+    Transmission = sys::aiTextureType::aiTextureType_TRANSMISSION.0 as u32,
     /// Maya base color (compat)
-    MayaBase = sys::aiTextureType::aiTextureType_MAYA_BASE as u32,
+    MayaBase = sys::aiTextureType::aiTextureType_MAYA_BASE.0 as u32,
     /// Maya specular (compat)
-    MayaSpecular = sys::aiTextureType::aiTextureType_MAYA_SPECULAR as u32,
+    MayaSpecular = sys::aiTextureType::aiTextureType_MAYA_SPECULAR.0 as u32,
     /// Maya specular color (compat)
-    MayaSpecularColor = sys::aiTextureType::aiTextureType_MAYA_SPECULAR_COLOR as u32,
+    MayaSpecularColor = sys::aiTextureType::aiTextureType_MAYA_SPECULAR_COLOR.0 as u32,
     /// Maya specular roughness (compat)
-    MayaSpecularRoughness = sys::aiTextureType::aiTextureType_MAYA_SPECULAR_ROUGHNESS as u32,
+    MayaSpecularRoughness = sys::aiTextureType::aiTextureType_MAYA_SPECULAR_ROUGHNESS.0 as u32,
     /// Anisotropy (PBR)
-    Anisotropy = sys::aiTextureType::aiTextureType_ANISOTROPY as u32,
+    Anisotropy = sys::aiTextureType::aiTextureType_ANISOTROPY.0 as u32,
     /// glTF metallic-roughness packed
-    GltfMetallicRoughness = sys::aiTextureType::aiTextureType_GLTF_METALLIC_ROUGHNESS as u32,
+    GltfMetallicRoughness = sys::aiTextureType::aiTextureType_GLTF_METALLIC_ROUGHNESS.0 as u32,
 }
 
 /// High-level shading model
@@ -1049,10 +857,8 @@ pub enum ShadingModel {
     NoShading,
     /// Fresnel reflectance model
     Fresnel,
-    /// PBR specular-glossiness workflow
-    PbrSpecularGlossiness,
-    /// PBR metallic-roughness workflow
-    PbrMetallicRoughness,
+    /// Generic PBR BRDF; available workflows are described by the material properties.
+    PbrBrdf,
     /// Unknown shading model with raw value
     Unknown(u32),
 }
@@ -1061,21 +867,19 @@ impl ShadingModel {
     fn from_raw(v: u32) -> Self {
         use sys::aiShadingMode;
         match v {
-            x if x == aiShadingMode::aiShadingMode_Flat as u32 => ShadingModel::Flat,
-            x if x == aiShadingMode::aiShadingMode_Gouraud as u32 => ShadingModel::Gouraud,
-            x if x == aiShadingMode::aiShadingMode_Phong as u32 => ShadingModel::Phong,
-            x if x == aiShadingMode::aiShadingMode_Blinn as u32 => ShadingModel::Blinn,
-            x if x == aiShadingMode::aiShadingMode_Toon as u32 => ShadingModel::Toon,
-            x if x == aiShadingMode::aiShadingMode_OrenNayar as u32 => ShadingModel::OrenNayar,
-            x if x == aiShadingMode::aiShadingMode_Minnaert as u32 => ShadingModel::Minnaert,
-            x if x == aiShadingMode::aiShadingMode_CookTorrance as u32 => {
+            x if x == aiShadingMode::aiShadingMode_Flat.0 as u32 => ShadingModel::Flat,
+            x if x == aiShadingMode::aiShadingMode_Gouraud.0 as u32 => ShadingModel::Gouraud,
+            x if x == aiShadingMode::aiShadingMode_Phong.0 as u32 => ShadingModel::Phong,
+            x if x == aiShadingMode::aiShadingMode_Blinn.0 as u32 => ShadingModel::Blinn,
+            x if x == aiShadingMode::aiShadingMode_Toon.0 as u32 => ShadingModel::Toon,
+            x if x == aiShadingMode::aiShadingMode_OrenNayar.0 as u32 => ShadingModel::OrenNayar,
+            x if x == aiShadingMode::aiShadingMode_Minnaert.0 as u32 => ShadingModel::Minnaert,
+            x if x == aiShadingMode::aiShadingMode_CookTorrance.0 as u32 => {
                 ShadingModel::CookTorrance
             }
-            x if x == aiShadingMode::aiShadingMode_NoShading as u32 => ShadingModel::NoShading,
-            x if x == aiShadingMode::aiShadingMode_Fresnel as u32 => ShadingModel::Fresnel,
-            x if x == aiShadingMode::aiShadingMode_PBR_BRDF as u32 => {
-                ShadingModel::PbrSpecularGlossiness
-            }
+            x if x == aiShadingMode::aiShadingMode_NoShading.0 as u32 => ShadingModel::NoShading,
+            x if x == aiShadingMode::aiShadingMode_Fresnel.0 as u32 => ShadingModel::Fresnel,
+            x if x == aiShadingMode::aiShadingMode_PBR_BRDF.0 as u32 => ShadingModel::PbrBrdf,
             other => ShadingModel::Unknown(other),
         }
     }
@@ -1106,7 +910,7 @@ impl PropertyTypeInfo {
             sys::aiPropertyTypeInfo::aiPTI_String => Self::String,
             sys::aiPropertyTypeInfo::aiPTI_Integer => Self::Integer,
             sys::aiPropertyTypeInfo::aiPTI_Buffer => Self::Buffer,
-            other => Self::Unknown(other as u32),
+            other => Self::Unknown(other.0 as u32),
         }
     }
 }
@@ -1152,15 +956,114 @@ pub struct MaterialPropertyRef {
 /// Assimp treats `mData` as a byte blob; callers must not assume alignment.
 struct MaterialPropertyData<'a> {
     bytes: &'a [u8],
+    type_info: PropertyTypeInfo,
 }
 
 impl<'a> MaterialPropertyData<'a> {
     /// # Safety
     /// The returned slice borrows Assimp-owned memory and must not outlive the scene.
     unsafe fn from_sys(prop: &'a sys::aiMaterialProperty) -> Option<Self> {
-        let bytes =
-            ffi::slice_from_ptr_len_opt(prop, prop.mData as *const u8, prop.mDataLength as usize)?;
-        Some(Self { bytes })
+        let len = prop.mDataLength as usize;
+        if len > isize::MAX as usize {
+            return None;
+        }
+        let bytes = ffi::slice_from_ptr_len_opt(prop, prop.mData as *const u8, len)?;
+        Some(Self {
+            bytes,
+            type_info: PropertyTypeInfo::from_sys(prop.mType),
+        })
+    }
+
+    fn i32_source_width(&self) -> Option<usize> {
+        let width = match self.type_info {
+            PropertyTypeInfo::Integer | PropertyTypeInfo::Buffer if self.bytes.len() == 1 => 1,
+            PropertyTypeInfo::Integer | PropertyTypeInfo::Buffer | PropertyTypeInfo::Float => 4,
+            PropertyTypeInfo::Double => 8,
+            _ => return None,
+        };
+        (self.bytes.len() % width == 0).then_some(width)
+    }
+
+    fn i32_count(&self) -> Option<usize> {
+        if self.type_info == PropertyTypeInfo::String {
+            return self.float_count();
+        }
+        Some(self.bytes.len() / self.i32_source_width()?)
+    }
+
+    fn read_i32(&self, index: usize) -> Option<i32> {
+        if self.type_info == PropertyTypeInfo::String {
+            let value = self.string_ref()?;
+            return std::str::from_utf8(value.as_bytes())
+                .ok()?
+                .split_whitespace()
+                .nth(index)?
+                .parse()
+                .ok();
+        }
+        let offset = index.checked_mul(self.i32_source_width()?)?;
+        let value = match self.type_info {
+            PropertyTypeInfo::Integer | PropertyTypeInfo::Buffer if self.bytes.len() == 1 => {
+                return Some(i32::from(*self.bytes.get(offset)? as std::os::raw::c_char));
+            }
+            PropertyTypeInfo::Integer | PropertyTypeInfo::Buffer => {
+                return self.read_ne_i32(offset);
+            }
+            PropertyTypeInfo::Float => f64::from(self.read_ne_f32(offset)?),
+            PropertyTypeInfo::Double => self.read_ne_f64(offset)?,
+            _ => return None,
+        };
+        let truncated = value.trunc();
+        if !truncated.is_finite()
+            || truncated < f64::from(i32::MIN)
+            || truncated > f64::from(i32::MAX)
+        {
+            return None;
+        }
+        Some(truncated as i32)
+    }
+
+    fn float_source_width(&self) -> Option<usize> {
+        let width = match self.type_info {
+            PropertyTypeInfo::Float | PropertyTypeInfo::Buffer | PropertyTypeInfo::Integer => 4,
+            PropertyTypeInfo::Double => 8,
+            _ => return None,
+        };
+        (self.bytes.len() % width == 0).then_some(width)
+    }
+
+    fn float_count(&self) -> Option<usize> {
+        if self.type_info == PropertyTypeInfo::String {
+            let value = self.string_ref()?;
+            return Some(
+                std::str::from_utf8(value.as_bytes())
+                    .ok()?
+                    .split_whitespace()
+                    .count(),
+            );
+        }
+        Some(self.bytes.len() / self.float_source_width()?)
+    }
+
+    fn read_f64(&self, index: usize) -> Option<f64> {
+        if self.type_info == PropertyTypeInfo::String {
+            let value = self.string_ref()?;
+            return std::str::from_utf8(value.as_bytes())
+                .ok()?
+                .split_whitespace()
+                .nth(index)?
+                .parse()
+                .ok();
+        }
+        let offset = index.checked_mul(self.float_source_width()?)?;
+        match self.type_info {
+            PropertyTypeInfo::Float | PropertyTypeInfo::Buffer => {
+                Some(f64::from(self.read_ne_f32(offset)?))
+            }
+            PropertyTypeInfo::Double => self.read_ne_f64(offset),
+            PropertyTypeInfo::Integer => Some(f64::from(self.read_ne_i32(offset)?)),
+            _ => None,
+        }
     }
 
     fn read_ne_u32(&self, offset: usize) -> Option<u32> {
@@ -1199,45 +1102,49 @@ impl<'a> MaterialPropertyData<'a> {
         Some(f64::from_ne_bytes(raw))
     }
 
-    fn read_ne_f32_array<const N: usize>(&self, offset: usize) -> Option<[f32; N]> {
-        let need = 4usize.checked_mul(N)?;
-        let slice = self.bytes.get(offset..offset.checked_add(need)?)?;
-        let mut out = [0.0f32; N];
-        for (i, slot) in out.iter_mut().enumerate() {
-            let start = i * 4;
-            let raw: [u8; 4] = slice[start..start + 4].try_into().ok()?;
-            *slot = f32::from_ne_bytes(raw);
+    fn read_f32_array<const N: usize>(&self) -> Option<[f32; N]> {
+        Some(self.read_f64_array::<N>()?.map(|value| value as f32))
+    }
+
+    fn read_f64_array<const N: usize>(&self) -> Option<[f64; N]> {
+        self.float_count()?;
+        let mut out = [0.0f64; N];
+        for (index, slot) in out.iter_mut().enumerate() {
+            *slot = self.read_f64(index)?;
         }
         Some(out)
     }
 
-    fn read_ne_f64_array<const N: usize>(&self, offset: usize) -> Option<[f64; N]> {
-        let need = 8usize.checked_mul(N)?;
-        let slice = self.bytes.get(offset..offset.checked_add(need)?)?;
-        let mut out = [0.0f64; N];
-        for (i, slot) in out.iter_mut().enumerate() {
-            let start = i * 8;
-            let raw: [u8; 8] = slice[start..start + 8].try_into().ok()?;
-            *slot = f64::from_ne_bytes(raw);
+    fn string_ref(&self) -> Option<MaterialStringRef> {
+        if self.type_info != PropertyTypeInfo::String {
+            return None;
         }
-        Some(out)
+        Some(MaterialStringRef {
+            value: self.decode_ai_string()?,
+        })
     }
 
     fn decode_ai_string(&self) -> Option<sys::aiString> {
         let declared_len = self.read_ne_u32(0)? as usize;
         let payload = self.bytes.get(4..)?;
-        let max = (sys::AI_MAXLEN as usize).saturating_sub(1);
-        let copy_len = declared_len.min(payload.len()).min(max);
+        if declared_len >= sys::AI_MAXLEN as usize
+            || payload.len() != declared_len.checked_add(1)?
+            || *payload.get(declared_len)? != 0
+        {
+            return None;
+        }
 
         let mut value = sys::aiString {
-            length: copy_len as u32,
+            length: declared_len as u32,
             data: [0; sys::AI_MAXLEN as usize],
         };
 
-        for (dst, src) in value.data[..copy_len].iter_mut().zip(&payload[..copy_len]) {
+        for (dst, src) in value.data[..declared_len]
+            .iter_mut()
+            .zip(&payload[..declared_len])
+        {
             *dst = *src as std::os::raw::c_char;
         }
-        value.data[copy_len] = 0;
         Some(value)
     }
 }
@@ -1287,8 +1194,9 @@ impl MaterialPropertyRef {
 
     /// Raw property bytes as stored by Assimp (zero-copy).
     pub fn data(&self) -> &[u8] {
-        let p = self.raw();
-        ffi::slice_from_ptr_len(self, p.mData as *const u8, p.mDataLength as usize)
+        unsafe { MaterialPropertyData::from_sys(self.raw()) }
+            .map(|data| data.bytes)
+            .unwrap_or_default()
     }
 
     /// Interpret the property payload as an `i32` slice when stored as `Integer` (zero-copy).
@@ -1325,16 +1233,13 @@ impl MaterialPropertyRef {
     /// Interpret the property payload as an `aiString` when stored as `String` (no heap allocation).
     ///
     /// Assimp material properties store strings in a compact `aiString`-compatible binary layout:
-    /// a 32-bit byte length followed by the UTF-8 (usually) bytes (typically including a trailing NUL).
+    /// a 32-bit byte length followed by exactly that many bytes and a trailing NUL.
     /// We decode this representation into an owned `aiString` buffer for safe, allocation-free use.
+    /// Invalid lengths, missing terminators, and strings exceeding `AI_MAXLEN - 1` return `None`.
     pub fn string_ref(&self) -> Option<MaterialStringRef> {
-        if self.type_info() != PropertyTypeInfo::String {
-            return None;
-        }
         let p = self.raw();
         let d = unsafe { MaterialPropertyData::from_sys(p) }?;
-        let value = d.decode_ai_string()?;
-        Some(MaterialStringRef { value })
+        d.string_ref()
     }
 
     /// Read the first element as `i32` when stored as `Integer`.
@@ -1344,7 +1249,7 @@ impl MaterialPropertyRef {
         }
         let p = self.raw();
         let d = unsafe { MaterialPropertyData::from_sys(p) }?;
-        d.read_ne_i32(0)
+        d.read_i32(0)
     }
 
     /// Read the first element as `u32` when stored as `Integer` and non-negative.
@@ -1364,7 +1269,7 @@ impl MaterialPropertyRef {
         }
         let p = self.raw();
         let d = unsafe { MaterialPropertyData::from_sys(p) }?;
-        d.read_ne_f32(0)
+        Some(d.read_f64(0)? as f32)
     }
 
     /// Read the first element as `f64` when stored as `Double`.
@@ -1374,7 +1279,7 @@ impl MaterialPropertyRef {
         }
         let p = self.raw();
         let d = unsafe { MaterialPropertyData::from_sys(p) }?;
-        d.read_ne_f64(0)
+        d.read_f64(0)
     }
 
     /// Read `N` elements as `f32` when stored as `Float`.
@@ -1384,7 +1289,7 @@ impl MaterialPropertyRef {
         }
         let p = self.raw();
         let d = unsafe { MaterialPropertyData::from_sys(p) }?;
-        d.read_ne_f32_array::<N>(0)
+        d.read_f32_array::<N>()
     }
 
     /// Read `N` elements as `f64` when stored as `Double`.
@@ -1394,7 +1299,7 @@ impl MaterialPropertyRef {
         }
         let p = self.raw();
         let d = unsafe { MaterialPropertyData::from_sys(p) }?;
-        d.read_ne_f64_array::<N>(0)
+        d.read_f64_array::<N>()
     }
 
     /// Read a `Vec2` when stored as `Float` and the payload has at least 2 floats.
@@ -1426,19 +1331,15 @@ impl MaterialPropertyRef {
     }
 
     fn data_cast_slice_opt<T>(&self) -> Option<&[T]> {
-        let p = self.raw();
-        let len = p.mDataLength as usize;
+        let data = unsafe { MaterialPropertyData::from_sys(self.raw()) }?;
+        let len = data.bytes.len();
         let size = std::mem::size_of::<T>();
         let align = std::mem::align_of::<T>();
 
         if len == 0 {
             return Some(&[]);
         }
-        if p.mData.is_null() {
-            return None;
-        }
-
-        let ptr = p.mData as *const u8;
+        let ptr = data.bytes.as_ptr();
         if size == 0 {
             return Some(&[]);
         }
@@ -1521,49 +1422,53 @@ impl TextureType {
 
     #[inline]
     fn to_semantic(self) -> u32 {
-        self.to_sys() as u32
+        self.to_sys().0 as u32
     }
 
     /// Try convert a raw u32 (aiTextureType) into TextureType safely
     pub fn from_u32(v: u32) -> Option<Self> {
         Some(match v {
-            x if x == sys::aiTextureType::aiTextureType_DIFFUSE as u32 => Self::Diffuse,
-            x if x == sys::aiTextureType::aiTextureType_SPECULAR as u32 => Self::Specular,
-            x if x == sys::aiTextureType::aiTextureType_AMBIENT as u32 => Self::Ambient,
-            x if x == sys::aiTextureType::aiTextureType_EMISSIVE as u32 => Self::Emissive,
-            x if x == sys::aiTextureType::aiTextureType_HEIGHT as u32 => Self::Height,
-            x if x == sys::aiTextureType::aiTextureType_NORMALS as u32 => Self::Normals,
-            x if x == sys::aiTextureType::aiTextureType_SHININESS as u32 => Self::Shininess,
-            x if x == sys::aiTextureType::aiTextureType_OPACITY as u32 => Self::Opacity,
-            x if x == sys::aiTextureType::aiTextureType_DISPLACEMENT as u32 => Self::Displacement,
-            x if x == sys::aiTextureType::aiTextureType_LIGHTMAP as u32 => Self::Lightmap,
-            x if x == sys::aiTextureType::aiTextureType_REFLECTION as u32 => Self::Reflection,
-            x if x == sys::aiTextureType::aiTextureType_BASE_COLOR as u32 => Self::BaseColor,
-            x if x == sys::aiTextureType::aiTextureType_NORMAL_CAMERA as u32 => Self::NormalCamera,
-            x if x == sys::aiTextureType::aiTextureType_EMISSION_COLOR as u32 => {
+            x if x == sys::aiTextureType::aiTextureType_DIFFUSE.0 as u32 => Self::Diffuse,
+            x if x == sys::aiTextureType::aiTextureType_SPECULAR.0 as u32 => Self::Specular,
+            x if x == sys::aiTextureType::aiTextureType_AMBIENT.0 as u32 => Self::Ambient,
+            x if x == sys::aiTextureType::aiTextureType_EMISSIVE.0 as u32 => Self::Emissive,
+            x if x == sys::aiTextureType::aiTextureType_HEIGHT.0 as u32 => Self::Height,
+            x if x == sys::aiTextureType::aiTextureType_NORMALS.0 as u32 => Self::Normals,
+            x if x == sys::aiTextureType::aiTextureType_SHININESS.0 as u32 => Self::Shininess,
+            x if x == sys::aiTextureType::aiTextureType_OPACITY.0 as u32 => Self::Opacity,
+            x if x == sys::aiTextureType::aiTextureType_DISPLACEMENT.0 as u32 => Self::Displacement,
+            x if x == sys::aiTextureType::aiTextureType_LIGHTMAP.0 as u32 => Self::Lightmap,
+            x if x == sys::aiTextureType::aiTextureType_REFLECTION.0 as u32 => Self::Reflection,
+            x if x == sys::aiTextureType::aiTextureType_BASE_COLOR.0 as u32 => Self::BaseColor,
+            x if x == sys::aiTextureType::aiTextureType_NORMAL_CAMERA.0 as u32 => {
+                Self::NormalCamera
+            }
+            x if x == sys::aiTextureType::aiTextureType_EMISSION_COLOR.0 as u32 => {
                 Self::EmissionColor
             }
-            x if x == sys::aiTextureType::aiTextureType_METALNESS as u32 => Self::Metalness,
-            x if x == sys::aiTextureType::aiTextureType_DIFFUSE_ROUGHNESS as u32 => {
+            x if x == sys::aiTextureType::aiTextureType_METALNESS.0 as u32 => Self::Metalness,
+            x if x == sys::aiTextureType::aiTextureType_DIFFUSE_ROUGHNESS.0 as u32 => {
                 Self::DiffuseRoughness
             }
-            x if x == sys::aiTextureType::aiTextureType_AMBIENT_OCCLUSION as u32 => {
+            x if x == sys::aiTextureType::aiTextureType_AMBIENT_OCCLUSION.0 as u32 => {
                 Self::AmbientOcclusion
             }
-            x if x == sys::aiTextureType::aiTextureType_UNKNOWN as u32 => Self::Unknown,
-            x if x == sys::aiTextureType::aiTextureType_SHEEN as u32 => Self::Sheen,
-            x if x == sys::aiTextureType::aiTextureType_CLEARCOAT as u32 => Self::Clearcoat,
-            x if x == sys::aiTextureType::aiTextureType_TRANSMISSION as u32 => Self::Transmission,
-            x if x == sys::aiTextureType::aiTextureType_MAYA_BASE as u32 => Self::MayaBase,
-            x if x == sys::aiTextureType::aiTextureType_MAYA_SPECULAR as u32 => Self::MayaSpecular,
-            x if x == sys::aiTextureType::aiTextureType_MAYA_SPECULAR_COLOR as u32 => {
+            x if x == sys::aiTextureType::aiTextureType_UNKNOWN.0 as u32 => Self::Unknown,
+            x if x == sys::aiTextureType::aiTextureType_SHEEN.0 as u32 => Self::Sheen,
+            x if x == sys::aiTextureType::aiTextureType_CLEARCOAT.0 as u32 => Self::Clearcoat,
+            x if x == sys::aiTextureType::aiTextureType_TRANSMISSION.0 as u32 => Self::Transmission,
+            x if x == sys::aiTextureType::aiTextureType_MAYA_BASE.0 as u32 => Self::MayaBase,
+            x if x == sys::aiTextureType::aiTextureType_MAYA_SPECULAR.0 as u32 => {
+                Self::MayaSpecular
+            }
+            x if x == sys::aiTextureType::aiTextureType_MAYA_SPECULAR_COLOR.0 as u32 => {
                 Self::MayaSpecularColor
             }
-            x if x == sys::aiTextureType::aiTextureType_MAYA_SPECULAR_ROUGHNESS as u32 => {
+            x if x == sys::aiTextureType::aiTextureType_MAYA_SPECULAR_ROUGHNESS.0 as u32 => {
                 Self::MayaSpecularRoughness
             }
-            x if x == sys::aiTextureType::aiTextureType_ANISOTROPY as u32 => Self::Anisotropy,
-            x if x == sys::aiTextureType::aiTextureType_GLTF_METALLIC_ROUGHNESS as u32 => {
+            x if x == sys::aiTextureType::aiTextureType_ANISOTROPY.0 as u32 => Self::Anisotropy,
+            x if x == sys::aiTextureType::aiTextureType_GLTF_METALLIC_ROUGHNESS.0 as u32 => {
                 Self::GltfMetallicRoughness
             }
             _ => return None,
@@ -1598,25 +1503,911 @@ mod material_property_data_tests {
         (prop, data)
     }
 
-    #[test]
-    fn decode_ai_string_clamps_to_payload_and_adds_terminator() {
-        let mut data = Vec::new();
-        data.extend_from_slice(&999u32.to_ne_bytes()); // declared length > payload
-        data.extend_from_slice(b"abc"); // payload shorter than declared length
+    fn with_material(properties: &mut [sys::aiMaterialProperty], check: impl FnOnce(&Material)) {
+        let scene = Scene::from_memory(b"o tri\nv 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\n", Some("obj"))
+            .expect("import owner scene");
+        let mut pointers: Vec<_> = properties.iter_mut().map(std::ptr::from_mut).collect();
+        let raw = sys::aiMaterial {
+            mProperties: pointers.as_mut_ptr(),
+            mNumProperties: pointers.len() as u32,
+            mNumAllocated: pointers.len() as u32,
+        };
+        // The fixture owns all native buffers; only the imported owner scene uses Assimp's allocator.
+        // The material view is dropped before any of the borrowed fixture storage.
+        let material = Material {
+            scene,
+            material_ptr: SharedPtr::new(&raw).unwrap(),
+        };
+        check(&material);
+    }
 
-        let (prop, _data_owner) = make_prop_with_data(data);
-        let decoded = unsafe { MaterialPropertyData::from_sys(&prop) }
-            .and_then(|d| d.decode_ai_string())
-            .unwrap();
-
-        assert_eq!(decoded.length, 3);
-        let bytes: Vec<u8> = decoded.data[..3].iter().map(|c| *c as u8).collect();
-        assert_eq!(bytes, b"abc");
-        assert_eq!(decoded.data[3] as u8, 0);
+    fn assert_integer_getters(
+        type_info: sys::aiPropertyTypeInfo,
+        mut bytes: Vec<u8>,
+        expected: Option<Vec<i32>>,
+    ) {
+        let property = sys::aiMaterialProperty {
+            mKey: ai_string_from_cstr(c"$test.number"),
+            mType: type_info,
+            mData: bytes.as_mut_ptr().cast(),
+            mDataLength: bytes.len() as u32,
+            ..Default::default()
+        };
+        with_material(&mut [property], |material| {
+            assert_eq!(
+                material.get_property_i32_array(c"$test.number", None, 0),
+                expected
+            );
+            assert_eq!(
+                material.get_integer_property(c"$test.number"),
+                expected.as_ref().and_then(|values| values.first().copied())
+            );
+        });
     }
 
     #[test]
-    fn read_ne_primitives_and_arrays_from_bytes() {
+    fn integer_getters_decode_one_byte_and_native_i32_payloads() {
+        for byte in [0u8, 1, 2, u8::MAX] {
+            assert_integer_getters(
+                sys::aiPropertyTypeInfo::aiPTI_Integer,
+                vec![byte],
+                Some(vec![i32::from(byte as std::os::raw::c_char)]),
+            );
+        }
+        assert_integer_getters(
+            sys::aiPropertyTypeInfo::aiPTI_Integer,
+            [i32::MIN, -42, 0, i32::MAX]
+                .into_iter()
+                .flat_map(i32::to_ne_bytes)
+                .collect(),
+            Some(vec![i32::MIN, -42, 0, i32::MAX]),
+        );
+        assert_integer_getters(sys::aiPropertyTypeInfo::aiPTI_Integer, vec![], Some(vec![]));
+    }
+
+    #[test]
+    fn integer_getters_truncate_float_and_double_values_with_checked_bounds() {
+        assert_integer_getters(
+            sys::aiPropertyTypeInfo::aiPTI_Float,
+            [1.75f32, -2.75, -2_147_483_648.0, 2_147_483_520.0]
+                .into_iter()
+                .flat_map(f32::to_ne_bytes)
+                .collect(),
+            Some(vec![1, -2, i32::MIN, 2_147_483_520]),
+        );
+        assert_integer_getters(
+            sys::aiPropertyTypeInfo::aiPTI_Double,
+            [
+                1.75,
+                -2.75,
+                f64::from(i32::MIN) - 0.75,
+                f64::from(i32::MAX) + 0.75,
+            ]
+            .into_iter()
+            .flat_map(f64::to_ne_bytes)
+            .collect(),
+            Some(vec![1, -2, i32::MIN, i32::MAX]),
+        );
+        for value in [
+            f32::NAN,
+            f32::INFINITY,
+            f32::NEG_INFINITY,
+            2_147_483_648.0,
+            -2_147_483_904.0,
+        ] {
+            assert_integer_getters(
+                sys::aiPropertyTypeInfo::aiPTI_Float,
+                value.to_ne_bytes().to_vec(),
+                None,
+            );
+        }
+        for value in [
+            f64::NAN,
+            f64::INFINITY,
+            f64::NEG_INFINITY,
+            f64::from(i32::MAX) + 1.0,
+            f64::from(i32::MIN) - 1.0,
+        ] {
+            assert_integer_getters(
+                sys::aiPropertyTypeInfo::aiPTI_Double,
+                value.to_ne_bytes().to_vec(),
+                None,
+            );
+        }
+    }
+
+    #[test]
+    fn integer_getters_reject_malformed_and_non_numeric_payloads() {
+        // Assimp's generic AddProperty stores enum values as a Buffer.
+        assert_integer_getters(
+            sys::aiPropertyTypeInfo::aiPTI_Buffer,
+            11i32.to_ne_bytes().to_vec(),
+            Some(vec![11]),
+        );
+        for (type_info, lengths) in [
+            (sys::aiPropertyTypeInfo::aiPTI_Integer, &[2, 3, 5][..]),
+            (sys::aiPropertyTypeInfo::aiPTI_Buffer, &[2, 3, 5][..]),
+            (sys::aiPropertyTypeInfo::aiPTI_Float, &[1, 3, 5][..]),
+            (sys::aiPropertyTypeInfo::aiPTI_Double, &[1, 7, 9][..]),
+        ] {
+            for &length in lengths {
+                assert_integer_getters(type_info, vec![0; length], None);
+            }
+        }
+        for type_info in [
+            sys::aiPropertyTypeInfo::aiPTI_String,
+            sys::aiPropertyTypeInfo(77),
+        ] {
+            assert_integer_getters(type_info, vec![0; 8], None);
+        }
+        let property = sys::aiMaterialProperty {
+            mKey: ai_string_from_cstr(c"$test.number"),
+            mType: sys::aiPropertyTypeInfo::aiPTI_Integer,
+            mData: std::ptr::null_mut(),
+            mDataLength: 4,
+            ..Default::default()
+        };
+        with_material(&mut [property], |material| {
+            assert_eq!(material.get_integer_property(c"$test.number"), None);
+            assert_eq!(
+                material.get_property_i32_array(c"$test.number", None, 0),
+                None
+            );
+        });
+    }
+
+    #[test]
+    fn integer_array_rejects_invalid_later_elements_and_preserves_scoped_queries() {
+        let mut bytes: Vec<_> = [1.5, f64::NAN]
+            .into_iter()
+            .flat_map(f64::to_ne_bytes)
+            .collect();
+        let property = sys::aiMaterialProperty {
+            mKey: ai_string_from_cstr(c"$test.number"),
+            mType: sys::aiPropertyTypeInfo::aiPTI_Double,
+            mData: bytes.as_mut_ptr().cast(),
+            mDataLength: bytes.len() as u32,
+            ..Default::default()
+        };
+        with_material(&mut [property], |material| {
+            assert_eq!(material.get_integer_property(c"$test.number"), Some(1));
+            assert_eq!(
+                material.get_property_i32_array(c"$test.number", None, 0),
+                None
+            );
+        });
+        bytes = (-2.75f64).to_ne_bytes().to_vec();
+        let property = sys::aiMaterialProperty {
+            mSemantic: TextureType::Normals.to_semantic(),
+            mIndex: 2,
+            mData: bytes.as_mut_ptr().cast(),
+            mDataLength: bytes.len() as u32,
+            ..property
+        };
+        with_material(&mut [property], |material| {
+            assert_eq!(
+                material.get_property_i32_array(c"$test.number", Some(TextureType::Normals), 2),
+                Some(vec![-2])
+            );
+            assert_eq!(
+                material.get_property_i32_array(c"$test.number", None, 0),
+                None
+            );
+        });
+    }
+
+    #[test]
+    fn float_and_color_getters_decode_numeric_types_and_preserve_scope() {
+        for (type_info, bytes, expected) in [
+            (
+                sys::aiPropertyTypeInfo::aiPTI_Float,
+                [0.25f32, 0.5, 0.75]
+                    .into_iter()
+                    .flat_map(f32::to_ne_bytes)
+                    .collect(),
+                vec![0.25, 0.5, 0.75],
+            ),
+            (
+                sys::aiPropertyTypeInfo::aiPTI_Double,
+                [0.25f64, 0.5, 0.75, 0.125]
+                    .into_iter()
+                    .flat_map(f64::to_ne_bytes)
+                    .collect(),
+                vec![0.25, 0.5, 0.75, 0.125],
+            ),
+            (
+                sys::aiPropertyTypeInfo::aiPTI_Integer,
+                [1i32, -2, 3, 4]
+                    .into_iter()
+                    .flat_map(i32::to_ne_bytes)
+                    .collect(),
+                vec![1.0, -2.0, 3.0, 4.0],
+            ),
+            (
+                sys::aiPropertyTypeInfo::aiPTI_Buffer,
+                [0.25f32, 0.5, 0.75]
+                    .into_iter()
+                    .flat_map(f32::to_ne_bytes)
+                    .collect(),
+                vec![0.25, 0.5, 0.75],
+            ),
+        ] {
+            let (mut property, _owner) = make_prop_with_data(bytes);
+            property.mKey = ai_string_from_cstr(c"$test.number");
+            property.mType = type_info;
+            let expected_f32: Vec<_> = expected.iter().map(|value| *value as f32).collect();
+            with_material(&mut [property], |material| {
+                assert_eq!(
+                    material.get_float_property(c"$test.number"),
+                    Some(expected_f32[0])
+                );
+                assert_eq!(
+                    material
+                        .get_property_f32_array(c"$test.number", None, 0)
+                        .as_deref(),
+                    Some(expected_f32.as_slice())
+                );
+                assert_eq!(
+                    material
+                        .get_property_f64_array(c"$test.number", None, 0)
+                        .as_deref(),
+                    Some(expected.as_slice())
+                );
+                assert_eq!(
+                    material.get_color_property(c"$test.number"),
+                    Some(Color4D::new(
+                        expected_f32[0],
+                        expected_f32[1],
+                        expected_f32[2],
+                        expected_f32.get(3).copied().unwrap_or(1.0),
+                    ))
+                );
+            });
+            property.mSemantic = TextureType::Normals.to_semantic();
+            property.mIndex = 2;
+            with_material(&mut [property], |material| {
+                assert_eq!(
+                    material.get_texture_float_property(c"$test.number", TextureType::Normals, 2),
+                    Some(expected_f32[0])
+                );
+                assert_eq!(
+                    material
+                        .get_property_f64_array(c"$test.number", Some(TextureType::Normals), 2)
+                        .as_deref(),
+                    Some(expected.as_slice())
+                );
+                assert_eq!(material.get_float_property(c"$test.number"), None);
+                assert_eq!(
+                    material.get_texture_float_property(c"$test.number", TextureType::Normals, 0),
+                    None
+                );
+            });
+        }
+    }
+
+    #[test]
+    fn numeric_buffer_preserves_float_and_integer_interpretations() {
+        let (mut property, _owner) = make_prop_with_data(0.5f32.to_ne_bytes().to_vec());
+        property.mKey = ai_string_from_cstr(c"$test.number");
+        property.mType = sys::aiPropertyTypeInfo::aiPTI_Buffer;
+        with_material(&mut [property], |material| {
+            assert_eq!(material.get_float_property(c"$test.number"), Some(0.5));
+            assert_eq!(
+                material.get_integer_property(c"$test.number"),
+                Some(i32::from_ne_bytes(0.5f32.to_ne_bytes()))
+            );
+        });
+        for byte in [0u8, 1, u8::MAX] {
+            assert_integer_getters(
+                sys::aiPropertyTypeInfo::aiPTI_Buffer,
+                vec![byte],
+                Some(vec![i32::from(byte as std::os::raw::c_char)]),
+            );
+        }
+    }
+
+    #[test]
+    fn float_getters_reject_unknown_short_and_incomplete_numeric_data() {
+        for (type_info, lengths) in [
+            (sys::aiPropertyTypeInfo(77), &[0, 1, 4, 8][..]),
+            (sys::aiPropertyTypeInfo::aiPTI_Float, &[1, 3, 5][..]),
+            (sys::aiPropertyTypeInfo::aiPTI_Double, &[1, 7, 9][..]),
+            (sys::aiPropertyTypeInfo::aiPTI_Integer, &[1, 2, 3, 5][..]),
+            (sys::aiPropertyTypeInfo::aiPTI_Buffer, &[1, 2, 3, 5][..]),
+            (sys::aiPropertyTypeInfo::aiPTI_String, &[1, 3, 4][..]),
+        ] {
+            for &length in lengths {
+                let (mut property, _owner) = make_prop_with_data(vec![0; length]);
+                property.mKey = ai_string_from_cstr(c"$test.number");
+                property.mType = type_info;
+                with_material(&mut [property], |material| {
+                    assert_eq!(material.get_float_property(c"$test.number"), None);
+                    assert_eq!(material.get_color_property(c"$test.number"), None);
+                    assert_eq!(
+                        material.get_property_f32_array(c"$test.number", None, 0),
+                        None
+                    );
+                    assert_eq!(
+                        material.get_property_f64_array(c"$test.number", None, 0),
+                        None
+                    );
+                });
+                property.mSemantic = TextureType::Normals.to_semantic();
+                with_material(&mut [property], |material| {
+                    assert_eq!(material.normal_texture_scale(0), None);
+                    assert_eq!(
+                        material.get_texture_float_property(
+                            c"$test.number",
+                            TextureType::Normals,
+                            0
+                        ),
+                        None
+                    );
+                });
+            }
+        }
+    }
+
+    #[test]
+    fn float_getters_preserve_ieee_values_and_require_three_color_components() {
+        let bytes = [f64::INFINITY, f64::NEG_INFINITY, f64::NAN]
+            .into_iter()
+            .flat_map(f64::to_ne_bytes)
+            .collect();
+        let (mut property, _owner) = make_prop_with_data(bytes);
+        property.mKey = ai_string_from_cstr(c"$test.number");
+        property.mType = sys::aiPropertyTypeInfo::aiPTI_Double;
+        with_material(&mut [property], |material| {
+            assert_eq!(
+                material.get_float_property(c"$test.number"),
+                Some(f32::INFINITY)
+            );
+            let color = material.get_color_property(c"$test.number").unwrap();
+            assert_eq!(color.x, f32::INFINITY);
+            assert_eq!(color.y, f32::NEG_INFINITY);
+            assert!(color.z.is_nan());
+            assert_eq!(color.w, 1.0);
+        });
+        for count in [0, 1, 2] {
+            property.mDataLength = count * 8;
+            with_material(&mut [property], |material| {
+                assert_eq!(material.get_color_property(c"$test.number"), None);
+                if count == 0 {
+                    assert_eq!(material.get_float_property(c"$test.number"), None);
+                    assert_eq!(
+                        material.get_property_f64_array(c"$test.number", None, 0),
+                        Some(vec![])
+                    );
+                }
+            });
+        }
+    }
+
+    #[test]
+    fn numeric_strings_are_bounded_utf8_and_whitespace_parsed() {
+        for text in [
+            &b" 1\t-2\n3.5 4 "[..],
+            &b"1 2 invalid 4"[..],
+            &b"1.5suffix"[..],
+            &b"\xff"[..],
+        ] {
+            let mut bytes = (text.len() as u32).to_ne_bytes().to_vec();
+            bytes.extend_from_slice(text);
+            bytes.push(0);
+            let (mut property, _owner) = make_prop_with_data(bytes);
+            property.mKey = ai_string_from_cstr(c"$test.number");
+            property.mType = sys::aiPropertyTypeInfo::aiPTI_String;
+            with_material(&mut [property], |material| {
+                assert_eq!(
+                    material
+                        .get_string_property_ref(c"$test.number")
+                        .unwrap()
+                        .as_bytes(),
+                    text
+                );
+                if text == b" 1\t-2\n3.5 4 " {
+                    assert_eq!(material.get_float_property(c"$test.number"), Some(1.0));
+                    assert_eq!(
+                        material.get_color_property(c"$test.number"),
+                        Some(Color4D::new(1.0, -2.0, 3.5, 4.0))
+                    );
+                    assert_eq!(
+                        material.get_property_f32_array(c"$test.number", None, 0),
+                        Some(vec![1.0, -2.0, 3.5, 4.0])
+                    );
+                    assert_eq!(
+                        material.get_property_f64_array(c"$test.number", None, 0),
+                        Some(vec![1.0, -2.0, 3.5, 4.0])
+                    );
+                } else {
+                    assert_eq!(material.get_color_property(c"$test.number"), None);
+                    assert_eq!(
+                        material.get_property_f64_array(c"$test.number", None, 0),
+                        None
+                    );
+                }
+            });
+        }
+        for (text, expected) in [
+            (
+                &b" 1 -2 2147483647 -2147483648 "[..],
+                Some(vec![1, -2, i32::MAX, i32::MIN]),
+            ),
+            (&b"2147483648"[..], None),
+            (&b"NaN"[..], None),
+            (&b"1.5"[..], None),
+        ] {
+            let mut bytes = (text.len() as u32).to_ne_bytes().to_vec();
+            bytes.extend_from_slice(text);
+            bytes.push(0);
+            assert_integer_getters(sys::aiPropertyTypeInfo::aiPTI_String, bytes, expected);
+        }
+    }
+
+    #[test]
+    fn texture_outputs_have_defaults_for_missing_and_non_uv_properties() {
+        let mut path_bytes = (b"texture.png".len() as u32).to_ne_bytes().to_vec();
+        path_bytes.extend_from_slice(b"texture.png\0");
+        let path = sys::aiMaterialProperty {
+            mKey: ai_string_from_cstr(c"$tex.file"),
+            mSemantic: TextureType::Diffuse.to_semantic(),
+            mType: sys::aiPropertyTypeInfo::aiPTI_String,
+            mData: path_bytes.as_mut_ptr().cast(),
+            mDataLength: path_bytes.len() as u32,
+            ..Default::default()
+        };
+        with_material(&mut [path], |material| {
+            let texture = material.texture_ref(TextureType::Diffuse, 0).unwrap();
+            assert_eq!(texture.path_bytes(), b"texture.png");
+            assert_eq!(texture.mapping, TextureMapping::UV);
+            assert_eq!(texture.uv_index, 0);
+            assert_eq!(texture.blend_factor, 1.0);
+            assert_eq!(texture.operation, TextureOperation::Multiply);
+            assert_eq!(texture.map_modes, [TextureMapMode::Wrap; 3]);
+            assert!(texture.flags.is_empty());
+            assert!(texture.uv_transform.is_none());
+        });
+        let mut mapping_bytes =
+            (sys::aiTextureMapping::aiTextureMapping_SPHERE.0 as i32).to_ne_bytes();
+        let mapping = sys::aiMaterialProperty {
+            mKey: ai_string_from_cstr(c"$tex.mapping"),
+            mType: sys::aiPropertyTypeInfo::aiPTI_Integer,
+            mData: mapping_bytes.as_mut_ptr().cast(),
+            mDataLength: mapping_bytes.len() as u32,
+            ..path
+        };
+        let mut transform_bytes = 0.25f32.to_ne_bytes();
+        let transform = sys::aiMaterialProperty {
+            mKey: ai_string_from_cstr(c"$tex.uvtrafo"),
+            mType: sys::aiPropertyTypeInfo::aiPTI_Float,
+            mData: transform_bytes.as_mut_ptr().cast(),
+            mDataLength: transform_bytes.len() as u32,
+            ..path
+        };
+        with_material(&mut [path, mapping, transform], |material| {
+            let texture = material.texture_ref(TextureType::Diffuse, 0).unwrap();
+            assert_eq!(texture.mapping, TextureMapping::Sphere);
+            assert_eq!(texture.uv_index, 0);
+            assert_eq!(texture.blend_factor, 1.0);
+            assert_eq!(texture.operation, TextureOperation::Multiply);
+            assert!(texture.uv_transform.is_none());
+        });
+    }
+
+    #[test]
+    fn texture_integer_properties_reject_short_non_finite_and_out_of_range_values() {
+        let mut path_bytes = 11u32.to_ne_bytes().to_vec();
+        path_bytes.extend_from_slice(b"texture.png\0");
+        let (mut path, _path_owner) = make_prop_with_data(path_bytes);
+        path.mKey = ai_string_from_cstr(c"$tex.file");
+        path.mSemantic = TextureType::Diffuse.to_semantic();
+        path.mType = sys::aiPropertyTypeInfo::aiPTI_String;
+        for (type_info, bytes) in [
+            (sys::aiPropertyTypeInfo::aiPTI_Integer, vec![1, 2]),
+            (sys::aiPropertyTypeInfo::aiPTI_Buffer, vec![1, 2]),
+            (sys::aiPropertyTypeInfo(77), vec![1]),
+            (sys::aiPropertyTypeInfo::aiPTI_String, vec![1]),
+            (
+                sys::aiPropertyTypeInfo::aiPTI_Float,
+                f32::NAN.to_ne_bytes().to_vec(),
+            ),
+            (
+                sys::aiPropertyTypeInfo::aiPTI_Float,
+                f32::INFINITY.to_ne_bytes().to_vec(),
+            ),
+            (
+                sys::aiPropertyTypeInfo::aiPTI_Float,
+                2_147_483_648.0f32.to_ne_bytes().to_vec(),
+            ),
+            (
+                sys::aiPropertyTypeInfo::aiPTI_Double,
+                f64::NAN.to_ne_bytes().to_vec(),
+            ),
+            (
+                sys::aiPropertyTypeInfo::aiPTI_Double,
+                (f64::from(i32::MIN) - 1.0).to_ne_bytes().to_vec(),
+            ),
+        ] {
+            let (data, _data_owner) = make_prop_with_data(bytes);
+            let mut properties = vec![path];
+            properties.extend(
+                [
+                    c"$tex.mapping",
+                    c"$tex.uvwsrc",
+                    c"$tex.op",
+                    c"$tex.mapmodeu",
+                    c"$tex.mapmodev",
+                    c"$tex.flags",
+                ]
+                .map(|key| sys::aiMaterialProperty {
+                    mKey: ai_string_from_cstr(key),
+                    mType: type_info,
+                    mData: data.mData,
+                    mDataLength: data.mDataLength,
+                    ..path
+                }),
+            );
+            with_material(&mut properties, |material| {
+                let texture = material.texture_ref(TextureType::Diffuse, 0).unwrap();
+                assert_eq!(texture.mapping, TextureMapping::UV);
+                assert_eq!(texture.uv_index, 0);
+                assert_eq!(texture.operation, TextureOperation::Multiply);
+                assert_eq!(texture.map_modes, [TextureMapMode::Wrap; 3]);
+                assert!(texture.flags.is_empty());
+            });
+        }
+    }
+
+    #[test]
+    fn texture_values_decode_scoped_buffers_doubles_and_unknown_enums() {
+        let mut path_bytes = 11u32.to_ne_bytes().to_vec();
+        path_bytes.extend_from_slice(b"texture.png\0");
+        let (mut path, _path_owner) = make_prop_with_data(path_bytes);
+        path.mKey = ai_string_from_cstr(c"$tex.file");
+        path.mSemantic = TextureType::Normals.to_semantic();
+        path.mIndex = 2;
+        path.mType = sys::aiPropertyTypeInfo::aiPTI_String;
+        let mut buffers = [
+            (
+                c"$tex.op",
+                sys::aiPropertyTypeInfo::aiPTI_Double,
+                77.75f64.to_ne_bytes().to_vec(),
+            ),
+            (
+                c"$tex.blend",
+                sys::aiPropertyTypeInfo::aiPTI_Buffer,
+                0.5f32.to_ne_bytes().to_vec(),
+            ),
+            (
+                c"$tex.uvwsrc",
+                sys::aiPropertyTypeInfo::aiPTI_Buffer,
+                vec![2],
+            ),
+            (
+                c"$tex.mapmodeu",
+                sys::aiPropertyTypeInfo::aiPTI_Integer,
+                (-1i32).to_ne_bytes().to_vec(),
+            ),
+            (
+                c"$tex.mapmodev",
+                sys::aiPropertyTypeInfo::aiPTI_Buffer,
+                78i32.to_ne_bytes().to_vec(),
+            ),
+            (
+                c"$tex.flags",
+                sys::aiPropertyTypeInfo::aiPTI_Buffer,
+                vec![1],
+            ),
+        ];
+        let mut properties = vec![path];
+        properties.extend(buffers.iter_mut().map(|(key, type_info, bytes)| {
+            sys::aiMaterialProperty {
+                mKey: ai_string_from_cstr(key),
+                mType: *type_info,
+                mData: bytes.as_mut_ptr().cast(),
+                mDataLength: bytes.len() as u32,
+                ..path
+            }
+        }));
+        with_material(&mut properties, |material| {
+            let texture = material.texture_ref(TextureType::Normals, 2).unwrap();
+            assert_eq!(texture.path_bytes(), b"texture.png");
+            assert_eq!(texture.mapping, TextureMapping::UV);
+            assert_eq!(texture.uv_index, 2);
+            assert_eq!(texture.blend_factor, 0.5);
+            assert_eq!(texture.operation, TextureOperation::Unknown(77));
+            assert_eq!(
+                texture.map_modes,
+                [
+                    TextureMapMode::Unknown(u32::MAX),
+                    TextureMapMode::Unknown(78),
+                    TextureMapMode::Wrap,
+                ]
+            );
+            assert_eq!(texture.flags, TextureFlags::INVERT);
+            assert!(material.texture_ref(TextureType::Normals, 0).is_none());
+            assert!(material.texture_ref(TextureType::Diffuse, 2).is_none());
+            assert!(
+                material
+                    .texture_ref(TextureType::Normals, usize::MAX)
+                    .is_none()
+            );
+        });
+        let mut mapping_bytes = 79i32.to_ne_bytes();
+        properties.push(sys::aiMaterialProperty {
+            mKey: ai_string_from_cstr(c"$tex.mapping"),
+            mType: sys::aiPropertyTypeInfo::aiPTI_Integer,
+            mData: mapping_bytes.as_mut_ptr().cast(),
+            mDataLength: mapping_bytes.len() as u32,
+            ..path
+        });
+        with_material(&mut properties, |material| {
+            let texture = material.texture_ref(TextureType::Normals, 2).unwrap();
+            assert_eq!(texture.mapping, TextureMapping::Unknown(79));
+            assert_eq!(texture.uv_index, 0);
+        });
+    }
+
+    #[test]
+    fn texture_blend_transform_and_axis_reject_unknown_and_short_data() {
+        let mut path_bytes = 11u32.to_ne_bytes().to_vec();
+        path_bytes.extend_from_slice(b"texture.png\0");
+        let (mut path, _path_owner) = make_prop_with_data(path_bytes);
+        path.mKey = ai_string_from_cstr(c"$tex.file");
+        path.mSemantic = TextureType::Diffuse.to_semantic();
+        path.mType = sys::aiPropertyTypeInfo::aiPTI_String;
+        for type_info in [
+            sys::aiPropertyTypeInfo(77),
+            sys::aiPropertyTypeInfo::aiPTI_Float,
+            sys::aiPropertyTypeInfo::aiPTI_Double,
+            sys::aiPropertyTypeInfo::aiPTI_Integer,
+            sys::aiPropertyTypeInfo::aiPTI_Buffer,
+            sys::aiPropertyTypeInfo::aiPTI_String,
+        ] {
+            let (data, _data_owner) = make_prop_with_data(vec![1]);
+            let mut properties = vec![path];
+            properties.extend(
+                [c"$tex.blend", c"$tex.uvtrafo", c"$tex.mapaxis"].map(|key| {
+                    sys::aiMaterialProperty {
+                        mKey: ai_string_from_cstr(key),
+                        mType: type_info,
+                        mData: data.mData,
+                        mDataLength: data.mDataLength,
+                        ..path
+                    }
+                }),
+            );
+            with_material(&mut properties, |material| {
+                let texture = material.texture_ref(TextureType::Diffuse, 0).unwrap();
+                assert_eq!(texture.blend_factor, 1.0);
+                assert!(texture.uv_transform.is_none());
+                assert!(texture.axis.is_none());
+            });
+        }
+    }
+
+    #[test]
+    fn texture_transform_and_axis_use_typed_bounded_numeric_decoding() {
+        let mut path_bytes = 11u32.to_ne_bytes().to_vec();
+        path_bytes.extend_from_slice(b"texture.png\0");
+        let (mut path, _path_owner) = make_prop_with_data(path_bytes);
+        path.mKey = ai_string_from_cstr(c"$tex.file");
+        path.mSemantic = TextureType::Diffuse.to_semantic();
+        path.mType = sys::aiPropertyTypeInfo::aiPTI_String;
+        let mut string_bytes = 9u32.to_ne_bytes().to_vec();
+        string_bytes.extend_from_slice(b"1 2 3 4 5\0");
+        for (type_info, bytes) in [
+            (
+                sys::aiPropertyTypeInfo::aiPTI_Float,
+                [1.0f32, 2.0, 3.0, 4.0, 5.0]
+                    .into_iter()
+                    .flat_map(f32::to_ne_bytes)
+                    .collect(),
+            ),
+            (
+                sys::aiPropertyTypeInfo::aiPTI_Double,
+                [1.0f64, 2.0, 3.0, 4.0, 5.0]
+                    .into_iter()
+                    .flat_map(f64::to_ne_bytes)
+                    .collect(),
+            ),
+            (
+                sys::aiPropertyTypeInfo::aiPTI_Integer,
+                [1i32, 2, 3, 4, 5]
+                    .into_iter()
+                    .flat_map(i32::to_ne_bytes)
+                    .collect(),
+            ),
+            (
+                sys::aiPropertyTypeInfo::aiPTI_Buffer,
+                [1.0f32, 2.0, 3.0, 4.0, 5.0]
+                    .into_iter()
+                    .flat_map(f32::to_ne_bytes)
+                    .collect(),
+            ),
+            (sys::aiPropertyTypeInfo::aiPTI_String, string_bytes),
+        ] {
+            let (data, _data_owner) = make_prop_with_data(bytes);
+            let mut properties = vec![path];
+            properties.extend([c"$tex.uvtrafo", c"$tex.mapaxis"].map(|key| {
+                sys::aiMaterialProperty {
+                    mKey: ai_string_from_cstr(key),
+                    mType: type_info,
+                    mData: data.mData,
+                    mDataLength: data.mDataLength,
+                    ..path
+                }
+            }));
+            with_material(&mut properties, |material| {
+                let texture = material.texture_ref(TextureType::Diffuse, 0).unwrap();
+                let transform = texture.uv_transform.unwrap();
+                assert_eq!(transform.translation, Vector2D::new(1.0, 2.0));
+                assert_eq!(transform.scaling, Vector2D::new(3.0, 4.0));
+                assert_eq!(transform.rotation, 5.0);
+                assert_eq!(texture.axis, Some(Vector3D::new(1.0, 2.0, 3.0)));
+            });
+            if type_info == sys::aiPropertyTypeInfo::aiPTI_Float {
+                for length in [0, 4, 8, 12, 16, 19] {
+                    properties[1].mDataLength = length;
+                    properties[2].mDataLength = length;
+                    with_material(&mut properties, |material| {
+                        let texture = material.texture_ref(TextureType::Diffuse, 0).unwrap();
+                        assert!(texture.uv_transform.is_none());
+                        assert_eq!(
+                            texture.axis,
+                            if matches!(length, 12 | 16) {
+                                Some(Vector3D::new(1.0, 2.0, 3.0))
+                            } else {
+                                None
+                            }
+                        );
+                    });
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn string_and_texture_paths_reject_short_unknown_and_null_payloads() {
+        for (type_info, bytes) in [
+            (sys::aiPropertyTypeInfo(77), vec![1]),
+            (sys::aiPropertyTypeInfo::aiPTI_String, vec![1]),
+            (
+                sys::aiPropertyTypeInfo::aiPTI_String,
+                99u32.to_ne_bytes().to_vec(),
+            ),
+        ] {
+            let (mut property, _owner) = make_prop_with_data(bytes);
+            property.mKey = ai_string_from_cstr(c"$tex.file");
+            property.mType = type_info;
+            with_material(
+                &mut [
+                    property,
+                    sys::aiMaterialProperty {
+                        mSemantic: TextureType::Diffuse.to_semantic(),
+                        ..property
+                    },
+                ],
+                |material| {
+                    assert!(material.get_string_property_ref(c"$tex.file").is_none());
+                    assert!(material.texture_ref(TextureType::Diffuse, 0).is_none());
+                },
+            );
+        }
+        for length in [0, 4, 16] {
+            let property = sys::aiMaterialProperty {
+                mKey: ai_string_from_cstr(c"$tex.file"),
+                mType: sys::aiPropertyTypeInfo::aiPTI_String,
+                mDataLength: length,
+                mData: std::ptr::null_mut(),
+                ..Default::default()
+            };
+            with_material(
+                &mut [
+                    property,
+                    sys::aiMaterialProperty {
+                        mSemantic: TextureType::Diffuse.to_semantic(),
+                        ..property
+                    },
+                ],
+                |material| {
+                    assert!(material.get_string_property_ref(c"$tex.file").is_none());
+                    assert!(material.get_float_property(c"$tex.file").is_none());
+                    assert!(material.get_color_property(c"$tex.file").is_none());
+                    assert!(material.texture_ref(TextureType::Diffuse, 0).is_none());
+                },
+            );
+        }
+    }
+
+    #[test]
+    fn native_unknown_values_are_preserved() {
+        assert_eq!(
+            PropertyTypeInfo::from_sys(sys::aiPropertyTypeInfo(77)),
+            PropertyTypeInfo::Unknown(77)
+        );
+        assert_eq!(
+            TextureMapping::from_raw(sys::aiTextureMapping(77).0 as u32),
+            TextureMapping::Unknown(77)
+        );
+        assert_eq!(
+            TextureOperation::from_raw(sys::aiTextureOp(77).0 as u32),
+            TextureOperation::Unknown(77)
+        );
+        assert_eq!(
+            TextureMapMode::from_raw(sys::aiTextureMapMode(77).0 as u32),
+            TextureMapMode::Unknown(77)
+        );
+        assert_eq!(ShadingModel::from_raw(77), ShadingModel::Unknown(77));
+        assert_eq!(BlendMode::from_raw(77), BlendMode::Unknown(77));
+    }
+
+    #[test]
+    fn emission_aliases_prefer_emission_color_and_fall_back_per_index() {
+        let mut color_bytes = 7u32.to_ne_bytes().to_vec();
+        color_bytes.extend_from_slice(b"pbr.png\0");
+        let mut emissive_bytes = 8u32.to_ne_bytes().to_vec();
+        emissive_bytes.extend_from_slice(b"gltf.png\0");
+        let color = sys::aiMaterialProperty {
+            mKey: ai_string_from_cstr(c"$tex.file"),
+            mSemantic: TextureType::EmissionColor.to_semantic(),
+            mType: sys::aiPropertyTypeInfo::aiPTI_String,
+            mData: color_bytes.as_mut_ptr().cast(),
+            mDataLength: color_bytes.len() as u32,
+            ..Default::default()
+        };
+        let emissive = sys::aiMaterialProperty {
+            mSemantic: TextureType::Emissive.to_semantic(),
+            mData: emissive_bytes.as_mut_ptr().cast(),
+            mDataLength: emissive_bytes.len() as u32,
+            ..color
+        };
+        with_material(
+            &mut [
+                color,
+                emissive,
+                sys::aiMaterialProperty {
+                    mIndex: 1,
+                    ..emissive
+                },
+            ],
+            |material| {
+                assert_eq!(material.emission_texture(0).unwrap().path, "pbr.png");
+                assert_eq!(material.emissive_texture(0).unwrap().path, "pbr.png");
+                assert_eq!(material.emission_texture(1).unwrap().path, "gltf.png");
+                assert_eq!(material.emissive_texture(1).unwrap().path, "gltf.png");
+                assert!(material.emission_texture(2).is_none());
+                assert!(material.texture(TextureType::EmissionColor, 1).is_none());
+                assert_eq!(
+                    material.texture(TextureType::Emissive, 0).unwrap().path,
+                    "gltf.png"
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn decode_ai_string_rejects_invalid_lengths_and_missing_terminators() {
+        for (length, payload) in [
+            (999u32, &b"abc"[..]),
+            (3, &b"abc"[..]),
+            (3, &b"abc!"[..]),
+            (2, &b"abc\0"[..]),
+            (sys::AI_MAXLEN, &b"\0"[..]),
+        ] {
+            let mut bytes = length.to_ne_bytes().to_vec();
+            bytes.extend_from_slice(payload);
+            let (prop, _data_owner) = make_prop_with_data(bytes);
+            assert!(
+                unsafe { MaterialPropertyData::from_sys(&prop) }
+                    .and_then(|data| data.decode_ai_string())
+                    .is_none()
+            );
+        }
+    }
+
+    #[test]
+    fn read_ne_primitives_from_bytes() {
         let mut data = Vec::new();
         data.extend_from_slice(&42i32.to_ne_bytes());
         data.extend_from_slice(&1.0f32.to_ne_bytes());
@@ -1628,7 +2419,9 @@ mod material_property_data_tests {
         let d = unsafe { MaterialPropertyData::from_sys(&prop) }.unwrap();
 
         assert_eq!(d.read_ne_i32(0), Some(42));
-        assert_eq!(d.read_ne_f32_array::<3>(4), Some([1.0, 2.0, 3.5]));
+        assert_eq!(d.read_ne_f32(4), Some(1.0));
+        assert_eq!(d.read_ne_f32(8), Some(2.0));
+        assert_eq!(d.read_ne_f32(12), Some(3.5));
         assert_eq!(d.read_ne_f64(4 + 12), Some(9.0));
         assert_eq!(d.read_ne_u32(9999), None);
     }
@@ -1706,8 +2499,8 @@ pub enum BlendMode {
 impl BlendMode {
     fn from_raw(v: u32) -> Self {
         match v {
-            x if x == sys::aiBlendMode::aiBlendMode_Default as u32 => BlendMode::Default,
-            x if x == sys::aiBlendMode::aiBlendMode_Additive as u32 => BlendMode::Additive,
+            x if x == sys::aiBlendMode::aiBlendMode_Default.0 as u32 => BlendMode::Default,
+            x if x == sys::aiBlendMode::aiBlendMode_Additive.0 as u32 => BlendMode::Additive,
             other => BlendMode::Unknown(other),
         }
     }
@@ -1748,9 +2541,10 @@ impl Material {
         self.texture(TextureType::GltfMetallicRoughness, 0)
     }
 
-    /// Get emission texture at the specified index
+    /// Get the emission texture, preferring `EmissionColor` over the glTF `Emissive` slot.
     pub fn emission_texture(&self, index: usize) -> Option<TextureInfo> {
         self.texture(TextureType::EmissionColor, index)
+            .or_else(|| self.texture(TextureType::Emissive, index))
     }
 
     /// Get normal map texture at the specified index
@@ -1863,9 +2657,9 @@ impl Material {
         self.texture(TextureType::Shininess, index)
     }
 
-    /// Emissive map (PBR emission color)
+    /// Alias of [`Self::emission_texture`], with the same texture slot precedence.
     pub fn emissive_texture(&self, index: usize) -> Option<TextureInfo> {
-        self.texture(TextureType::EmissionColor, index)
+        self.emission_texture(index)
     }
 }
 
@@ -1882,20 +2676,22 @@ pub enum TextureMapping {
     Box,
     /// Planar mapping
     Plane,
-    /// Other mapping mode
+    /// Other mapping mode explicitly selected by Assimp, retaining its raw value.
     Other(u32),
+    /// Unknown mapping mode with its raw value.
+    Unknown(u32),
 }
 
 impl TextureMapping {
-    fn from_raw(value: sys::aiTextureMapping) -> Self {
-        let value_u32 = value as u32;
-        match value_u32 {
-            v if v == sys::aiTextureMapping::aiTextureMapping_UV as u32 => Self::UV,
-            v if v == sys::aiTextureMapping::aiTextureMapping_SPHERE as u32 => Self::Sphere,
-            v if v == sys::aiTextureMapping::aiTextureMapping_CYLINDER as u32 => Self::Cylinder,
-            v if v == sys::aiTextureMapping::aiTextureMapping_BOX as u32 => Self::Box,
-            v if v == sys::aiTextureMapping::aiTextureMapping_PLANE as u32 => Self::Plane,
-            other => Self::Other(other),
+    fn from_raw(value: u32) -> Self {
+        match value {
+            v if v == sys::aiTextureMapping::aiTextureMapping_UV.0 as u32 => Self::UV,
+            v if v == sys::aiTextureMapping::aiTextureMapping_SPHERE.0 as u32 => Self::Sphere,
+            v if v == sys::aiTextureMapping::aiTextureMapping_CYLINDER.0 as u32 => Self::Cylinder,
+            v if v == sys::aiTextureMapping::aiTextureMapping_BOX.0 as u32 => Self::Box,
+            v if v == sys::aiTextureMapping::aiTextureMapping_PLANE.0 as u32 => Self::Plane,
+            v if v == sys::aiTextureMapping::aiTextureMapping_OTHER.0 as u32 => Self::Other(v),
+            other => Self::Unknown(other),
         }
     }
 }
@@ -1915,21 +2711,22 @@ pub enum TextureOperation {
     SmoothAdd,
     /// Signed add operation
     SignedAdd,
-    /// Other operation
+    /// Legacy representation of an unrecognized operation.
     Other(u32),
+    /// Unknown operation with its raw value.
+    Unknown(u32),
 }
 
 impl TextureOperation {
-    fn from_raw(value: sys::aiTextureOp) -> Self {
-        let value_u32 = value as u32;
-        match value_u32 {
-            v if v == sys::aiTextureOp::aiTextureOp_Multiply as u32 => Self::Multiply,
-            v if v == sys::aiTextureOp::aiTextureOp_Add as u32 => Self::Add,
-            v if v == sys::aiTextureOp::aiTextureOp_Subtract as u32 => Self::Subtract,
-            v if v == sys::aiTextureOp::aiTextureOp_Divide as u32 => Self::Divide,
-            v if v == sys::aiTextureOp::aiTextureOp_SmoothAdd as u32 => Self::SmoothAdd,
-            v if v == sys::aiTextureOp::aiTextureOp_SignedAdd as u32 => Self::SignedAdd,
-            other => Self::Other(other),
+    fn from_raw(value: u32) -> Self {
+        match value {
+            v if v == sys::aiTextureOp::aiTextureOp_Multiply.0 as u32 => Self::Multiply,
+            v if v == sys::aiTextureOp::aiTextureOp_Add.0 as u32 => Self::Add,
+            v if v == sys::aiTextureOp::aiTextureOp_Subtract.0 as u32 => Self::Subtract,
+            v if v == sys::aiTextureOp::aiTextureOp_Divide.0 as u32 => Self::Divide,
+            v if v == sys::aiTextureOp::aiTextureOp_SmoothAdd.0 as u32 => Self::SmoothAdd,
+            v if v == sys::aiTextureOp::aiTextureOp_SignedAdd.0 as u32 => Self::SignedAdd,
+            other => Self::Unknown(other),
         }
     }
 }
@@ -1945,19 +2742,20 @@ pub enum TextureMapMode {
     Mirror,
     /// Decal texture mode
     Decal,
-    /// Other texture map mode
+    /// Legacy representation of an unrecognized texture map mode.
     Other(u32),
+    /// Unknown texture map mode with its raw value.
+    Unknown(u32),
 }
 
 impl TextureMapMode {
-    fn from_raw(value: sys::aiTextureMapMode) -> Self {
-        let value_u32 = value as u32;
-        match value_u32 {
-            v if v == sys::aiTextureMapMode::aiTextureMapMode_Wrap as u32 => Self::Wrap,
-            v if v == sys::aiTextureMapMode::aiTextureMapMode_Clamp as u32 => Self::Clamp,
-            v if v == sys::aiTextureMapMode::aiTextureMapMode_Mirror as u32 => Self::Mirror,
-            v if v == sys::aiTextureMapMode::aiTextureMapMode_Decal as u32 => Self::Decal,
-            other => Self::Other(other),
+    fn from_raw(value: u32) -> Self {
+        match value {
+            v if v == sys::aiTextureMapMode::aiTextureMapMode_Wrap.0 as u32 => Self::Wrap,
+            v if v == sys::aiTextureMapMode::aiTextureMapMode_Clamp.0 as u32 => Self::Clamp,
+            v if v == sys::aiTextureMapMode::aiTextureMapMode_Mirror.0 as u32 => Self::Mirror,
+            v if v == sys::aiTextureMapMode::aiTextureMapMode_Decal.0 as u32 => Self::Decal,
+            other => Self::Unknown(other),
         }
     }
 }
@@ -2061,11 +2859,11 @@ bitflags::bitflags! {
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
     pub struct TextureFlags: u32 {
         /// Invert the texture colors
-        const INVERT        = sys::aiTextureFlags::aiTextureFlags_Invert as u32;
+        const INVERT        = sys::aiTextureFlags::aiTextureFlags_Invert.0 as u32;
         /// Use the alpha channel of the texture
-        const USE_ALPHA     = sys::aiTextureFlags::aiTextureFlags_UseAlpha as u32;
+        const USE_ALPHA     = sys::aiTextureFlags::aiTextureFlags_UseAlpha.0 as u32;
         /// Ignore the alpha channel of the texture
-        const IGNORE_ALPHA  = sys::aiTextureFlags::aiTextureFlags_IgnoreAlpha as u32;
+        const IGNORE_ALPHA  = sys::aiTextureFlags::aiTextureFlags_IgnoreAlpha.0 as u32;
     }
 }
 

@@ -2,7 +2,7 @@
 //! These tests verify compatibility with the original Assimp library
 
 use asset_importer::{
-    Importer, enable_verbose_logging, get_import_extensions,
+    Importer, get_import_extensions,
     io::{FileStream, MemoryFileStream},
     postprocess::PostProcessSteps,
     version,
@@ -98,14 +98,6 @@ fn test_extension_list() {
         "Should support at least 30 formats, found {}",
         ext_count
     );
-}
-
-#[test]
-fn test_verbose_logging() {
-    // Test verbose logging functionality
-    enable_verbose_logging(true);
-    enable_verbose_logging(false);
-    // If we get here without crashing, the test passes
 }
 
 #[test]

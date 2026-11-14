@@ -11,8 +11,6 @@ use std::error::Error;
 use asset_importer::{postprocess::PostProcessSteps, texture::TextureDataRef};
 
 fn main() -> Result<(), Box<dyn Error>> {
-    common::init_logging_from_env();
-
     let path = common::resolve_model_path(
         common::ModelSource::ArgOrExamplesDir,
         "cube_with_materials.obj",
@@ -24,7 +22,6 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     if !scene.has_textures() {
         println!("No embedded textures found.");
-        common::shutdown_logging();
         return Ok(());
     }
 
@@ -74,7 +71,6 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
     }
 
-    common::shutdown_logging();
     Ok(())
 }
 

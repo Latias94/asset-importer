@@ -39,31 +39,6 @@ pub fn resolve_model_path(source: ModelSource, fallback_name: &str) -> PathBuf {
     }
 }
 
-/// Attach default logging streams if AI_EX_VERBOSE=1 or AI_EX_STDERR=1
-pub fn init_logging_from_env() {
-    // Only enable logging if explicitly requested to avoid potential issues
-    let verbose = std::env::var("AI_EX_VERBOSE").ok().as_deref() == Some("1");
-    let _log_to_stderr = std::env::var("AI_EX_STDERR").ok().as_deref() == Some("1");
-    let _has_log_file = std::env::var("AI_EX_LOGFILE").is_ok();
-
-    // Only enable verbose logging if explicitly requested
-    if verbose {
-        // Use safe verbose logging (no custom streams due to FFI safety issues)
-        asset_importer::enable_verbose_logging(verbose);
-        if verbose {
-            println!(
-                "Verbose logging enabled (custom log streams disabled due to FFI safety issues)"
-            );
-        }
-    }
-}
-
-/// Clean up logging on exit
-#[allow(dead_code)]
-pub fn shutdown_logging() {
-    // No-op: no custom streams to detach (they were removed due to FFI safety issues)
-}
-
 /// Import a scene using a set of default post-process steps. Accepts extra steps to combine.
 #[allow(dead_code)]
 pub fn import_scene(

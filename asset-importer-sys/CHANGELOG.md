@@ -8,15 +8,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- **Breaking:** All native enum types use bindgen integer newtypes with associated constants. Unknown file values and flag combinations remain valid at the FFI boundary; use `.0` to read their integer representation.
+- Source builds explicitly bundle minizip while retaining system zlib on Unix. Windows GNU source/prebuilt/package paths distinguish static archives from DLL import archives and retain bundled zlib.
+- Local prebuilt extraction caches track the archive's canonical path and contents, and Cargo watches the selected archive for replacement.
 - Bundled Assimp is now [6.0.6](https://github.com/assimp/assimp/releases/tag/v6.0.6) (`a79ff6bbce54d3e01186a918dc6374ed55317426`). Bindings are regenerated with bindgen 0.73.2; source overrides and prebuilt packages must match this version.
 - **Breaking:** The custom import bridge returns an opaque `aiRustScene` owner. Use `aiGetSceneRust` to borrow its scene, `aiApplyPostProcessingRust` for exclusive post-processing, and `aiReleaseSceneRust` to release it. Upstream C API bindings remain available.
 - The package tool uses Cargo's current `OUT_DIR`, target, and CRT settings, removing directory scans and runtime target guesses. Archives include `revision.h` and are checked against their actual build version before packaging.
 - Updated build/download dependencies and added `BUNDLED_ASSIMP_VERSION`. macOS fallback deployment targets now match Rust's supported baseline: 10.13 for Intel and 11.0 for ARM64.
 
 ### Fixed
+- The C++ bridge guards all scene-copy operations it exposes against sparse morph channel aliasing and blocks 3MF blob/custom I/O writes to the host file system.
+- Export copies reject empty/unsupported node metadata and mesh animation channels that Assimp would leave shared with the source. Already unique indices with a stale non-verbose flag are normalized on an independent private scene.
+- Native Doxygen code blocks render as text in generated Rust documentation, so diagrams and C/C++ examples are not compiled as Rust doctests.
 - System header version parsing now skips unrelated defines and include guards. Prebuilt packages whose version cannot be determined are rejected.
 - The bridge retains importer ownership after post-processing failures, releases custom I/O streams on every destruction path, and preserves progress cancellation and C++ exception boundaries.
-- `aiMaterialProperty::default()` now initializes a valid `aiPTI_Float` value instead of zero-initializing a Rust enum with no zero variant; regeneration preserves this fix.
+- `aiMaterialProperty::default()` initializes `aiPTI_Float`, matching the C++ constructor; generated integer newtypes also eliminate invalid native enum discriminants.
 - Windows GNU source static builds now link bundled `zlibstatic` archives, including debug-suffixed libraries.
 - Windows runtime DLL placement supports both Cargo build directory layouts instead of assuming a fixed `OUT_DIR` depth, and reports copy failures.
 - Changes to pregenerated bindings now retrigger the build script.

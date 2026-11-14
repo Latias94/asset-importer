@@ -145,7 +145,7 @@ impl Scene {
         file_io: Option<OwnedAiFileIO>,
     ) -> Result<Self> {
         if owner.is_null() {
-            return Err(Error::from_bridge_or_assimp());
+            return Err(Error::from_bridge());
         }
         let owner = SharedPtr::new(owner).ok_or(Error::NullPointer)?;
         let scene_ptr = unsafe { sys::aiGetSceneRust(owner.as_ptr()) };
@@ -261,9 +261,7 @@ impl Scene {
             ));
         }
         if !ok {
-            return Err(Error::invalid_scene(
-                Error::from_bridge_or_assimp().to_string(),
-            ));
+            return Err(Error::invalid_scene(Error::from_bridge().to_string()));
         }
 
         let new_ptr = unsafe { sys::aiGetSceneRust(owner.as_ptr()) };
@@ -408,7 +406,7 @@ impl Scene {
         match &self.inner.release_kind {
             SceneRelease::Importer(owner) => {
                 if !unsafe { sys::aiGetMemoryRequirementsRust(owner.as_ptr(), &mut info) } {
-                    return Err(Error::from_bridge_or_assimp());
+                    return Err(Error::from_bridge());
                 }
             }
             #[cfg(feature = "raw-sys")]

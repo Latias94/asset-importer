@@ -1,5 +1,20 @@
 use crate::build_support::{config::BuildConfig, plan::BuildPlan, util};
 
+#[cfg(feature = "generate-bindings")]
+#[derive(Debug)]
+struct NativeComments;
+
+#[cfg(feature = "generate-bindings")]
+impl bindgen::callbacks::ParseCallbacks for NativeComments {
+    fn process_comment(&self, comment: &str) -> Option<String> {
+        comment.contains("@code").then(|| {
+            comment
+                .replace("@code", "\n```text\n")
+                .replace("@endcode", "\n```\n")
+        })
+    }
+}
+
 pub fn run_docsrs(cfg: &BuildConfig) {
     util::warn("DOCS_RS detected: skipping native build and linking; generating bindings only");
     println!("cargo:rustc-cfg=docsrs");
@@ -102,7 +117,8 @@ fn run_bindgen(cfg: &BuildConfig, plan: &BuildPlan) {
         .rust_target(bindgen::RustTarget::stable(85, 0).expect("valid crate MSRV"))
         .header(wrapper_h.to_string_lossy())
         .clang_arg("-fretain-comments-from-system-headers")
-        .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()));
+        .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
+        .parse_callbacks(Box::new(NativeComments));
 
     for dir in &include_dirs {
         builder = builder.clang_arg(format!("-I{}", dir.display()));
@@ -114,7 +130,7 @@ fn run_bindgen(cfg: &BuildConfig, plan: &BuildPlan) {
         .allowlist_var("ai.*")
         .allowlist_var("AI_.*")
         .derive_default(true)
-        // Zero is not a valid aiPropertyTypeInfo discriminant; provide a valid default in lib.rs.
+        // Match the C++ material property constructor instead of using zero for its type.
         .no_default("aiMaterialProperty")
         .derive_debug(true)
         .derive_copy(true)
@@ -123,28 +139,9 @@ fn run_bindgen(cfg: &BuildConfig, plan: &BuildPlan) {
         .derive_hash(true)
         .prepend_enum_name(false)
         .layout_tests(false)
-        // Keep enum shapes compatible with the safe layer (it expects Rust enums with variants).
-        .rustified_enum("aiReturn")
-        .rustified_enum("aiOrigin")
-        .rustified_enum("aiTextureType")
-        .rustified_enum("aiTextureOp")
-        .rustified_enum("aiTextureMapping")
-        .rustified_enum("aiTextureMapMode")
-        .rustified_enum("aiShadingMode")
-        .rustified_enum("aiBlendMode")
-        .rustified_enum("aiPostProcessSteps")
-        .rustified_enum("aiComponent")
-        .rustified_enum("aiPrimitiveType")
-        .rustified_enum("aiDefaultLogStream")
-        .rustified_enum("aiImporterFlags")
-        .rustified_enum("aiMetadataType")
-        .rustified_enum("aiLightSourceType")
-        .rustified_enum("aiAnimBehaviour")
-        .rustified_enum("aiAnimInterpolation")
-        .rustified_enum("aiMorphingMethod")
-        .rustified_enum("aiPropertyTypeInfo")
-        .rustified_enum("aiTextureFlags")
-        .rustified_enum("aiRustPropertyKind");
+        // Native loaders can write arbitrary file-provided enum values and bit combinations.
+        // Transparent integer wrappers keep every native representation valid in Rust.
+        .newtype_enum("ai.*");
 
     let bindings = builder
         .generate()
@@ -175,7 +172,7 @@ fn run_bindgen(cfg: &BuildConfig, plan: &BuildPlan) {
         // Keep this list small and high-signal: missing any of these indicates a major API gap.
         let required = [
             "pub fn aiGetEmbeddedTexture",
-            "pub enum aiAnimInterpolation",
+            "pub struct aiAnimInterpolation",
             "mInterpolation",
             "aiTextureType_MAYA_BASE",
         ];

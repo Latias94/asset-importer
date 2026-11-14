@@ -79,7 +79,7 @@ pub fn approximately_equal(a: f32, b: f32, epsilon: f32) -> bool {
 pub mod color {
     use super::*;
 
-    /// Convert RGB to HSV color space
+    /// Convert RGB to HSV color space, with hue in degrees.
     pub fn rgb_to_hsv(rgb: Color3D) -> Vector3D {
         let r = rgb.x;
         let g = rgb.y;
@@ -92,7 +92,7 @@ pub mod color {
         let h = if delta == 0.0 {
             0.0
         } else if max == r {
-            60.0 * (((g - b) / delta) % 6.0)
+            60.0 * ((g - b) / delta).rem_euclid(6.0)
         } else if max == g {
             60.0 * ((b - r) / delta + 2.0)
         } else {
@@ -105,9 +105,9 @@ pub mod color {
         Vector3D::new(h, s, v)
     }
 
-    /// Convert HSV to RGB color space
+    /// Convert HSV to RGB color space, wrapping hue in degrees modulo 360.
     pub fn hsv_to_rgb(hsv: Vector3D) -> Color3D {
-        let h = hsv.x;
+        let h = hsv.x.rem_euclid(360.0);
         let s = hsv.y;
         let v = hsv.z;
 

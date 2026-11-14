@@ -16,6 +16,7 @@
 #include <assimp/IOSystem.hpp>
 #include <assimp/IOStream.hpp>
 #include <assimp/ProgressHandler.hpp>
+#include <assimp/config.h>
 #include <cstdio>
 #include <cstring>
 #include <exception>
@@ -23,6 +24,8 @@
 #include <mutex>
 #include <unordered_set>
 #include <string>
+#include <utility>
+#include <vector>
 
 // Store a thread-local last-error message for the bridge
 static thread_local std::string g_last_error_msg;
@@ -283,6 +286,146 @@ static void set_unknown_exception_error(const char* context) noexcept {
     }
 }
 
+static bool metadata_can_be_copied(const aiMetadata* metadata, bool node_metadata) {
+    std::vector<std::pair<const aiMetadata*, bool>> pending;
+    if (metadata) {
+        pending.emplace_back(metadata, node_metadata);
+    }
+    while (!pending.empty()) {
+        const auto item = pending.back();
+        pending.pop_back();
+        const aiMetadata* current = item.first;
+        if (item.second && current->mNumProperties == 0) {
+            g_last_error_msg = "Cannot copy a node with empty metadata: Assimp would share and free the source metadata";
+            return false;
+        }
+        if (current->mNumProperties && (!current->mKeys || !current->mValues)) {
+            g_last_error_msg = "Cannot copy invalid metadata arrays";
+            return false;
+        }
+        for (unsigned int i = 0; i < current->mNumProperties; ++i) {
+            const aiMetadataEntry& entry = current->mValues[i];
+            if (!entry.mData || entry.mType < AI_BOOL || entry.mType > AI_UINT32) {
+                g_last_error_msg = "Cannot copy unassigned or unknown metadata with Assimp";
+                return false;
+            }
+            if (item.second && (entry.mType == AI_INT64 || entry.mType == AI_UINT32)) {
+                g_last_error_msg = "Cannot copy this node metadata integer type with Assimp";
+                return false;
+            }
+            if (entry.mType == AI_AIMETADATA) {
+                pending.emplace_back(static_cast<const aiMetadata*>(entry.mData), false);
+            }
+        }
+    }
+    return true;
+}
+
+static bool scene_can_be_copied(const aiScene* scene, bool include_scene_data = true) {
+    // SceneCombiner stops copying aiAnimMesh channels at the first empty slot,
+    // leaving later buffers shared with the source and freed by both owners.
+    const auto channels_can_be_copied = [](const auto* mesh, const std::string& location) {
+        bool gap = false;
+        for (unsigned int channel = 0; channel < AI_MAX_NUMBER_OF_TEXTURECOORDS; ++channel) {
+            if (!mesh->mTextureCoords[channel]) {
+                gap = true;
+            } else if (gap) {
+                g_last_error_msg = location + " has sparse texture coordinate channel " +
+                    std::to_string(channel) + "; Assimp cannot safely copy this scene";
+                return false;
+            }
+        }
+        gap = false;
+        for (unsigned int channel = 0; channel < AI_MAX_NUMBER_OF_COLOR_SETS; ++channel) {
+            if (!mesh->mColors[channel]) {
+                gap = true;
+            } else if (gap) {
+                g_last_error_msg = location + " has sparse vertex color channel " +
+                    std::to_string(channel) + "; Assimp cannot safely copy this scene";
+                return false;
+            }
+        }
+        return true;
+    };
+
+    for (unsigned int mesh_index = 0; mesh_index < scene->mNumMeshes; ++mesh_index) {
+        const aiMesh* mesh = scene->mMeshes[mesh_index];
+        const std::string location = "mesh " + std::to_string(mesh_index);
+        // Prefer the morph target diagnostic when both layouts contain gaps.
+        for (unsigned int morph = 0; morph < mesh->mNumAnimMeshes; ++morph) {
+            if (!channels_can_be_copied(mesh->mAnimMeshes[morph],
+                    location + ", morph target " + std::to_string(morph))) {
+                return false;
+            }
+        }
+        if (!channels_can_be_copied(mesh, location)) {
+            return false;
+        }
+    }
+    if (!include_scene_data) {
+        return true;
+    }
+    if (!metadata_can_be_copied(scene->mMetaData, false)) {
+        return false;
+    }
+    std::vector<const aiNode*> nodes;
+    if (scene->mRootNode) {
+        nodes.push_back(scene->mRootNode);
+    }
+    while (!nodes.empty()) {
+        const aiNode* node = nodes.back();
+        nodes.pop_back();
+        if (!metadata_can_be_copied(node->mMetaData, true)) {
+            return false;
+        }
+        for (unsigned int i = 0; i < node->mNumChildren; ++i) {
+            nodes.push_back(node->mChildren[i]);
+        }
+    }
+    for (unsigned int i = 0; i < scene->mNumAnimations; ++i) {
+        if (scene->mAnimations[i]->mNumMeshChannels) {
+            g_last_error_msg = "Cannot copy mesh animation channels: Assimp leaves their buffers shared with the source";
+            return false;
+        }
+    }
+    return true;
+}
+
+#ifndef ASSIMP_BUILD_NO_EXPORT
+using ExportSceneCopy = std::unique_ptr<aiScene, decltype(&aiFreeScene)>;
+
+static ExportSceneCopy normalize_export_scene(const aiScene* scene) {
+    ExportSceneCopy copy(nullptr, aiFreeScene);
+    if (!(scene->mFlags & AI_SCENE_FLAGS_NON_VERBOSE_FORMAT)) {
+        return copy;
+    }
+    // Assimp's exporter skips vertex expansion when indices are already unique,
+    // but leaves NON_VERBOSE_FORMAT set. Normal generation then rejects the scene.
+    // Normalize only a private copy, preserving shared Rust views of the source.
+    for (unsigned int m = 0; m < scene->mNumMeshes; ++m) {
+        const aiMesh* mesh = scene->mMeshes[m];
+        std::vector<unsigned char> seen(mesh->mNumVertices, 0);
+        for (unsigned int f = 0; f < mesh->mNumFaces; ++f) {
+            const aiFace& face = mesh->mFaces[f];
+            for (unsigned int i = 0; i < face.mNumIndices; ++i) {
+                const unsigned int index = face.mIndices[i];
+                if (index >= seen.size() || seen[index]++) {
+                    return copy;
+                }
+            }
+        }
+    }
+    aiScene* native_copy = nullptr;
+    aiCopyScene(scene, &native_copy);
+    if (!native_copy) {
+        throw std::bad_alloc();
+    }
+    copy.reset(native_copy);
+    copy->mFlags &= ~AI_SCENE_FLAGS_NON_VERBOSE_FORMAT;
+    return copy;
+}
+#endif
+
 static aiRustScene* import_with_bridge(
     const char* path,
     const char* mem,
@@ -314,11 +457,16 @@ static aiRustScene* import_with_bridge(
     // Properties
     apply_properties(importer, props, props_count);
 
+    const bool guard_scene_copy = (flags & aiProcess_PreTransformVertices) &&
+        importer.GetPropertyBool(AI_CONFIG_PP_PTV_KEEP_HIERARCHY, false);
+    // ReadFile validates before ScenePreprocessor. Defer the remaining steps so
+    // the shared-mesh copy in PreTransformVertices cannot precede our guard.
+    const unsigned int read_flags = guard_scene_copy ? (flags & aiProcess_ValidateDataStructure) : flags;
     const aiScene* scene = nullptr;
     if (path) {
-        scene = importer.ReadFile(path, flags);
+        scene = importer.ReadFile(path, read_flags);
     } else if (mem) {
-        scene = importer.ReadFileFromMemory(mem, (size_t)mem_len, flags, hint ? hint : "");
+        scene = importer.ReadFileFromMemory(mem, (size_t)mem_len, read_flags, hint ? hint : "");
     }
 
     // Assimp's void stage notifications ignore Update's return value. Let its
@@ -326,6 +474,17 @@ static aiRustScene* import_with_bridge(
     if (progress && progress->cancelled) {
         g_last_error_msg = "Import cancelled by progress handler";
         return nullptr;
+    }
+
+    if (scene && guard_scene_copy) {
+        if (!scene_can_be_copied(scene, false)) {
+            return nullptr;
+        }
+        scene = importer.ApplyPostProcessing(flags & ~aiProcess_ValidateDataStructure);
+        if (progress && progress->cancelled) {
+            g_last_error_msg = "Import cancelled by progress handler";
+            return nullptr;
+        }
     }
 
     if (!scene) {
@@ -414,6 +573,11 @@ bool aiApplyPostProcessingRust(struct aiRustScene* owner, unsigned int flags) {
             set_bridge_error("Scene owner is empty");
             return false;
         }
+        if ((flags & aiProcess_PreTransformVertices) &&
+            owner->importer.GetPropertyBool(AI_CONFIG_PP_PTV_KEEP_HIERARCHY, false) &&
+            !scene_can_be_copied(owner->importer.GetScene(), false)) {
+            return false;
+        }
         if (!owner->importer.ApplyPostProcessing(flags)) {
             set_bridge_error(owner->importer.GetErrorString());
             return false;
@@ -477,7 +641,18 @@ enum aiReturn aiExportSceneExWithPropertiesRust(
         g_last_error_msg = "Format ID or path is null";
         return aiReturn_FAILURE;
     }
+    if (file_io && std::strcmp(format_id, "3mf") == 0) {
+        g_last_error_msg = "3MF export does not support a custom file system because its ZIP writer writes directly to the host file system";
+        return aiReturn_FAILURE;
+    }
+    if (!scene_can_be_copied(scene)) {
+        return aiReturn_FAILURE;
+    }
 
+    auto normalized_scene = normalize_export_scene(scene);
+    if (normalized_scene) {
+        scene = normalized_scene.get();
+    }
     Assimp::Exporter exporter;
     Assimp::ExportProperties export_props;
 
@@ -530,7 +705,18 @@ const struct aiExportDataBlob* aiExportSceneToBlobWithPropertiesRust(
         g_last_error_msg = "Format ID is null";
         return nullptr;
     }
+    if (std::strcmp(format_id, "3mf") == 0) {
+        g_last_error_msg = "3MF blob export is unsupported because its ZIP writer writes directly to the host file system";
+        return nullptr;
+    }
+    if (!scene_can_be_copied(scene)) {
+        return nullptr;
+    }
 
+    auto normalized_scene = normalize_export_scene(scene);
+    if (normalized_scene) {
+        scene = normalized_scene.get();
+    }
     Assimp::Exporter exporter;
     Assimp::ExportProperties export_props;
 

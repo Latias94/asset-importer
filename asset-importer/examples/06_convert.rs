@@ -11,8 +11,6 @@ use asset_importer::{
 };
 
 fn main() -> Result<(), Box<dyn Error>> {
-    common::init_logging_from_env();
-
     let args: Vec<String> = std::env::args().collect();
     if args.len() < 3 {
         eprintln!(
@@ -51,8 +49,6 @@ fn main() -> Result<(), Box<dyn Error>> {
             Ok(())
         }
     };
-
-    common::shutdown_logging();
 
     #[cfg(not(feature = "export"))]
     if result.is_err() {

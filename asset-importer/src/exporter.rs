@@ -146,7 +146,12 @@ impl ExportBuilder {
         self
     }
 
-    /// Export the scene to a file
+    /// Export the scene to a file.
+    ///
+    /// 3MF requires the native file system because its ZIP writer bypasses custom I/O.
+    /// Morph targets with sparse UV or color channels cannot be copied safely by Assimp.
+    /// Empty or unsupported node metadata and mesh animation channels are also rejected
+    /// because Assimp cannot deep-copy their ownership safely.
     pub fn export_to_file<P: AsRef<Path>>(self, scene: &Scene, path: P) -> Result<()> {
         let path_str = path.as_ref().to_string_lossy();
         let c_path = CString::new(path_str.as_ref())
@@ -158,31 +163,19 @@ impl ExportBuilder {
             .file_system
             .as_ref()
             .map(|fs| OwnedAiFileIO::new(fs.clone()));
-        let used_bridge = !self.properties.is_empty() || file_io.is_some();
-        let result = if used_bridge {
-            let buffers = build_rust_properties(&self.properties)?;
-            unsafe {
-                sys::aiExportSceneExWithPropertiesRust(
-                    scene.as_raw_sys(),
-                    c_format.as_ptr(),
-                    c_path.as_ptr(),
-                    file_io
-                        .as_ref()
-                        .map_or(std::ptr::null(), |io| io.as_ptr_sys()),
-                    self.preprocessing,
-                    buffers.ffi_props.as_ptr(),
-                    buffers.ffi_props.len(),
-                )
-            }
-        } else {
-            unsafe {
-                sys::aiExportScene(
-                    scene.as_raw_sys(),
-                    c_format.as_ptr(),
-                    c_path.as_ptr(),
-                    self.preprocessing,
-                )
-            }
+        let buffers = build_rust_properties(&self.properties)?;
+        let result = unsafe {
+            sys::aiExportSceneExWithPropertiesRust(
+                scene.as_raw_sys(),
+                c_format.as_ptr(),
+                c_path.as_ptr(),
+                file_io
+                    .as_ref()
+                    .map_or(std::ptr::null(), |io| io.as_ptr_sys()),
+                self.preprocessing,
+                buffers.ffi_props.as_ptr(),
+                buffers.ffi_props.len(),
+            )
         };
 
         if file_io.as_ref().is_some_and(|io| io.has_error()) {
@@ -191,42 +184,33 @@ impl ExportBuilder {
 
         if result == sys::aiReturn::aiReturn_SUCCESS {
             Ok(())
-        } else if used_bridge {
-            Err(Error::from_bridge_or_assimp())
         } else {
-            Err(Error::from_assimp())
+            Err(Error::export_failed(Error::from_bridge().to_string()))
         }
     }
 
-    /// Export the scene to a blob in memory
+    /// Export the scene to a blob in memory.
+    ///
+    /// 3MF is unsupported because its ZIP writer writes directly to the host file system.
+    /// Morph targets with sparse UV or color channels cannot be copied safely by Assimp.
+    /// Empty or unsupported node metadata and mesh animation channels are also rejected.
     pub fn export_to_blob(self, scene: &Scene) -> Result<ExportBlob> {
         let c_format = CString::new(self.format_id.as_str())
             .map_err(|_| Error::invalid_parameter("Invalid format ID"))?;
 
-        let used_bridge = !self.properties.is_empty();
-        let blob_ptr = if !used_bridge {
-            unsafe {
-                sys::aiExportSceneToBlob(scene.as_raw_sys(), c_format.as_ptr(), self.preprocessing)
-            }
-        } else {
-            let buffers = build_rust_properties(&self.properties)?;
-            unsafe {
-                sys::aiExportSceneToBlobWithPropertiesRust(
-                    scene.as_raw_sys(),
-                    c_format.as_ptr(),
-                    self.preprocessing,
-                    buffers.ffi_props.as_ptr(),
-                    buffers.ffi_props.len(),
-                )
-            }
+        let buffers = build_rust_properties(&self.properties)?;
+        let blob_ptr = unsafe {
+            sys::aiExportSceneToBlobWithPropertiesRust(
+                scene.as_raw_sys(),
+                c_format.as_ptr(),
+                self.preprocessing,
+                buffers.ffi_props.as_ptr(),
+                buffers.ffi_props.len(),
+            )
         };
 
         if blob_ptr.is_null() {
-            if used_bridge {
-                Err(Error::from_bridge_or_assimp())
-            } else {
-                Err(Error::from_assimp())
-            }
+            Err(Error::export_failed(Error::from_bridge().to_string()))
         } else {
             ExportBlob::from_sys_ptr(blob_ptr)
                 .ok_or_else(|| Error::invalid_scene("Invalid export blob pointer"))
@@ -484,6 +468,163 @@ pub mod formats {
 mod tests {
     use super::*;
     use crate::Importer;
+
+    fn morph_scene(channels: usize) -> Scene {
+        // Positions, two-component UVs, RGBA colors, then zero position deltas.
+        let data = "AAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAAAAAAAAgD8AAAAAAAAAAAAAAAAAAIA/AAAAAAAAAAAAAIA/AACAPwAAAAAAAAAAAACAPwAAAAAAAIA/AAAAAAAAgD8AAAAAAAAAAAAAgD8AAIA/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+        let mut attributes = String::from("\"POSITION\": 0");
+        for channel in 0..channels {
+            attributes.push_str(&format!(
+                ", \"TEXCOORD_{channel}\": 1, \"COLOR_{channel}\": 2",
+            ));
+        }
+        let gltf = format!(
+            r#"{{
+              "asset": {{ "version": "2.0" }},
+              "buffers": [{{ "uri": "data:application/octet-stream;base64,{data}", "byteLength": 144 }}],
+              "bufferViews": [
+                {{ "buffer": 0, "byteOffset": 0, "byteLength": 36 }},
+                {{ "buffer": 0, "byteOffset": 36, "byteLength": 24 }},
+                {{ "buffer": 0, "byteOffset": 60, "byteLength": 48 }},
+                {{ "buffer": 0, "byteOffset": 108, "byteLength": 36 }}
+              ],
+              "accessors": [
+                {{ "bufferView": 0, "componentType": 5126, "count": 3, "type": "VEC3", "min": [0,0,0], "max": [1,1,0] }},
+                {{ "bufferView": 1, "componentType": 5126, "count": 3, "type": "VEC2" }},
+                {{ "bufferView": 2, "componentType": 5126, "count": 3, "type": "VEC4" }},
+                {{ "bufferView": 3, "componentType": 5126, "count": 3, "type": "VEC3", "min": [0,0,0], "max": [0,0,0] }}
+              ],
+              "meshes": [{{ "weights": [0.5, 0.5], "primitives": [{{
+                "attributes": {{ {attributes} }},
+                "targets": [{{ "POSITION": 3 }}, {{ "POSITION": 3 }}]
+              }}] }}],
+              "nodes": [{{ "mesh": 0 }}],
+              "scenes": [{{ "nodes": [0] }}],
+              "scene": 0
+            }}"#,
+        );
+        let import = || {
+            Importer::new()
+                .read_from_memory(gltf.as_bytes())
+                .with_memory_hint("gltf")
+                .with_post_process(crate::postprocess::PostProcessSteps::empty())
+                .import()
+                .expect("import native-owned morph fixture")
+        };
+        let scene = import();
+        if channels > 0 {
+            let donor = import();
+            // SAFETY: Both scenes are exclusively owned here, with no live views.
+            // glTF creates position-only targets. Transfer the donor mesh's native
+            // arrays into target 1, keeping exactly one owner of every allocation.
+            // The host mesh retains matching dense channels and the same vertex count.
+            unsafe {
+                let mesh = &mut **(*scene.as_raw_sys()).mMeshes;
+                let anim = &mut **mesh.mAnimMeshes.add(1);
+                let donor_mesh = &mut **(*donor.as_raw_sys()).mMeshes;
+                assert!(anim.mTextureCoords.iter().all(|ptr| ptr.is_null()));
+                assert!(anim.mColors.iter().all(|ptr| ptr.is_null()));
+                std::mem::swap(&mut anim.mTextureCoords, &mut donor_mesh.mTextureCoords);
+                std::mem::swap(&mut anim.mColors, &mut donor_mesh.mColors);
+                donor_mesh.mNumUVComponents.fill(0);
+            }
+        }
+        assert_eq!(scene.num_meshes(), 1);
+        let mesh = scene.mesh(0).unwrap();
+        assert_eq!(mesh.num_anim_meshes(), 2);
+        for anim in mesh.anim_meshes() {
+            assert_eq!(anim.vertices_raw().len(), 3);
+        }
+        let anim = mesh.anim_mesh(1).unwrap();
+        for channel in 0..channels {
+            assert_eq!(anim.texture_coords_raw(channel).len(), 3);
+            assert_eq!(anim.vertex_colors_raw(channel).len(), 3);
+        }
+        scene
+    }
+
+    #[test]
+    fn sparse_morph_channels_are_rejected_without_freeing_source_buffers() {
+        for (colors, from, to) in [(false, 0, 2), (false, 1, 7), (true, 0, 2), (true, 1, 7)] {
+            let scene = morph_scene(2);
+            // SAFETY: No scene clones or views are alive here. Both the host mesh
+            // and its second morph target keep each native allocation exactly once;
+            // swapping slots preserves ownership and matching vertex components.
+            unsafe {
+                let raw_scene = &*scene.as_raw_sys();
+                let mesh = &mut **raw_scene.mMeshes;
+                let anim = &mut **mesh.mAnimMeshes.add(1);
+                if colors {
+                    mesh.mColors.swap(from, to);
+                    anim.mColors.swap(from, to);
+                } else {
+                    mesh.mTextureCoords.swap(from, to);
+                    mesh.mNumUVComponents.swap(from, to);
+                    anim.mTextureCoords.swap(from, to);
+                }
+            }
+
+            let mesh = scene.mesh(0).unwrap();
+            let anim = mesh.anim_mesh(1).unwrap();
+            let uv = anim.texture_coords_raw(to);
+            let color = anim.vertex_colors_raw(to);
+            let expected_uv = uv.to_vec();
+            let expected_color = color.to_vec();
+            let expected_kind = if colors {
+                "vertex color"
+            } else {
+                "texture coordinate"
+            };
+            let expected_channel = if from == 0 { 1 } else { to };
+
+            // Cover both entry points and the property/custom-I/O configurations
+            // that previously selected different native export implementations.
+            let blob_error = ExportBuilder::new("stl")
+                .with_property_bool("EXPORT_POINT_CLOUDS", false)
+                .export_to_blob(&scene)
+                .err()
+                .expect("reject sparse morph target before native copy");
+            let file_error = ExportBuilder::new("stl")
+                .with_file_system(crate::io::MemoryFileSystem::new())
+                .export_to_file(&scene, "virtual/morph.stl")
+                .expect_err("reject sparse morph target before native copy");
+            for error in [blob_error, file_error] {
+                let Error::ExportFailed { message } = error else {
+                    panic!("expected ExportFailed, got {error}");
+                };
+                assert!(message.contains("morph target 1"), "{message}");
+                assert!(message.contains(expected_kind), "{message}");
+                assert!(
+                    message.contains(&format!("channel {expected_channel}")),
+                    "{message}"
+                );
+            }
+            assert_eq!(uv, expected_uv);
+            assert_eq!(color, expected_color);
+        }
+    }
+
+    #[test]
+    fn dense_and_position_only_morph_targets_still_export() {
+        for channels in [0, 2] {
+            let scene = morph_scene(channels);
+            let mesh = scene.mesh(0).unwrap();
+            let anim = mesh.anim_mesh(1).unwrap();
+            let positions = anim.vertices_raw();
+            let expected = positions.to_vec();
+
+            let blob = ExportBuilder::new("stl")
+                .export_to_blob(&scene)
+                .expect("export morph targets whose channels can be safely copied");
+
+            assert!(blob.data().starts_with(b"solid "));
+            assert_eq!(positions, expected);
+            for channel in 0..channels {
+                assert_eq!(anim.texture_coords_raw(channel).len(), 3);
+                assert_eq!(anim.vertex_colors_raw(channel).len(), 3);
+            }
+        }
+    }
 
     #[test]
     fn test_exporter_creation() {

@@ -1,5 +1,8 @@
 //! Light representation and utilities
 
+// Native enum signedness differs between MSVC and Unix bindings.
+#![allow(clippy::unnecessary_cast)]
+
 use crate::{
     ptr::SharedPtr,
     scene::Scene,
@@ -126,19 +129,23 @@ pub enum LightType {
     Ambient,
     /// Area light
     Area,
+    /// Unrecognized native light type.
+    Unknown(u32),
 }
 
 impl LightType {
     fn from_raw(value: sys::aiLightSourceType) -> Self {
-        let v = value as u32;
+        let v = value.0 as u32;
         match v {
-            x if x == sys::aiLightSourceType::aiLightSource_UNDEFINED as u32 => Self::Undefined,
-            x if x == sys::aiLightSourceType::aiLightSource_DIRECTIONAL as u32 => Self::Directional,
-            x if x == sys::aiLightSourceType::aiLightSource_POINT as u32 => Self::Point,
-            x if x == sys::aiLightSourceType::aiLightSource_SPOT as u32 => Self::Spot,
-            x if x == sys::aiLightSourceType::aiLightSource_AMBIENT as u32 => Self::Ambient,
-            x if x == sys::aiLightSourceType::aiLightSource_AREA as u32 => Self::Area,
-            _ => Self::Undefined,
+            x if x == sys::aiLightSourceType::aiLightSource_UNDEFINED.0 as u32 => Self::Undefined,
+            x if x == sys::aiLightSourceType::aiLightSource_DIRECTIONAL.0 as u32 => {
+                Self::Directional
+            }
+            x if x == sys::aiLightSourceType::aiLightSource_POINT.0 as u32 => Self::Point,
+            x if x == sys::aiLightSourceType::aiLightSource_SPOT.0 as u32 => Self::Spot,
+            x if x == sys::aiLightSourceType::aiLightSource_AMBIENT.0 as u32 => Self::Ambient,
+            x if x == sys::aiLightSourceType::aiLightSource_AREA.0 as u32 => Self::Area,
+            other => Self::Unknown(other),
         }
     }
 }

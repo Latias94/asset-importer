@@ -81,10 +81,6 @@ pub mod raw;
 #[cfg(feature = "export")]
 pub use crate::exporter::{ExportBlob, ExportBuilder, ExportFormatDesc, export_properties};
 
-// Re-export logging functionality
-#[allow(deprecated)]
-pub use crate::logging::{LogLevel, LogStream, Logger};
-
 // Re-export metadata functionality
 pub use crate::metadata::{Metadata, MetadataEntry, MetadataType};
 
@@ -138,7 +134,6 @@ pub mod texture;
 #[cfg(feature = "export")]
 pub mod exporter;
 pub mod io;
-pub mod logging;
 pub mod metadata;
 pub mod progress;
 
@@ -216,70 +211,42 @@ pub fn is_extension_supported(extension: &str) -> crate::Result<bool> {
     Ok(unsafe { crate::sys::aiIsExtensionSupported(c_extension.as_ptr()) != 0 })
 }
 
-const FALLBACK_IMPORT_EXTENSIONS: [&str; 15] = [
-    ".obj", ".fbx", ".dae", ".gltf", ".glb", ".3ds", ".blend", ".x", ".ply", ".stl", ".md2",
-    ".md3", ".md5", ".ase", ".ifc",
-];
-
 /// An allocation-minimized import extension list.
 ///
 /// This keeps the raw Assimp extension list string and provides an iterator over `&str` views
 /// (e.g. `".obj"`), avoiding per-extension allocations.
 #[derive(Debug, Clone)]
 pub struct ImportExtensions {
-    raw: Option<String>,
-}
-
-#[derive(Debug)]
-enum ImportExtensionsIterInner<'a> {
-    Assimp(std::str::Split<'a, char>),
-    Fallback(std::slice::Iter<'a, &'static str>),
+    raw: String,
 }
 
 /// Iterator over supported import extensions.
 #[derive(Debug)]
 pub struct ImportExtensionsIter<'a> {
-    inner: ImportExtensionsIterInner<'a>,
+    inner: std::str::Split<'a, char>,
 }
 
 impl<'a> Iterator for ImportExtensionsIter<'a> {
     type Item = &'a str;
 
     fn next(&mut self) -> Option<Self::Item> {
-        loop {
-            match &mut self.inner {
-                ImportExtensionsIterInner::Assimp(split) => {
-                    let ext = split.next()?;
-                    let trimmed = ext.trim();
-                    if trimmed.starts_with("*.") && trimmed.len() > 1 {
-                        return Some(&trimmed[1..]);
-                    }
-                }
-                ImportExtensionsIterInner::Fallback(iter) => {
-                    let s: &'static str = iter.next()?;
-                    return Some(s);
-                }
-            }
-        }
+        self.inner.find_map(|ext| {
+            let ext = ext.trim();
+            (ext.starts_with("*.") && ext.len() > 2).then(|| &ext[1..])
+        })
     }
 }
 
 impl ImportExtensions {
-    /// Raw Assimp extension list, if available (e.g. `"*.3ds;*.obj;*.dae"`).
-    pub fn raw_assimp_list(&self) -> Option<&str> {
-        self.raw.as_deref()
+    /// Raw Assimp extension list (e.g. `"*.3ds;*.obj;*.dae"`), including an empty list.
+    pub fn raw_assimp_list(&self) -> &str {
+        &self.raw
     }
 
     /// Iterate extensions as `".ext"` strings (without allocation).
     pub fn iter(&self) -> ImportExtensionsIter<'_> {
-        if let Some(s) = self.raw.as_deref() {
-            ImportExtensionsIter {
-                inner: ImportExtensionsIterInner::Assimp(s.split(';')),
-            }
-        } else {
-            ImportExtensionsIter {
-                inner: ImportExtensionsIterInner::Fallback(FALLBACK_IMPORT_EXTENSIONS.iter()),
-            }
+        ImportExtensionsIter {
+            inner: self.raw.split(';'),
         }
     }
 
@@ -300,12 +267,8 @@ pub fn get_import_extensions_list() -> ImportExtensions {
         crate::sys::aiGetExtensionList(&mut ai_string);
     }
 
-    if ai_string.length > 0 {
-        ImportExtensions {
-            raw: Some(crate::types::ai_string_to_string(&ai_string)),
-        }
-    } else {
-        ImportExtensions { raw: None }
+    ImportExtensions {
+        raw: crate::types::ai_string_to_string(&ai_string),
     }
 }
 
@@ -368,13 +331,6 @@ impl Iterator for ExportFormatDescIterator {
     }
 }
 
-/// Enable verbose logging for debugging
-pub fn enable_verbose_logging(enable: bool) {
-    unsafe {
-        crate::sys::aiEnableVerboseLogging(if enable { 1 } else { 0 });
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -407,6 +363,18 @@ mod tests {
 
         // This should not be supported
         assert!(!is_extension_supported("xyz").unwrap());
+    }
+
+    #[test]
+    fn extension_lists_preserve_native_capabilities() {
+        let empty = ImportExtensions { raw: String::new() };
+        assert_eq!(empty.raw_assimp_list(), "");
+        assert_eq!(empty.iter().next(), None);
+
+        let list = ImportExtensions {
+            raw: "*.obj; *.gltf ;;*.glb;*.".to_owned(),
+        };
+        assert_eq!(list.iter().collect::<Vec<_>>(), [".obj", ".gltf", ".glb"]);
     }
 
     #[test]

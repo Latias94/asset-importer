@@ -8,7 +8,6 @@ use std::error::Error;
 use asset_importer::{postprocess::PostProcessSteps, raw};
 
 fn main() -> Result<(), Box<dyn Error>> {
-    common::init_logging_from_env();
     let path = common::resolve_model_path(common::ModelSource::ArgOrExamplesDir, "box.obj");
     let scene = common::import_scene(&path, PostProcessSteps::empty())?;
 
@@ -64,6 +63,5 @@ fn main() -> Result<(), Box<dyn Error>> {
         println!("Index bytes (across faces): {} bytes", index_bytes);
     }
 
-    common::shutdown_logging();
     Ok(())
 }

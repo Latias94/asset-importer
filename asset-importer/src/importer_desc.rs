@@ -17,28 +17,28 @@ pub struct ImporterFlags {
 impl ImporterFlags {
     /// Indicates that there is a textual encoding of the file format; and that it is supported.
     pub const SUPPORT_TEXT_FLAVOUR: Self = Self {
-        bits: sys::aiImporterFlags::aiImporterFlags_SupportTextFlavour as u32,
+        bits: sys::aiImporterFlags::aiImporterFlags_SupportTextFlavour.0 as u32,
     };
 
     /// Indicates that there is a binary encoding of the file format; and that it is supported.
     pub const SUPPORT_BINARY_FLAVOUR: Self = Self {
-        bits: sys::aiImporterFlags::aiImporterFlags_SupportBinaryFlavour as u32,
+        bits: sys::aiImporterFlags::aiImporterFlags_SupportBinaryFlavour.0 as u32,
     };
 
     /// Indicates that there is a compressed encoding of the file format; and that it is supported.
     pub const SUPPORT_COMPRESSED_FLAVOUR: Self = Self {
-        bits: sys::aiImporterFlags::aiImporterFlags_SupportCompressedFlavour as u32,
+        bits: sys::aiImporterFlags::aiImporterFlags_SupportCompressedFlavour.0 as u32,
     };
 
     /// Indicates that the importer reads only a very particular subset of the file format.
     /// This happens commonly for declarative or procedural formats which cannot easily be mapped to #aiScene
     pub const LIMITED_SUPPORT: Self = Self {
-        bits: sys::aiImporterFlags::aiImporterFlags_LimitedSupport as u32,
+        bits: sys::aiImporterFlags::aiImporterFlags_LimitedSupport.0 as u32,
     };
 
     /// Indicates that the importer is highly experimental and should be used with care.
     pub const EXPERIMENTAL: Self = Self {
-        bits: sys::aiImporterFlags::aiImporterFlags_Experimental as u32,
+        bits: sys::aiImporterFlags::aiImporterFlags_Experimental.0 as u32,
     };
 
     /// Create empty flags

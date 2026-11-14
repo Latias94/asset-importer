@@ -10,100 +10,100 @@ bitflags! {
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
     pub struct PostProcessSteps: u32 {
         /// Calculates the tangents and bitangents for the imported meshes.
-        const CALC_TANGENT_SPACE = sys::aiPostProcessSteps::aiProcess_CalcTangentSpace as u32;
+        const CALC_TANGENT_SPACE = sys::aiPostProcessSteps::aiProcess_CalcTangentSpace.0 as u32;
 
         /// Identifies and joins identical vertex data sets within all imported meshes.
-        const JOIN_IDENTICAL_VERTICES = sys::aiPostProcessSteps::aiProcess_JoinIdenticalVertices as u32;
+        const JOIN_IDENTICAL_VERTICES = sys::aiPostProcessSteps::aiProcess_JoinIdenticalVertices.0 as u32;
 
         /// Converts all the imported data to a left-handed coordinate space.
-        const MAKE_LEFT_HANDED = sys::aiPostProcessSteps::aiProcess_MakeLeftHanded as u32;
+        const MAKE_LEFT_HANDED = sys::aiPostProcessSteps::aiProcess_MakeLeftHanded.0 as u32;
 
         /// Triangulates all faces of all meshes.
-        const TRIANGULATE = sys::aiPostProcessSteps::aiProcess_Triangulate as u32;
+        const TRIANGULATE = sys::aiPostProcessSteps::aiProcess_Triangulate.0 as u32;
 
         /// Removes some parts of the data structure (animations, materials, light sources, cameras, textures, vertex components).
-        const REMOVE_COMPONENT = sys::aiPostProcessSteps::aiProcess_RemoveComponent as u32;
+        const REMOVE_COMPONENT = sys::aiPostProcessSteps::aiProcess_RemoveComponent.0 as u32;
 
         /// Generates normals for all faces of all meshes.
-        const GEN_NORMALS = sys::aiPostProcessSteps::aiProcess_GenNormals as u32;
+        const GEN_NORMALS = sys::aiPostProcessSteps::aiProcess_GenNormals.0 as u32;
 
         /// Generates smooth normals for all vertices in the mesh.
-        const GEN_SMOOTH_NORMALS = sys::aiPostProcessSteps::aiProcess_GenSmoothNormals as u32;
+        const GEN_SMOOTH_NORMALS = sys::aiPostProcessSteps::aiProcess_GenSmoothNormals.0 as u32;
 
         /// Splits large meshes into smaller sub-meshes.
-        const SPLIT_LARGE_MESHES = sys::aiPostProcessSteps::aiProcess_SplitLargeMeshes as u32;
+        const SPLIT_LARGE_MESHES = sys::aiPostProcessSteps::aiProcess_SplitLargeMeshes.0 as u32;
 
         /// Removes the node graph and pre-transforms all vertices with the local transformation matrices of their nodes.
-        const PRE_TRANSFORM_VERTICES = sys::aiPostProcessSteps::aiProcess_PreTransformVertices as u32;
+        const PRE_TRANSFORM_VERTICES = sys::aiPostProcessSteps::aiProcess_PreTransformVertices.0 as u32;
 
         /// Limits the number of bones simultaneously affecting a single vertex.
-        const LIMIT_BONE_WEIGHTS = sys::aiPostProcessSteps::aiProcess_LimitBoneWeights as u32;
+        const LIMIT_BONE_WEIGHTS = sys::aiPostProcessSteps::aiProcess_LimitBoneWeights.0 as u32;
 
         /// Validates the imported scene data structure.
-        const VALIDATE_DATA_STRUCTURE = sys::aiPostProcessSteps::aiProcess_ValidateDataStructure as u32;
+        const VALIDATE_DATA_STRUCTURE = sys::aiPostProcessSteps::aiProcess_ValidateDataStructure.0 as u32;
 
         /// Reorders triangles for better vertex cache locality.
-        const IMPROVE_CACHE_LOCALITY = sys::aiPostProcessSteps::aiProcess_ImproveCacheLocality as u32;
+        const IMPROVE_CACHE_LOCALITY = sys::aiPostProcessSteps::aiProcess_ImproveCacheLocality.0 as u32;
 
         /// Searches for redundant/unreferenced materials and removes them.
-        const REMOVE_REDUNDANT_MATERIALS = sys::aiPostProcessSteps::aiProcess_RemoveRedundantMaterials as u32;
+        const REMOVE_REDUNDANT_MATERIALS = sys::aiPostProcessSteps::aiProcess_RemoveRedundantMaterials.0 as u32;
 
         /// This step tries to determine which meshes have normal vectors that are facing inwards and inverts them.
-        const FIX_INFACING_NORMALS = sys::aiPostProcessSteps::aiProcess_FixInfacingNormals as u32;
+        const FIX_INFACING_NORMALS = sys::aiPostProcessSteps::aiProcess_FixInfacingNormals.0 as u32;
 
         /// This step generically populates aiBone::mArmature and aiBone::mNode generically.
-        const POPULATE_ARMATURE_DATA = sys::aiPostProcessSteps::aiProcess_PopulateArmatureData as u32;
+        const POPULATE_ARMATURE_DATA = sys::aiPostProcessSteps::aiProcess_PopulateArmatureData.0 as u32;
 
         /// Sorts triangles by primitive type (points, lines, triangles).
-        const SORT_BY_PTYPE = sys::aiPostProcessSteps::aiProcess_SortByPType as u32;
+        const SORT_BY_PTYPE = sys::aiPostProcessSteps::aiProcess_SortByPType.0 as u32;
 
         /// Searches for duplicate vertices and removes them.
-        const FIND_DEGENERATES = sys::aiPostProcessSteps::aiProcess_FindDegenerates as u32;
+        const FIND_DEGENERATES = sys::aiPostProcessSteps::aiProcess_FindDegenerates.0 as u32;
 
         /// Searches for invalid data, such as zeroed normal vectors or invalid UV coords and removes/fixes them.
-        const FIND_INVALID_DATA = sys::aiPostProcessSteps::aiProcess_FindInvalidData as u32;
+        const FIND_INVALID_DATA = sys::aiPostProcessSteps::aiProcess_FindInvalidData.0 as u32;
 
         /// Converts non-UV mappings (such as spherical or cylindrical mapping) to proper texture coordinate channels.
-        const GEN_UV_COORDS = sys::aiPostProcessSteps::aiProcess_GenUVCoords as u32;
+        const GEN_UV_COORDS = sys::aiPostProcessSteps::aiProcess_GenUVCoords.0 as u32;
 
         /// Applies per-texture UV transformations and bakes them into stand-alone vtexture coordinate channels.
-        const TRANSFORM_UV_COORDS = sys::aiPostProcessSteps::aiProcess_TransformUVCoords as u32;
+        const TRANSFORM_UV_COORDS = sys::aiPostProcessSteps::aiProcess_TransformUVCoords.0 as u32;
 
         /// Searches for instances of meshes and replaces them by references to one master.
-        const FIND_INSTANCES = sys::aiPostProcessSteps::aiProcess_FindInstances as u32;
+        const FIND_INSTANCES = sys::aiPostProcessSteps::aiProcess_FindInstances.0 as u32;
 
         /// Optimizes the scene hierarchy.
-        const OPTIMIZE_MESHES = sys::aiPostProcessSteps::aiProcess_OptimizeMeshes as u32;
+        const OPTIMIZE_MESHES = sys::aiPostProcessSteps::aiProcess_OptimizeMeshes.0 as u32;
 
         /// Optimizes the scene graph.
-        const OPTIMIZE_GRAPH = sys::aiPostProcessSteps::aiProcess_OptimizeGraph as u32;
+        const OPTIMIZE_GRAPH = sys::aiPostProcessSteps::aiProcess_OptimizeGraph.0 as u32;
 
         /// Flips all UV coordinates along the y-axis and adjusts material settings and bitangents accordingly.
-        const FLIP_UVS = sys::aiPostProcessSteps::aiProcess_FlipUVs as u32;
+        const FLIP_UVS = sys::aiPostProcessSteps::aiProcess_FlipUVs.0 as u32;
 
         /// Flips face winding order from CCW to CW or vice versa.
-        const FLIP_WINDING_ORDER = sys::aiPostProcessSteps::aiProcess_FlipWindingOrder as u32;
+        const FLIP_WINDING_ORDER = sys::aiPostProcessSteps::aiProcess_FlipWindingOrder.0 as u32;
 
         /// Splits meshes with more than one primitive type in homogeneous sub-meshes.
-        const SPLIT_BY_BONE_COUNT = sys::aiPostProcessSteps::aiProcess_SplitByBoneCount as u32;
+        const SPLIT_BY_BONE_COUNT = sys::aiPostProcessSteps::aiProcess_SplitByBoneCount.0 as u32;
 
         /// Removes bones losslessly or according to some threshold.
-        const DEBONE = sys::aiPostProcessSteps::aiProcess_Debone as u32;
+        const DEBONE = sys::aiPostProcessSteps::aiProcess_Debone.0 as u32;
 
         /// Converts absolute morphing animations into relative ones.
-        const GLOBAL_SCALE = sys::aiPostProcessSteps::aiProcess_GlobalScale as u32;
+        const GLOBAL_SCALE = sys::aiPostProcessSteps::aiProcess_GlobalScale.0 as u32;
 
         /// Embeds textures into the scene.
-        const EMBED_TEXTURES = sys::aiPostProcessSteps::aiProcess_EmbedTextures as u32;
+        const EMBED_TEXTURES = sys::aiPostProcessSteps::aiProcess_EmbedTextures.0 as u32;
 
         /// Forces the loader to ignore up-direction.
-        const FORCE_GEN_NORMALS = sys::aiPostProcessSteps::aiProcess_ForceGenNormals as u32;
+        const FORCE_GEN_NORMALS = sys::aiPostProcessSteps::aiProcess_ForceGenNormals.0 as u32;
 
         /// Drops normals for all faces of all meshes.
-        const DROP_NORMALS = sys::aiPostProcessSteps::aiProcess_DropNormals as u32;
+        const DROP_NORMALS = sys::aiPostProcessSteps::aiProcess_DropNormals.0 as u32;
 
         /// Generates bounding boxes for all meshes.
-        const GEN_BOUNDING_BOXES = sys::aiPostProcessSteps::aiProcess_GenBoundingBoxes as u32;
+        const GEN_BOUNDING_BOXES = sys::aiPostProcessSteps::aiProcess_GenBoundingBoxes.0 as u32;
     }
 }
 

@@ -12,8 +12,6 @@ use std::error::Error;
 use asset_importer::{Matrix4x4, Quaternion, Vector2D, Vector3D};
 
 fn main() -> Result<(), Box<dyn Error>> {
-    common::init_logging_from_env();
-
     run_mint_demo()?;
     Ok(())
 }
@@ -144,8 +142,6 @@ fn run_mint_demo() -> Result<(), Box<dyn Error>> {
 
     println!("\n✓ All mint conversions completed successfully!");
     println!("The mint integration allows seamless interoperability with other math libraries.");
-
-    common::shutdown_logging();
 
     Ok(())
 }

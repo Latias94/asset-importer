@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- **Breaking:** Native enums exposed through `raw-sys` are integer newtypes; access the raw value through `.0`. Unknown light types, animation behaviors, morphing methods, material types and metadata types remain representable.
+- **Breaking:** `ShadingModel::PbrBrdf` replaces the two workflow-specific variants. Assimp's generic PBR mode cannot identify a material workflow by itself.
+- **Breaking:** Metadata preserves unassigned and unknown keys, and returns contextual errors for malformed known values instead of silently losing entries.
+- **Breaking:** Exports always use the C++ bridge and report `Error::ExportFailed` with the Exporter's diagnostic. Removed the unrelated C-global `Error::from_assimp()` accessor.
+- **Breaking:** `ImportExtensions::raw_assimp_list()` returns `&str`; an empty native extension list remains empty instead of advertising unsupported formats.
 - Bundled Assimp is now [6.0.6](https://github.com/assimp/assimp/releases/tag/v6.0.6), with updated bindings and regression coverage for glTF normalized skin weights, mixed joint accessors, and texture transforms.
 - **Breaking:** The optional `glam` integration now uses 0.34. The minimum supported Rust version remains 1.85, and workspace dependency resolution respects it.
 - **Breaking:** `Scene::apply_postprocess` requires exclusive scene ownership and a scene created by the import builder. Drop clones, views, and owning iterators first, or configure post-processing before import. Raw adopted scenes are rejected.
@@ -15,6 +20,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Breaking:** `Error::IoError` preserves the original `std::io::Error` in its `source` field. Custom file systems must return `std::io::ErrorKind::NotFound` through `Error::from` for missing optional files; other open errors fail the operation instead of silently discarding sidecar data.
 
 ### Fixed
+- Texture queries initialize all optional native outputs, including UV transforms; missing optional properties no longer result in uninitialized reads.
+- All material value queries use bounded Rust decoding, including texture parameters, float/color properties and numeric strings. Unknown types and malformed payloads no longer reach native string or unchecked integer-conversion fallbacks.
+- Integer material queries decode bounded native bytes, support one-byte booleans, and validate floating-point conversions. This avoids zero-capacity writes and the upstream Double-as-string conversion path. Emissive texture helpers also find glTF's `Emissive` slot.
+- Read callbacks initialize native buffers before lending them to safe `FileStream::read` implementations.
+- Native scene copies reject sparse morph UV/color channels before export and hierarchy-preserving pre-transformation, including system builds. 3MF blob/custom-I/O export is rejected before its ZIP writer can touch host files.
+- Export rejects empty or unsupported node metadata and mesh-animation channels before unsafe upstream deep copies, keeping source metadata and views alive on the failure path.
+- Export normalizes inconsistent verbose-layout flags on a private copy when required, allowing default-imported triangles to export as STL without changing source flags, normals, or borrowed views.
+- Euler rotation matrices retain their homogeneous identity row; signed-scale decomposition preserves reflections; transformed bounds remain conservative for infinite boxes and projection-plane crossings. RGB/HSV conversions normalize hue, and vector comparison documents Assimp's lexicographic behavior.
 - Scene ownership no longer uses Assimp's C post-processing failure path, which can access an already-deleted scene. Importer cleanup remains valid after a failed processing step.
 - Custom I/O streams are closed when Assimp deletes them directly or leaves them open during an exporter exception. Import/export now report callback panics, write/flush failures, and panicking stream destructors instead of silently succeeding; partial reads and writes are supported.
 - Progress cancellation is retained across stage notifications, stops subsequent user callbacks, and prevents returning a scene after cancellation. Panic payload destructors cannot unwind across the C ABI.
@@ -22,6 +35,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Zero-copy views check size, alignment, and field offsets against generated bindings at compile time, and the byte-view example correctly reads indices from individual faces.
 
 ### Removed
+- **Breaking:** Removed the unsynchronized native global logging facade and disabled log-stream compatibility stubs. Use operation results and progress callbacks for application-level diagnostics.
 - **Breaking:** Removed the `tokio` feature and runtime dependency. Scene types remain `Send + Sync`; use your application's runtime and `spawn_blocking` for imports.
 - **Breaking:** Removed `nozlib`, which did not disable Assimp's zlib dependency. Source and prebuilt static builds now link the required zlib consistently.
 

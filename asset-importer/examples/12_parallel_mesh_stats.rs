@@ -26,8 +26,6 @@ struct MeshStats {
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
-    common::init_logging_from_env();
-
     let args: Vec<String> = std::env::args().collect();
     let path = common::resolve_model_path(
         common::ModelSource::ArgOrExamplesDir,
@@ -127,7 +125,6 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
 
     println!("Total elapsed: {:?}", started.elapsed());
-    common::shutdown_logging();
     Ok(())
 }
 

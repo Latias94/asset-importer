@@ -262,7 +262,7 @@ pub fn vector3_equal_epsilon(a: Vector3D, b: Vector3D, eps: f32) -> bool {
     unsafe { sys::aiVector3AreEqualEpsilon(&aa, &bb, eps) != 0 }
 }
 
-/// Check if vector a is component-wise less than vector b
+/// Compare vectors lexicographically by X, then Y, then Z, matching Assimp.
 pub fn vector3_less_than(a: Vector3D, b: Vector3D) -> bool {
     let aa = to_ai_vector3d(a);
     let bb = to_ai_vector3d(b);
@@ -607,7 +607,8 @@ pub fn matrix4_decompose_no_scaling(m: Matrix4x4) -> (Quaternion, Vector3D) {
 
 /// Create a 4x4 rotation matrix from Euler angles
 pub fn matrix4_from_euler(x: f32, y: f32, z: f32) -> Matrix4x4 {
-    let mut out = sys::aiMatrix4x4::default();
+    // Assimp only writes the upper-left 3x3 rotation block.
+    let mut out = to_ai_matrix4x4(Matrix4x4::IDENTITY);
     unsafe { sys::aiMatrix4FromEulerAngles(&mut out, x, y, z) };
     from_ai_matrix4x4(out)
 }

@@ -22,17 +22,12 @@ Build modes:
 The build-mode features `build-assimp`, `prebuilt`, and `system` are mutually exclusive. Omitting
 all of them builds the bundled Assimp source.
 
-Tips:
-- Set `AI_EX_VERBOSE=1` to enable verbose Assimp logging.
-- Set `AI_EX_STDERR=1` to log to stderr (default is stdout).
-- Set `AI_EX_LOGFILE=/path/to/log.txt` to also log to a file.
-
 Most examples accept a model path as the first argument. If missing, some examples fallback to
 `examples/models/<fallback>` for convenience.
 
 ## Structure
 
-- `common/mod.rs` – shared helpers: logging setup, CLI helpers, importer defaults.
+- `common/mod.rs` – shared helpers: CLI arguments and importer defaults.
 
 Examples (recommended order):
 
@@ -109,6 +104,6 @@ cargo run -p asset-importer --example 07_mint_integration --features mint
 
 - Consistent CLI: examples either require a `<model_file>` argument or fall back to
   `examples/models/<name>`. See `common::resolve_model_path`.
-- Logging: controlled via environment variables (see above) and attached in `common::init_logging_from_env`.
+- Diagnostics: print operation errors and use progress callbacks for application-level logging.
 - Post‑processing: `common::import_scene` applies a small default set; examples can pass extra flags.
 - Output: keep output human‑readable and stable; prefer truncated previews for long arrays.

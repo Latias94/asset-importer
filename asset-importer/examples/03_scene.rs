@@ -8,7 +8,6 @@ use std::error::Error;
 use asset_importer::{node::Node, postprocess::PostProcessSteps, scene::MemoryInfo};
 
 fn main() -> Result<(), Box<dyn Error>> {
-    common::init_logging_from_env();
     let path = common::resolve_model_path(common::ModelSource::ArgOrExamplesDir, "box.obj");
     let scene = common::import_scene(&path, PostProcessSteps::empty())?;
 
@@ -53,7 +52,6 @@ fn main() -> Result<(), Box<dyn Error>> {
         );
     }
 
-    common::shutdown_logging();
     Ok(())
 }
 

@@ -154,32 +154,33 @@ pub const AI_SCENE_FLAGS_VALIDATION_WARNING: u32 = 4;
 pub const AI_SCENE_FLAGS_NON_VERBOSE_FORMAT: u32 = 8;
 pub const AI_SCENE_FLAGS_TERRAIN: u32 = 16;
 pub const AI_SCENE_FLAGS_ALLOW_SHARED: u32 = 32;
-#[repr(u32)]
+impl aiComponent {
+    pub const aiComponent_NORMALS: aiComponent = aiComponent(2);
+    pub const aiComponent_TANGENTS_AND_BITANGENTS: aiComponent = aiComponent(4);
+    #[doc = " ALL color sets\n Use aiComponent_COLORn(N) to specify the N'th set"]
+    pub const aiComponent_COLORS: aiComponent = aiComponent(8);
+    #[doc = " ALL texture UV sets\n aiComponent_TEXCOORDn(N) to specify the N'th set"]
+    pub const aiComponent_TEXCOORDS: aiComponent = aiComponent(16);
+    #[doc = " Removes all bone weights from all meshes.\n The scenegraph nodes corresponding to the bones are NOT removed.\n use the #aiProcess_OptimizeGraph step to do this"]
+    pub const aiComponent_BONEWEIGHTS: aiComponent = aiComponent(32);
+    #[doc = " Removes all node animations (aiScene::mAnimations).\n The corresponding scenegraph nodes are NOT removed.\n use the #aiProcess_OptimizeGraph step to do this"]
+    pub const aiComponent_ANIMATIONS: aiComponent = aiComponent(64);
+    #[doc = " Removes all embedded textures (aiScene::mTextures)"]
+    pub const aiComponent_TEXTURES: aiComponent = aiComponent(128);
+    #[doc = " Removes all light sources (aiScene::mLights).\n The corresponding scenegraph nodes are NOT removed.\n use the #aiProcess_OptimizeGraph step to do this"]
+    pub const aiComponent_LIGHTS: aiComponent = aiComponent(256);
+    #[doc = " Removes all cameras (aiScene::mCameras).\n The corresponding scenegraph nodes are NOT removed.\n use the #aiProcess_OptimizeGraph step to do this"]
+    pub const aiComponent_CAMERAS: aiComponent = aiComponent(512);
+    #[doc = " Removes all meshes (aiScene::mMeshes)."]
+    pub const aiComponent_MESHES: aiComponent = aiComponent(1024);
+    #[doc = " Removes all materials. One default material will\n be generated, so aiScene::mNumMaterials will be 1."]
+    pub const aiComponent_MATERIALS: aiComponent = aiComponent(2048);
+    pub const _aiComponent_Force32Bit: aiComponent = aiComponent(2684354559);
+}
+#[repr(transparent)]
 #[doc = " @brief Enumerates components of the aiScene and aiMesh data structures\n  that can be excluded from the import using the #aiProcess_RemoveComponent step.\n\n  See the documentation to #aiProcess_RemoveComponent for more details."]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
-pub enum aiComponent {
-    aiComponent_NORMALS = 2,
-    aiComponent_TANGENTS_AND_BITANGENTS = 4,
-    #[doc = " ALL color sets\n Use aiComponent_COLORn(N) to specify the N'th set"]
-    aiComponent_COLORS = 8,
-    #[doc = " ALL texture UV sets\n aiComponent_TEXCOORDn(N) to specify the N'th set"]
-    aiComponent_TEXCOORDS = 16,
-    #[doc = " Removes all bone weights from all meshes.\n The scenegraph nodes corresponding to the bones are NOT removed.\n use the #aiProcess_OptimizeGraph step to do this"]
-    aiComponent_BONEWEIGHTS = 32,
-    #[doc = " Removes all node animations (aiScene::mAnimations).\n The corresponding scenegraph nodes are NOT removed.\n use the #aiProcess_OptimizeGraph step to do this"]
-    aiComponent_ANIMATIONS = 64,
-    #[doc = " Removes all embedded textures (aiScene::mTextures)"]
-    aiComponent_TEXTURES = 128,
-    #[doc = " Removes all light sources (aiScene::mLights).\n The corresponding scenegraph nodes are NOT removed.\n use the #aiProcess_OptimizeGraph step to do this"]
-    aiComponent_LIGHTS = 256,
-    #[doc = " Removes all cameras (aiScene::mCameras).\n The corresponding scenegraph nodes are NOT removed.\n use the #aiProcess_OptimizeGraph step to do this"]
-    aiComponent_CAMERAS = 512,
-    #[doc = " Removes all meshes (aiScene::mMeshes)."]
-    aiComponent_MESHES = 1024,
-    #[doc = " Removes all materials. One default material will\n be generated, so aiScene::mNumMaterials will be 1."]
-    aiComponent_MATERIALS = 2048,
-    _aiComponent_Force32Bit = 2684354559,
-}
+pub struct aiComponent(pub ::std::os::raw::c_uint);
 pub type ai_real = f32;
 pub type ai_int = ::std::os::raw::c_int;
 pub type ai_uint = ::std::os::raw::c_uint;
@@ -298,47 +299,50 @@ impl Default for aiString {
         }
     }
 }
-#[repr(i32)]
+impl aiReturn {
+    #[doc = " Indicates that a function was successful"]
+    pub const aiReturn_SUCCESS: aiReturn = aiReturn(0);
+    #[doc = " Indicates that a function failed"]
+    pub const aiReturn_FAILURE: aiReturn = aiReturn(-1);
+    #[doc = " Indicates that not enough memory was available\n to perform the requested operation"]
+    pub const aiReturn_OUTOFMEMORY: aiReturn = aiReturn(-3);
+    #[doc = " @cond never\n  Force 32-bit size enum"]
+    pub const _AI_ENFORCE_ENUM_SIZE: aiReturn = aiReturn(2147483647);
+}
+#[repr(transparent)]
 #[doc = " @brief Standard return type for some library functions.\n\n Rarely used, and if, mostly in the C API."]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
-pub enum aiReturn {
-    #[doc = " Indicates that a function was successful"]
-    aiReturn_SUCCESS = 0,
-    #[doc = " Indicates that a function failed"]
-    aiReturn_FAILURE = -1,
-    #[doc = " Indicates that not enough memory was available\n to perform the requested operation"]
-    aiReturn_OUTOFMEMORY = -3,
-    #[doc = " @cond never\n  Force 32-bit size enum"]
-    _AI_ENFORCE_ENUM_SIZE = 2147483647,
+pub struct aiReturn(pub ::std::os::raw::c_int);
+impl aiOrigin {
+    #[doc = " Beginning of the file"]
+    pub const aiOrigin_SET: aiOrigin = aiOrigin(0);
+    #[doc = " Current position of the file pointer"]
+    pub const aiOrigin_CUR: aiOrigin = aiOrigin(1);
+    #[doc = " End of the file, offsets must be negative"]
+    pub const aiOrigin_END: aiOrigin = aiOrigin(2);
+    #[doc = "  @cond never\n   Force 32-bit size enum"]
+    pub const _AI_ORIGIN_ENFORCE_ENUM_SIZE: aiOrigin = aiOrigin(2147483647);
 }
-#[repr(u32)]
+#[repr(transparent)]
 #[doc = " Seek origins (for the virtual file system API).\n  Much cooler than using SEEK_SET, SEEK_CUR or SEEK_END."]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
-pub enum aiOrigin {
-    #[doc = " Beginning of the file"]
-    aiOrigin_SET = 0,
-    #[doc = " Current position of the file pointer"]
-    aiOrigin_CUR = 1,
-    #[doc = " End of the file, offsets must be negative"]
-    aiOrigin_END = 2,
-    #[doc = "  @cond never\n   Force 32-bit size enum"]
-    _AI_ORIGIN_ENFORCE_ENUM_SIZE = 2147483647,
+pub struct aiOrigin(pub ::std::os::raw::c_uint);
+impl aiDefaultLogStream {
+    #[doc = " Stream the log to a file"]
+    pub const aiDefaultLogStream_FILE: aiDefaultLogStream = aiDefaultLogStream(1);
+    #[doc = " Stream the log to std::cout"]
+    pub const aiDefaultLogStream_STDOUT: aiDefaultLogStream = aiDefaultLogStream(2);
+    #[doc = " Stream the log to std::cerr"]
+    pub const aiDefaultLogStream_STDERR: aiDefaultLogStream = aiDefaultLogStream(4);
+    #[doc = " MSVC only: Stream the log the the debugger\n (this relies on OutputDebugString from the Win32 SDK)"]
+    pub const aiDefaultLogStream_DEBUGGER: aiDefaultLogStream = aiDefaultLogStream(8);
+    #[doc = " @cond never\n  Force 32-bit size enum"]
+    pub const _AI_DLS_ENFORCE_ENUM_SIZE: aiDefaultLogStream = aiDefaultLogStream(2147483647);
 }
-#[repr(u32)]
+#[repr(transparent)]
 #[doc = "  @brief Enumerates predefined log streaming destinations.\n\n Logging to these streams can be enabled with a single call to\n   #LogStream::createDefaultStream."]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
-pub enum aiDefaultLogStream {
-    #[doc = " Stream the log to a file"]
-    aiDefaultLogStream_FILE = 1,
-    #[doc = " Stream the log to std::cout"]
-    aiDefaultLogStream_STDOUT = 2,
-    #[doc = " Stream the log to std::cerr"]
-    aiDefaultLogStream_STDERR = 4,
-    #[doc = " MSVC only: Stream the log the the debugger\n (this relies on OutputDebugString from the Win32 SDK)"]
-    aiDefaultLogStream_DEBUGGER = 8,
-    #[doc = " @cond never\n  Force 32-bit size enum"]
-    _AI_DLS_ENFORCE_ENUM_SIZE = 2147483647,
-}
+pub struct aiDefaultLogStream(pub ::std::os::raw::c_uint);
 #[doc = " @brief Stores the memory requirements for different components (e.g. meshes, materials,\n  animations) of an import. All sizes are in bytes.\n\n  @see Importer::GetMemoryRequirements()"]
 #[repr(C)]
 #[derive(Debug, Default, Copy, Clone, Hash, PartialEq, Eq)]
@@ -378,21 +382,22 @@ impl Default for aiBuffer {
         }
     }
 }
-#[repr(u32)]
+impl aiImporterFlags {
+    #[doc = " Indicates that there is a textual encoding of the\n  file format; and that it is supported."]
+    pub const aiImporterFlags_SupportTextFlavour: aiImporterFlags = aiImporterFlags(1);
+    #[doc = " Indicates that there is a binary encoding of the\n  file format; and that it is supported."]
+    pub const aiImporterFlags_SupportBinaryFlavour: aiImporterFlags = aiImporterFlags(2);
+    #[doc = " Indicates that there is a compressed encoding of the\n  file format; and that it is supported."]
+    pub const aiImporterFlags_SupportCompressedFlavour: aiImporterFlags = aiImporterFlags(4);
+    #[doc = " Indicates that the importer reads only a very particular\n subset of the file format. This happens commonly for\n declarative or procedural formats which cannot easily\n be mapped to #aiScene"]
+    pub const aiImporterFlags_LimitedSupport: aiImporterFlags = aiImporterFlags(8);
+    #[doc = " Indicates that the importer is highly experimental and\n should be used with care. This only happens for trunk\n (i.e. SVN) versions, experimental code is not included\n in releases."]
+    pub const aiImporterFlags_Experimental: aiImporterFlags = aiImporterFlags(16);
+}
+#[repr(transparent)]
 #[doc = " Mixed set of flags for #aiImporterDesc, indicating some features\n  common to many importers"]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
-pub enum aiImporterFlags {
-    #[doc = " Indicates that there is a textual encoding of the\n  file format; and that it is supported."]
-    aiImporterFlags_SupportTextFlavour = 1,
-    #[doc = " Indicates that there is a binary encoding of the\n  file format; and that it is supported."]
-    aiImporterFlags_SupportBinaryFlavour = 2,
-    #[doc = " Indicates that there is a compressed encoding of the\n  file format; and that it is supported."]
-    aiImporterFlags_SupportCompressedFlavour = 4,
-    #[doc = " Indicates that the importer reads only a very particular\n subset of the file format. This happens commonly for\n declarative or procedural formats which cannot easily\n be mapped to #aiScene"]
-    aiImporterFlags_LimitedSupport = 8,
-    #[doc = " Indicates that the importer is highly experimental and\n should be used with care. This only happens for trunk\n (i.e. SVN) versions, experimental code is not included\n in releases."]
-    aiImporterFlags_Experimental = 16,
-}
+pub struct aiImporterFlags(pub ::std::os::raw::c_uint);
 #[doc = " Meta information about a particular importer. Importers need to fill\n  this structure, but they can freely decide how talkative they are.\n  A common use case for loader meta info is a user interface\n  in which the user can choose between various import/export file\n  formats. Building such an UI by hand means a lot of maintenance\n  as importers/exporters are added to Assimp, so it might be useful\n  to have a common mechanism to query some rough importer\n  characteristics."]
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
@@ -509,7 +514,7 @@ unsafe extern "C" {
     ) -> *const aiScene;
 }
 unsafe extern "C" {
-    #[doc = " Get one of the predefine log streams. This is the quick'n'easy solution to\n  access Assimp's log system. Attaching a log stream can slightly reduce Assimp's\n  overall import performance.\n\n  Usage is rather simple (this will stream the log to a file, named log.txt, and\n  the stdout stream of the process:\n  @code\n    struct aiLogStream c;\n    c = aiGetPredefinedLogStream(aiDefaultLogStream_FILE,\"log.txt\");\n    aiAttachLogStream(&c);\n    c = aiGetPredefinedLogStream(aiDefaultLogStream_STDOUT,NULL);\n    aiAttachLogStream(&c);\n  @endcode\n\n  @param pStreams One of the #aiDefaultLogStream enumerated values.\n  @param file Solely for the #aiDefaultLogStream_FILE flag: specifies the file to write to.\n    Pass NULL for all other flags.\n  @return The log stream. callback is set to NULL if something went wrong."]
+    #[doc = " Get one of the predefine log streams. This is the quick'n'easy solution to\n  access Assimp's log system. Attaching a log stream can slightly reduce Assimp's\n  overall import performance.\n\n  Usage is rather simple (this will stream the log to a file, named log.txt, and\n  the stdout stream of the process:\n  \n```text\n\n    struct aiLogStream c;\n    c = aiGetPredefinedLogStream(aiDefaultLogStream_FILE,\"log.txt\");\n    aiAttachLogStream(&c);\n    c = aiGetPredefinedLogStream(aiDefaultLogStream_STDOUT,NULL);\n    aiAttachLogStream(&c);\n  \n```\n\n\n  @param pStreams One of the #aiDefaultLogStream enumerated values.\n  @param file Solely for the #aiDefaultLogStream_FILE flag: specifies the file to write to.\n    Pass NULL for all other flags.\n  @return The log stream. callback is set to NULL if something went wrong."]
     pub fn aiGetPredefinedLogStream(
         pStreams: aiDefaultLogStream,
         file: *const ::std::os::raw::c_char,
@@ -1024,7 +1029,7 @@ pub struct aiAABB {
     pub mMin: aiVector3D,
     pub mMax: aiVector3D,
 }
-#[doc = " @brief A single face in a mesh, referring to multiple vertices.\n\n If mNumIndices is 3, we call the face 'triangle', for mNumIndices > 3\n it's called 'polygon' (hey, that's just a definition!).\n <br>\n aiMesh::mPrimitiveTypes can be queried to quickly examine which types of\n primitive are actually present in a mesh. The #aiProcess_SortByPType flag\n executes a special post-processing algorithm which splits meshes with\n *different* primitive types mixed up (e.g. lines and triangles) in several\n 'clean' sub-meshes. Furthermore there is a configuration option (\n #AI_CONFIG_PP_SBP_REMOVE) to force #aiProcess_SortByPType to remove\n specific kinds of primitives from the imported scene, completely and forever.\n In many cases you'll probably want to set this setting to\n @code\n aiPrimitiveType_LINE|aiPrimitiveType_POINT\n @endcode\n Together with the #aiProcess_Triangulate flag you can then be sure that\n #aiFace::mNumIndices is always 3.\n @note Take a look at the @link data Data Structures page @endlink for\n more information on the layout and winding order of a face."]
+#[doc = " @brief A single face in a mesh, referring to multiple vertices.\n\n If mNumIndices is 3, we call the face 'triangle', for mNumIndices > 3\n it's called 'polygon' (hey, that's just a definition!).\n <br>\n aiMesh::mPrimitiveTypes can be queried to quickly examine which types of\n primitive are actually present in a mesh. The #aiProcess_SortByPType flag\n executes a special post-processing algorithm which splits meshes with\n *different* primitive types mixed up (e.g. lines and triangles) in several\n 'clean' sub-meshes. Furthermore there is a configuration option (\n #AI_CONFIG_PP_SBP_REMOVE) to force #aiProcess_SortByPType to remove\n specific kinds of primitives from the imported scene, completely and forever.\n In many cases you'll probably want to set this setting to\n \n```text\n\n aiPrimitiveType_LINE|aiPrimitiveType_POINT\n \n```\n\n Together with the #aiProcess_Triangulate flag you can then be sure that\n #aiFace::mNumIndices is always 3.\n @note Take a look at the @link data Data Structures page @endlink for\n more information on the layout and winding order of a face."]
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct aiFace {
@@ -1077,22 +1082,23 @@ impl Default for aiBone {
         }
     }
 }
-#[repr(u32)]
+impl aiPrimitiveType {
+    #[doc = " @brief A point primitive.\n\n This is just a single vertex in the virtual world,\n #aiFace contains just one index for such a primitive."]
+    pub const aiPrimitiveType_POINT: aiPrimitiveType = aiPrimitiveType(1);
+    #[doc = " @brief A line primitive.\n\n This is a line defined through a start and an end position.\n #aiFace contains exactly two indices for such a primitive."]
+    pub const aiPrimitiveType_LINE: aiPrimitiveType = aiPrimitiveType(2);
+    #[doc = " @brief A triangular primitive.\n\n A triangle consists of three indices."]
+    pub const aiPrimitiveType_TRIANGLE: aiPrimitiveType = aiPrimitiveType(4);
+    #[doc = " @brief A higher-level polygon with more than 3 edges.\n\n A triangle is a polygon, but polygon in this context means\n \"all polygons that are not triangles\". The \"Triangulate\"-Step\n is provided for your convenience, it splits all polygons in\n triangles (which are much easier to handle)."]
+    pub const aiPrimitiveType_POLYGON: aiPrimitiveType = aiPrimitiveType(8);
+    #[doc = " @brief A flag to determine whether this triangles only mesh is NGON encoded.\n\n NGON encoding is a special encoding that tells whether 2 or more consecutive triangles\n should be considered as a triangle fan. This is identified by looking at the first vertex index.\n 2 consecutive triangles with the same 1st vertex index are part of the same\n NGON.\n\n At the moment, only quads (concave or convex) are supported, meaning that polygons are 'seen' as\n triangles, as usual after a triangulation pass.\n\n To get an NGON encoded mesh, please use the aiProcess_Triangulate post process.\n\n @see aiProcess_Triangulate\n @link https://github.com/KhronosGroup/glTF/pull/1620"]
+    pub const aiPrimitiveType_NGONEncodingFlag: aiPrimitiveType = aiPrimitiveType(16);
+    pub const _aiPrimitiveType_Force32Bit: aiPrimitiveType = aiPrimitiveType(2147483647);
+}
+#[repr(transparent)]
 #[doc = " @brief Enumerates the types of geometric primitives supported by Assimp.\n\n  @see aiFace Face data structure\n  @see aiProcess_SortByPType Per-primitive sorting of meshes\n  @see aiProcess_Triangulate Automatic triangulation\n  @see AI_CONFIG_PP_SBP_REMOVE Removal of specific primitive types."]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
-pub enum aiPrimitiveType {
-    #[doc = " @brief A point primitive.\n\n This is just a single vertex in the virtual world,\n #aiFace contains just one index for such a primitive."]
-    aiPrimitiveType_POINT = 1,
-    #[doc = " @brief A line primitive.\n\n This is a line defined through a start and an end position.\n #aiFace contains exactly two indices for such a primitive."]
-    aiPrimitiveType_LINE = 2,
-    #[doc = " @brief A triangular primitive.\n\n A triangle consists of three indices."]
-    aiPrimitiveType_TRIANGLE = 4,
-    #[doc = " @brief A higher-level polygon with more than 3 edges.\n\n A triangle is a polygon, but polygon in this context means\n \"all polygons that are not triangles\". The \"Triangulate\"-Step\n is provided for your convenience, it splits all polygons in\n triangles (which are much easier to handle)."]
-    aiPrimitiveType_POLYGON = 8,
-    #[doc = " @brief A flag to determine whether this triangles only mesh is NGON encoded.\n\n NGON encoding is a special encoding that tells whether 2 or more consecutive triangles\n should be considered as a triangle fan. This is identified by looking at the first vertex index.\n 2 consecutive triangles with the same 1st vertex index are part of the same\n NGON.\n\n At the moment, only quads (concave or convex) are supported, meaning that polygons are 'seen' as\n triangles, as usual after a triangulation pass.\n\n To get an NGON encoded mesh, please use the aiProcess_Triangulate post process.\n\n @see aiProcess_Triangulate\n @link https://github.com/KhronosGroup/glTF/pull/1620"]
-    aiPrimitiveType_NGONEncodingFlag = 16,
-    _aiPrimitiveType_Force32Bit = 2147483647,
-}
+pub struct aiPrimitiveType(pub ::std::os::raw::c_uint);
 #[doc = " @brief An AnimMesh is an attachment to an #aiMesh stores per-vertex\n  animations for a particular frame.\n\n  You may think of an #aiAnimMesh as a `patch` for the host mesh, which\n  replaces only certain vertex data streams at a particular time.\n  Each mesh stores n attached attached meshes (#aiMesh::mAnimMeshes).\n  The actual relationship between the time line and anim meshes is\n  established by #aiMeshAnim, which references singular mesh attachments\n  by their ID and binds them to a time offset."]
 #[repr(C)]
 #[derive(Debug, Copy, Clone, PartialEq)]
@@ -1125,21 +1131,22 @@ impl Default for aiAnimMesh {
         }
     }
 }
-#[repr(u32)]
+impl aiMorphingMethod {
+    #[doc = " Morphing method to be determined"]
+    pub const aiMorphingMethod_UNKNOWN: aiMorphingMethod = aiMorphingMethod(0);
+    #[doc = " Interpolation between morph targets"]
+    pub const aiMorphingMethod_VERTEX_BLEND: aiMorphingMethod = aiMorphingMethod(1);
+    #[doc = " Normalized morphing between morph targets"]
+    pub const aiMorphingMethod_MORPH_NORMALIZED: aiMorphingMethod = aiMorphingMethod(2);
+    #[doc = " Relative morphing between morph targets"]
+    pub const aiMorphingMethod_MORPH_RELATIVE: aiMorphingMethod = aiMorphingMethod(3);
+    pub const _aiMorphingMethod_Force32Bit: aiMorphingMethod = aiMorphingMethod(2147483647);
+}
+#[repr(transparent)]
 #[doc = " @brief Enumerates the methods of mesh morphing supported by Assimp."]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
-pub enum aiMorphingMethod {
-    #[doc = " Morphing method to be determined"]
-    aiMorphingMethod_UNKNOWN = 0,
-    #[doc = " Interpolation between morph targets"]
-    aiMorphingMethod_VERTEX_BLEND = 1,
-    #[doc = " Normalized morphing between morph targets"]
-    aiMorphingMethod_MORPH_NORMALIZED = 2,
-    #[doc = " Relative morphing between morph targets"]
-    aiMorphingMethod_MORPH_RELATIVE = 3,
-    _aiMorphingMethod_Force32Bit = 2147483647,
-}
-#[doc = " @brief A mesh represents a geometry or model with a single material.\n\n It usually consists of a number of vertices and a series of primitives/faces\n referencing the vertices. In addition there might be a series of bones, each\n of them addressing a number of vertices with a certain weight. Vertex data\n is presented in channels with each channel containing a single per-vertex\n information such as a set of texture coordinates or a normal vector.\n If a data pointer is non-null, the corresponding data stream is present.\n From C++-programs you can also use the comfort functions Has*() to\n test for the presence of various data streams.\n\n A Mesh uses only a single material which is referenced by a material ID.\n @note The mPositions member is usually not optional. However, vertex positions\n *could* be missing if the #AI_SCENE_FLAGS_INCOMPLETE flag is set in\n @code\n aiScene::mFlags\n @endcode"]
+pub struct aiMorphingMethod(pub ::std::os::raw::c_uint);
+#[doc = " @brief A mesh represents a geometry or model with a single material.\n\n It usually consists of a number of vertices and a series of primitives/faces\n referencing the vertices. In addition there might be a series of bones, each\n of them addressing a number of vertices with a certain weight. Vertex data\n is presented in channels with each channel containing a single per-vertex\n information such as a set of texture coordinates or a normal vector.\n If a data pointer is non-null, the corresponding data stream is present.\n From C++-programs you can also use the comfort functions Has*() to\n test for the presence of various data streams.\n\n A Mesh uses only a single material which is referenced by a material ID.\n @note The mPositions member is usually not optional. However, vertex positions\n *could* be missing if the #AI_SCENE_FLAGS_INCOMPLETE flag is set in\n \n```text\n\n aiScene::mFlags\n \n```\n"]
 #[repr(C)]
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct aiMesh {
@@ -1151,7 +1158,7 @@ pub struct aiMesh {
     pub mNumFaces: ::std::os::raw::c_uint,
     #[doc = " @brief Vertex positions.\n\n This array is always present in a mesh. The array is\n mNumVertices in size."]
     pub mVertices: *mut aiVector3D,
-    #[doc = " @brief Vertex normals.\n\n The array contains normalized vectors, nullptr if not present.\n The array is mNumVertices in size. Normals are undefined for\n point and line primitives. A mesh consisting of points and\n lines only may not have normal vectors. Meshes with mixed\n primitive types (i.e. lines and triangles) may have normals,\n but the normals for vertices that are only referenced by\n point or line primitives are undefined and set to QNaN (WARN:\n qNaN compares to inequal to *everything*, even to qNaN itself.\n Using code like this to check whether a field is qnan is:\n @code\n #define IS_QNAN(f) (f != f)\n @endcode\n still dangerous because even 1.f == 1.f could evaluate to false! (\n remember the subtleties of IEEE754 artithmetics). Use stuff like\n @c fpclassify instead.\n @note Normal vectors computed by Assimp are always unit-length.\n However, this needn't apply for normals that have been taken\n directly from the model file."]
+    #[doc = " @brief Vertex normals.\n\n The array contains normalized vectors, nullptr if not present.\n The array is mNumVertices in size. Normals are undefined for\n point and line primitives. A mesh consisting of points and\n lines only may not have normal vectors. Meshes with mixed\n primitive types (i.e. lines and triangles) may have normals,\n but the normals for vertices that are only referenced by\n point or line primitives are undefined and set to QNaN (WARN:\n qNaN compares to inequal to *everything*, even to qNaN itself.\n Using code like this to check whether a field is qnan is:\n \n```text\n\n #define IS_QNAN(f) (f != f)\n \n```\n\n still dangerous because even 1.f == 1.f could evaluate to false! (\n remember the subtleties of IEEE754 artithmetics). Use stuff like\n @c fpclassify instead.\n @note Normal vectors computed by Assimp are always unit-length.\n However, this needn't apply for normals that have been taken\n directly from the model file."]
     pub mNormals: *mut aiVector3D,
     #[doc = " @brief Vertex tangents.\n\n The tangent of a vertex points in the direction of the positive\n X texture axis. The array contains normalized vectors, nullptr if\n not present. The array is mNumVertices in size. A mesh consisting\n of points and lines only may not have normal vectors. Meshes with\n mixed primitive types (i.e. lines and triangles) may have\n normals, but the normals for vertices that are only referenced by\n point or line primitives are undefined and set to qNaN.  See\n the #mNormals member for a detailed discussion of qNaNs.\n @note If the mesh contains tangents, it automatically also\n contains bitangents."]
     pub mTangents: *mut aiVector3D,
@@ -1243,23 +1250,24 @@ impl Default for aiSkeleton {
         }
     }
 }
-#[repr(u32)]
+impl aiLightSourceType {
+    pub const aiLightSource_UNDEFINED: aiLightSourceType = aiLightSourceType(0);
+    #[doc = "! A directional light source has a well-defined direction\n! but is infinitely far away. That's quite a good\n! approximation for sun light."]
+    pub const aiLightSource_DIRECTIONAL: aiLightSourceType = aiLightSourceType(1);
+    #[doc = "! A point light source has a well-defined position\n! in space but no direction - it emits light in all\n! directions. A normal bulb is a point light."]
+    pub const aiLightSource_POINT: aiLightSourceType = aiLightSourceType(2);
+    #[doc = "! A spot light source emits light in a specific\n! angle. It has a position and a direction it is pointing to.\n! A good example for a spot light is a light spot in\n! sport arenas."]
+    pub const aiLightSource_SPOT: aiLightSourceType = aiLightSourceType(3);
+    #[doc = "! The generic light level of the world, including the bounces\n! of all other light sources.\n! Typically, there's at most one ambient light in a scene.\n! This light type doesn't have a valid position, direction, or\n! other properties, just a color."]
+    pub const aiLightSource_AMBIENT: aiLightSourceType = aiLightSourceType(4);
+    #[doc = "! An area light is a rectangle with predefined size that uniformly\n! emits light from one of its sides. The position is center of the\n! rectangle and direction is its normal vector."]
+    pub const aiLightSource_AREA: aiLightSourceType = aiLightSourceType(5);
+    pub const _aiLightSource_Force32Bit: aiLightSourceType = aiLightSourceType(2147483647);
+}
+#[repr(transparent)]
 #[doc = " Enumerates all supported types of light sources."]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
-pub enum aiLightSourceType {
-    aiLightSource_UNDEFINED = 0,
-    #[doc = "! A directional light source has a well-defined direction\n! but is infinitely far away. That's quite a good\n! approximation for sun light."]
-    aiLightSource_DIRECTIONAL = 1,
-    #[doc = "! A point light source has a well-defined position\n! in space but no direction - it emits light in all\n! directions. A normal bulb is a point light."]
-    aiLightSource_POINT = 2,
-    #[doc = "! A spot light source emits light in a specific\n! angle. It has a position and a direction it is pointing to.\n! A good example for a spot light is a light spot in\n! sport arenas."]
-    aiLightSource_SPOT = 3,
-    #[doc = "! The generic light level of the world, including the bounces\n! of all other light sources.\n! Typically, there's at most one ambient light in a scene.\n! This light type doesn't have a valid position, direction, or\n! other properties, just a color."]
-    aiLightSource_AMBIENT = 4,
-    #[doc = "! An area light is a rectangle with predefined size that uniformly\n! emits light from one of its sides. The position is center of the\n! rectangle and direction is its normal vector."]
-    aiLightSource_AREA = 5,
-    _aiLightSource_Force32Bit = 2147483647,
-}
+pub struct aiLightSourceType(pub ::std::os::raw::c_uint);
 #[doc = " Helper structure to describe a light source.\n\n  Assimp supports multiple sorts of light sources, including\n  directional, point and spot lights. All of them are defined with just\n  a single structure and distinguished by their parameters.\n  Note - some file formats (such as 3DS, ASE) export a \"target point\" -\n  the point a spot light is looking at (it can even be animated). Assimp\n  writes the target point as a sub-node of a spot-lights's main node,\n  called \"<spotName>.Target\". However, this is just additional information\n  then, the transformation tracks of the main node make the\n  spot light already point in the right direction."]
 #[repr(C)]
 #[derive(Debug, Copy, Clone, PartialEq)]
@@ -1274,11 +1282,11 @@ pub struct aiLight {
     pub mDirection: aiVector3D,
     #[doc = " Up direction of the light source in space. Relative to the\n  transformation of the node corresponding to the light.\n\n  The direction is undefined for point lights. The vector\n  may be normalized, but it needn't."]
     pub mUp: aiVector3D,
-    #[doc = " Constant light attenuation factor.\n\n  The intensity of the light source at a given distance 'd' from\n  the light's position is\n  @code\n  Atten = 1/( att0 + att1 * d + att2 * d*d)\n  @endcode\n  This member corresponds to the att0 variable in the equation.\n  Naturally undefined for directional lights."]
+    #[doc = " Constant light attenuation factor.\n\n  The intensity of the light source at a given distance 'd' from\n  the light's position is\n  \n```text\n\n  Atten = 1/( att0 + att1 * d + att2 * d*d)\n  \n```\n\n  This member corresponds to the att0 variable in the equation.\n  Naturally undefined for directional lights."]
     pub mAttenuationConstant: f32,
-    #[doc = " Linear light attenuation factor.\n\n  The intensity of the light source at a given distance 'd' from\n  the light's position is\n  @code\n  Atten = 1/( att0 + att1 * d + att2 * d*d)\n  @endcode\n  This member corresponds to the att1 variable in the equation.\n  Naturally undefined for directional lights."]
+    #[doc = " Linear light attenuation factor.\n\n  The intensity of the light source at a given distance 'd' from\n  the light's position is\n  \n```text\n\n  Atten = 1/( att0 + att1 * d + att2 * d*d)\n  \n```\n\n  This member corresponds to the att1 variable in the equation.\n  Naturally undefined for directional lights."]
     pub mAttenuationLinear: f32,
-    #[doc = " Quadratic light attenuation factor.\n\n  The intensity of the light source at a given distance 'd' from\n  the light's position is\n  @code\n  Atten = 1/( att0 + att1 * d + att2 * d*d)\n  @endcode\n  This member corresponds to the att2 variable in the equation.\n  Naturally undefined for directional lights."]
+    #[doc = " Quadratic light attenuation factor.\n\n  The intensity of the light source at a given distance 'd' from\n  the light's position is\n  \n```text\n\n  Atten = 1/( att0 + att1 * d + att2 * d*d)\n  \n```\n\n  This member corresponds to the att2 variable in the equation.\n  Naturally undefined for directional lights."]
     pub mAttenuationQuadratic: f32,
     #[doc = " Diffuse color of the light source\n\n  The diffuse light color is multiplied with the diffuse\n  material color to obtain the final color that contributes\n  to the diffuse shading term."]
     pub mColorDiffuse: aiColor3D,
@@ -1302,7 +1310,7 @@ impl Default for aiLight {
         }
     }
 }
-#[doc = " Helper structure to describe a virtual camera.\n\n Cameras have a representation in the node graph and can be animated.\n An important aspect is that the camera itself is also part of the\n scene-graph. This means, any values such as the look-at vector are not\n *absolute*, they're <b>relative</b> to the coordinate system defined\n by the node which corresponds to the camera. This allows for camera\n animations. For static cameras parameters like the 'look-at' or 'up' vectors\n are usually specified directly in aiCamera, but beware, they could also\n be encoded in the node transformation. The following (pseudo)code sample\n shows how to do it: <br><br>\n @code\n // Get the camera matrix for a camera at a specific time\n // if the node hierarchy for the camera does not contain\n // at least one animated node this is a static computation\n get-camera-matrix (node sceneRoot, camera cam) : matrix\n {\n    node   cnd = find-node-for-camera(cam)\n    matrix cmt = identity()\n\n    // as usual - get the absolute camera transformation for this frame\n    for each node nd in hierarchy from sceneRoot to cnd\n      matrix cur\n      if (is-animated(nd))\n         cur = eval-animation(nd)\n      else cur = nd->mTransformation;\n      cmt = mult-matrices( cmt, cur )\n    end for\n\n    // now multiply with the camera's own local transform\n    cam = mult-matrices (cam, get-camera-matrix(cmt) )\n }\n @endcode\n\n @note some file formats (such as 3DS, ASE) export a \"target point\" -\n the point the camera is looking at (it can even be animated). Assimp\n writes the target point as a subnode of the camera's main node,\n called \"<camName>.Target\". However this is just additional information\n then the transformation tracks of the camera main node make the\n camera already look in the right direction."]
+#[doc = " Helper structure to describe a virtual camera.\n\n Cameras have a representation in the node graph and can be animated.\n An important aspect is that the camera itself is also part of the\n scene-graph. This means, any values such as the look-at vector are not\n *absolute*, they're <b>relative</b> to the coordinate system defined\n by the node which corresponds to the camera. This allows for camera\n animations. For static cameras parameters like the 'look-at' or 'up' vectors\n are usually specified directly in aiCamera, but beware, they could also\n be encoded in the node transformation. The following (pseudo)code sample\n shows how to do it: <br><br>\n \n```text\n\n // Get the camera matrix for a camera at a specific time\n // if the node hierarchy for the camera does not contain\n // at least one animated node this is a static computation\n get-camera-matrix (node sceneRoot, camera cam) : matrix\n {\n    node   cnd = find-node-for-camera(cam)\n    matrix cmt = identity()\n\n    // as usual - get the absolute camera transformation for this frame\n    for each node nd in hierarchy from sceneRoot to cnd\n      matrix cur\n      if (is-animated(nd))\n         cur = eval-animation(nd)\n      else cur = nd->mTransformation;\n      cmt = mult-matrices( cmt, cur )\n    end for\n\n    // now multiply with the camera's own local transform\n    cam = mult-matrices (cam, get-camera-matrix(cmt) )\n }\n \n```\n\n\n @note some file formats (such as 3DS, ASE) export a \"target point\" -\n the point the camera is looking at (it can even be animated). Assimp\n writes the target point as a subnode of the camera's main node,\n called \"<camName>.Target\". However this is just additional information\n then the transformation tracks of the camera main node make the\n camera already look in the right direction."]
 #[repr(C)]
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct aiCamera {
@@ -1334,175 +1342,181 @@ impl Default for aiCamera {
         }
     }
 }
-#[repr(u32)]
-#[doc = " @brief Defines how the Nth texture of a specific type is combined with\n  the result of all previous layers.\n\n  Example (left: key, right: value): <br>\n  @code\n  DiffColor0     - gray\n  DiffTextureOp0 - aiTextureOpMultiply\n  DiffTexture0   - tex1.png\n  DiffTextureOp0 - aiTextureOpAdd\n  DiffTexture1   - tex2.png\n  @endcode\n  Written as equation, the final diffuse term for a specific pixel would be:\n  @code\n  diffFinal = DiffColor0 * sampleTex(DiffTexture0,UV0) +\n     sampleTex(DiffTexture1,UV0) * diffContrib;\n  @endcode\n  where 'diffContrib' is the intensity of the incoming light for that pixel."]
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
-pub enum aiTextureOp {
+impl aiTextureOp {
     #[doc = " T = T1 * T2"]
-    aiTextureOp_Multiply = 0,
+    pub const aiTextureOp_Multiply: aiTextureOp = aiTextureOp(0);
     #[doc = " T = T1 + T2"]
-    aiTextureOp_Add = 1,
+    pub const aiTextureOp_Add: aiTextureOp = aiTextureOp(1);
     #[doc = " T = T1 - T2"]
-    aiTextureOp_Subtract = 2,
+    pub const aiTextureOp_Subtract: aiTextureOp = aiTextureOp(2);
     #[doc = " T = T1 / T2"]
-    aiTextureOp_Divide = 3,
+    pub const aiTextureOp_Divide: aiTextureOp = aiTextureOp(3);
     #[doc = " T = (T1 + T2) - (T1 * T2)"]
-    aiTextureOp_SmoothAdd = 4,
+    pub const aiTextureOp_SmoothAdd: aiTextureOp = aiTextureOp(4);
     #[doc = " T = T1 + (T2-0.5)"]
-    aiTextureOp_SignedAdd = 5,
-    _aiTextureOp_Force32Bit = 2147483647,
+    pub const aiTextureOp_SignedAdd: aiTextureOp = aiTextureOp(5);
+    pub const _aiTextureOp_Force32Bit: aiTextureOp = aiTextureOp(2147483647);
 }
-#[repr(u32)]
+#[repr(transparent)]
+#[doc = " @brief Defines how the Nth texture of a specific type is combined with\n  the result of all previous layers.\n\n  Example (left: key, right: value): <br>\n  \n```text\n\n  DiffColor0     - gray\n  DiffTextureOp0 - aiTextureOpMultiply\n  DiffTexture0   - tex1.png\n  DiffTextureOp0 - aiTextureOpAdd\n  DiffTexture1   - tex2.png\n  \n```\n\n  Written as equation, the final diffuse term for a specific pixel would be:\n  \n```text\n\n  diffFinal = DiffColor0 * sampleTex(DiffTexture0,UV0) +\n     sampleTex(DiffTexture1,UV0) * diffContrib;\n  \n```\n\n  where 'diffContrib' is the intensity of the incoming light for that pixel."]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct aiTextureOp(pub ::std::os::raw::c_uint);
+impl aiTextureMapMode {
+    #[doc = " A texture coordinate u|v is translated to u%1|v%1"]
+    pub const aiTextureMapMode_Wrap: aiTextureMapMode = aiTextureMapMode(0);
+    #[doc = " Texture coordinates outside [0...1]\n  are clamped to the nearest valid value."]
+    pub const aiTextureMapMode_Clamp: aiTextureMapMode = aiTextureMapMode(1);
+    #[doc = " If the texture coordinates for a pixel are outside [0...1]\n  the texture is not applied to that pixel"]
+    pub const aiTextureMapMode_Decal: aiTextureMapMode = aiTextureMapMode(3);
+    #[doc = " A texture coordinate u|v becomes u%1|v%1 if (u-(u%1))%2 is zero and\n  1-(u%1)|1-(v%1) otherwise"]
+    pub const aiTextureMapMode_Mirror: aiTextureMapMode = aiTextureMapMode(2);
+    pub const _aiTextureMapMode_Force32Bit: aiTextureMapMode = aiTextureMapMode(2147483647);
+}
+#[repr(transparent)]
 #[doc = " @brief Defines how UV coordinates outside the [0...1] range are handled.\n\n  Commonly referred to as 'wrapping mode'."]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
-pub enum aiTextureMapMode {
-    #[doc = " A texture coordinate u|v is translated to u%1|v%1"]
-    aiTextureMapMode_Wrap = 0,
-    #[doc = " Texture coordinates outside [0...1]\n  are clamped to the nearest valid value."]
-    aiTextureMapMode_Clamp = 1,
-    #[doc = " If the texture coordinates for a pixel are outside [0...1]\n  the texture is not applied to that pixel"]
-    aiTextureMapMode_Decal = 3,
-    #[doc = " A texture coordinate u|v becomes u%1|v%1 if (u-(u%1))%2 is zero and\n  1-(u%1)|1-(v%1) otherwise"]
-    aiTextureMapMode_Mirror = 2,
-    _aiTextureMapMode_Force32Bit = 2147483647,
+pub struct aiTextureMapMode(pub ::std::os::raw::c_uint);
+impl aiTextureMapping {
+    #[doc = " The mapping coordinates are taken from an UV channel.\n\n  #AI_MATKEY_UVWSRC property specifies from which UV channel\n  the texture coordinates are to be taken from (remember,\n  meshes can have more than one UV channel)."]
+    pub const aiTextureMapping_UV: aiTextureMapping = aiTextureMapping(0);
+    #[doc = " Spherical mapping"]
+    pub const aiTextureMapping_SPHERE: aiTextureMapping = aiTextureMapping(1);
+    #[doc = " Cylindrical mapping"]
+    pub const aiTextureMapping_CYLINDER: aiTextureMapping = aiTextureMapping(2);
+    #[doc = " Cubic mapping"]
+    pub const aiTextureMapping_BOX: aiTextureMapping = aiTextureMapping(3);
+    #[doc = " Planar mapping"]
+    pub const aiTextureMapping_PLANE: aiTextureMapping = aiTextureMapping(4);
+    #[doc = " Undefined mapping. Have fun."]
+    pub const aiTextureMapping_OTHER: aiTextureMapping = aiTextureMapping(5);
+    pub const _aiTextureMapping_Force32Bit: aiTextureMapping = aiTextureMapping(2147483647);
 }
-#[repr(u32)]
+#[repr(transparent)]
 #[doc = " @brief Defines how the mapping coords for a texture are generated.\n\n  Real-time applications typically require full UV coordinates, so the use of\n  the aiProcess_GenUVCoords step is highly recommended. It generates proper\n  UV channels for non-UV mapped objects, as long as an accurate description\n  how the mapping should look like (e.g spherical) is given.\n  See the #AI_MATKEY_MAPPING property for more details."]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
-pub enum aiTextureMapping {
-    #[doc = " The mapping coordinates are taken from an UV channel.\n\n  #AI_MATKEY_UVWSRC property specifies from which UV channel\n  the texture coordinates are to be taken from (remember,\n  meshes can have more than one UV channel)."]
-    aiTextureMapping_UV = 0,
-    #[doc = " Spherical mapping"]
-    aiTextureMapping_SPHERE = 1,
-    #[doc = " Cylindrical mapping"]
-    aiTextureMapping_CYLINDER = 2,
-    #[doc = " Cubic mapping"]
-    aiTextureMapping_BOX = 3,
-    #[doc = " Planar mapping"]
-    aiTextureMapping_PLANE = 4,
-    #[doc = " Undefined mapping. Have fun."]
-    aiTextureMapping_OTHER = 5,
-    _aiTextureMapping_Force32Bit = 2147483647,
+pub struct aiTextureMapping(pub ::std::os::raw::c_uint);
+impl aiTextureType {
+    #[doc = " Dummy value.\n\n  No texture, but the value to be used as 'texture semantic'\n  (#aiMaterialProperty::mSemantic) for all material properties\n  *not* related to textures."]
+    pub const aiTextureType_NONE: aiTextureType = aiTextureType(0);
+    #[doc = " The texture is combined with the result of the diffuse\n  lighting equation.\n  OR\n  PBR Specular/Glossiness"]
+    pub const aiTextureType_DIFFUSE: aiTextureType = aiTextureType(1);
+    #[doc = " The texture is combined with the result of the specular\n  lighting equation.\n  OR\n  PBR Specular/Glossiness"]
+    pub const aiTextureType_SPECULAR: aiTextureType = aiTextureType(2);
+    #[doc = " The texture is combined with the result of the ambient\n  lighting equation."]
+    pub const aiTextureType_AMBIENT: aiTextureType = aiTextureType(3);
+    #[doc = " The texture is added to the result of the lighting\n  calculation. It isn't influenced by incoming light."]
+    pub const aiTextureType_EMISSIVE: aiTextureType = aiTextureType(4);
+    #[doc = " The texture is a height map.\n\n  By convention, higher gray-scale values stand for\n  higher elevations from the base height."]
+    pub const aiTextureType_HEIGHT: aiTextureType = aiTextureType(5);
+    #[doc = " The texture is a (tangent space) normal-map.\n\n  Again, there are several conventions for tangent-space\n  normal maps. Assimp does (intentionally) not\n  distinguish here."]
+    pub const aiTextureType_NORMALS: aiTextureType = aiTextureType(6);
+    #[doc = " The texture defines the glossiness of the material.\n\n  The glossiness is in fact the exponent of the specular\n  (phong) lighting equation. Usually there is a conversion\n  function defined to map the linear color values in the\n  texture to a suitable exponent. Have fun."]
+    pub const aiTextureType_SHININESS: aiTextureType = aiTextureType(7);
+    #[doc = " The texture defines per-pixel opacity.\n\n  Usually 'white' means opaque and 'black' means\n  'transparency'. Or quite the opposite. Have fun."]
+    pub const aiTextureType_OPACITY: aiTextureType = aiTextureType(8);
+    #[doc = " Displacement texture\n\n  The exact purpose and format is application-dependent.\n  Higher color values stand for higher vertex displacements."]
+    pub const aiTextureType_DISPLACEMENT: aiTextureType = aiTextureType(9);
+    #[doc = " Lightmap texture (aka Ambient Occlusion)\n\n  Both 'Lightmaps' and dedicated 'ambient occlusion maps' are\n  covered by this material property. The texture contains a\n  scaling value for the final color value of a pixel. Its\n  intensity is not affected by incoming light."]
+    pub const aiTextureType_LIGHTMAP: aiTextureType = aiTextureType(10);
+    #[doc = " Reflection texture\n\n Contains the color of a perfect mirror reflection.\n Rarely used, almost never for real-time applications."]
+    pub const aiTextureType_REFLECTION: aiTextureType = aiTextureType(11);
+    #[doc = " PBR Materials\n PBR definitions from maya and other modelling packages now use this standard.\n This was originally introduced around 2012.\n Support for this is in game engines like Godot, Unreal or Unity3D.\n Modelling packages which use this are very common now."]
+    pub const aiTextureType_BASE_COLOR: aiTextureType = aiTextureType(12);
+    #[doc = " PBR Materials\n PBR definitions from maya and other modelling packages now use this standard.\n This was originally introduced around 2012.\n Support for this is in game engines like Godot, Unreal or Unity3D.\n Modelling packages which use this are very common now."]
+    pub const aiTextureType_NORMAL_CAMERA: aiTextureType = aiTextureType(13);
+    #[doc = " PBR Materials\n PBR definitions from maya and other modelling packages now use this standard.\n This was originally introduced around 2012.\n Support for this is in game engines like Godot, Unreal or Unity3D.\n Modelling packages which use this are very common now."]
+    pub const aiTextureType_EMISSION_COLOR: aiTextureType = aiTextureType(14);
+    #[doc = " PBR Materials\n PBR definitions from maya and other modelling packages now use this standard.\n This was originally introduced around 2012.\n Support for this is in game engines like Godot, Unreal or Unity3D.\n Modelling packages which use this are very common now."]
+    pub const aiTextureType_METALNESS: aiTextureType = aiTextureType(15);
+    #[doc = " PBR Materials\n PBR definitions from maya and other modelling packages now use this standard.\n This was originally introduced around 2012.\n Support for this is in game engines like Godot, Unreal or Unity3D.\n Modelling packages which use this are very common now."]
+    pub const aiTextureType_DIFFUSE_ROUGHNESS: aiTextureType = aiTextureType(16);
+    #[doc = " PBR Materials\n PBR definitions from maya and other modelling packages now use this standard.\n This was originally introduced around 2012.\n Support for this is in game engines like Godot, Unreal or Unity3D.\n Modelling packages which use this are very common now."]
+    pub const aiTextureType_AMBIENT_OCCLUSION: aiTextureType = aiTextureType(17);
+    #[doc = " Unknown texture\n\n  A texture reference that does not match any of the definitions\n  above is considered to be 'unknown'. It is still imported,\n  but is excluded from any further post-processing."]
+    pub const aiTextureType_UNKNOWN: aiTextureType = aiTextureType(18);
+    #[doc = " Sheen\n Generally used to simulate textiles that are covered in a layer of microfibers\n eg velvet\n https://github.com/KhronosGroup/glTF/tree/master/extensions/2.0/Khronos/KHR_materials_sheen"]
+    pub const aiTextureType_SHEEN: aiTextureType = aiTextureType(19);
+    #[doc = " Clearcoat\n Simulates a layer of 'polish' or 'lacquer' layered on top of a PBR substrate\n https://autodesk.github.io/standard-surface/#closures/coating\n https://github.com/KhronosGroup/glTF/tree/master/extensions/2.0/Khronos/KHR_materials_clearcoat"]
+    pub const aiTextureType_CLEARCOAT: aiTextureType = aiTextureType(20);
+    #[doc = " Transmission\n Simulates transmission through the surface\n May include further information such as wall thickness"]
+    pub const aiTextureType_TRANSMISSION: aiTextureType = aiTextureType(21);
+    #[doc = " Maya material declarations"]
+    pub const aiTextureType_MAYA_BASE: aiTextureType = aiTextureType(22);
+    #[doc = " Maya material declarations"]
+    pub const aiTextureType_MAYA_SPECULAR: aiTextureType = aiTextureType(23);
+    #[doc = " Maya material declarations"]
+    pub const aiTextureType_MAYA_SPECULAR_COLOR: aiTextureType = aiTextureType(24);
+    #[doc = " Maya material declarations"]
+    pub const aiTextureType_MAYA_SPECULAR_ROUGHNESS: aiTextureType = aiTextureType(25);
+    #[doc = " Anisotropy\n Simulates a surface with directional properties"]
+    pub const aiTextureType_ANISOTROPY: aiTextureType = aiTextureType(26);
+    #[doc = " gltf material declarations\n Refs: https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#metallic-roughness-material\n           \"textures for metalness and roughness properties are packed together in a single\n           texture called metallicRoughnessTexture. Its green channel contains roughness\n           values and its blue channel contains metalness values...\"\n       https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#_material_pbrmetallicroughness_metallicroughnesstexture\n           \"The metalness values are sampled from the B channel. The roughness values are\n           sampled from the G channel...\""]
+    pub const aiTextureType_GLTF_METALLIC_ROUGHNESS: aiTextureType = aiTextureType(27);
+    pub const _aiTextureType_Force32Bit: aiTextureType = aiTextureType(2147483647);
 }
-#[repr(u32)]
+#[repr(transparent)]
 #[doc = " @brief Defines the purpose of a texture\n\n  This is a very difficult topic. Different 3D packages support different\n  kinds of textures. For very common texture types, such as bumpmaps, the\n  rendering results depend on implementation details in the rendering\n  pipelines of these applications. Assimp loads all texture references from\n  the model file and tries to determine which of the predefined texture\n  types below is the best choice to match the original use of the texture\n  as closely as possible.<br>\n\n  In content pipelines you'll usually define how textures have to be handled,\n  and the artists working on models have to conform to this specification,\n  regardless which 3D tool they're using."]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
-pub enum aiTextureType {
-    #[doc = " Dummy value.\n\n  No texture, but the value to be used as 'texture semantic'\n  (#aiMaterialProperty::mSemantic) for all material properties\n  *not* related to textures."]
-    aiTextureType_NONE = 0,
-    #[doc = " The texture is combined with the result of the diffuse\n  lighting equation.\n  OR\n  PBR Specular/Glossiness"]
-    aiTextureType_DIFFUSE = 1,
-    #[doc = " The texture is combined with the result of the specular\n  lighting equation.\n  OR\n  PBR Specular/Glossiness"]
-    aiTextureType_SPECULAR = 2,
-    #[doc = " The texture is combined with the result of the ambient\n  lighting equation."]
-    aiTextureType_AMBIENT = 3,
-    #[doc = " The texture is added to the result of the lighting\n  calculation. It isn't influenced by incoming light."]
-    aiTextureType_EMISSIVE = 4,
-    #[doc = " The texture is a height map.\n\n  By convention, higher gray-scale values stand for\n  higher elevations from the base height."]
-    aiTextureType_HEIGHT = 5,
-    #[doc = " The texture is a (tangent space) normal-map.\n\n  Again, there are several conventions for tangent-space\n  normal maps. Assimp does (intentionally) not\n  distinguish here."]
-    aiTextureType_NORMALS = 6,
-    #[doc = " The texture defines the glossiness of the material.\n\n  The glossiness is in fact the exponent of the specular\n  (phong) lighting equation. Usually there is a conversion\n  function defined to map the linear color values in the\n  texture to a suitable exponent. Have fun."]
-    aiTextureType_SHININESS = 7,
-    #[doc = " The texture defines per-pixel opacity.\n\n  Usually 'white' means opaque and 'black' means\n  'transparency'. Or quite the opposite. Have fun."]
-    aiTextureType_OPACITY = 8,
-    #[doc = " Displacement texture\n\n  The exact purpose and format is application-dependent.\n  Higher color values stand for higher vertex displacements."]
-    aiTextureType_DISPLACEMENT = 9,
-    #[doc = " Lightmap texture (aka Ambient Occlusion)\n\n  Both 'Lightmaps' and dedicated 'ambient occlusion maps' are\n  covered by this material property. The texture contains a\n  scaling value for the final color value of a pixel. Its\n  intensity is not affected by incoming light."]
-    aiTextureType_LIGHTMAP = 10,
-    #[doc = " Reflection texture\n\n Contains the color of a perfect mirror reflection.\n Rarely used, almost never for real-time applications."]
-    aiTextureType_REFLECTION = 11,
-    #[doc = " PBR Materials\n PBR definitions from maya and other modelling packages now use this standard.\n This was originally introduced around 2012.\n Support for this is in game engines like Godot, Unreal or Unity3D.\n Modelling packages which use this are very common now."]
-    aiTextureType_BASE_COLOR = 12,
-    #[doc = " PBR Materials\n PBR definitions from maya and other modelling packages now use this standard.\n This was originally introduced around 2012.\n Support for this is in game engines like Godot, Unreal or Unity3D.\n Modelling packages which use this are very common now."]
-    aiTextureType_NORMAL_CAMERA = 13,
-    #[doc = " PBR Materials\n PBR definitions from maya and other modelling packages now use this standard.\n This was originally introduced around 2012.\n Support for this is in game engines like Godot, Unreal or Unity3D.\n Modelling packages which use this are very common now."]
-    aiTextureType_EMISSION_COLOR = 14,
-    #[doc = " PBR Materials\n PBR definitions from maya and other modelling packages now use this standard.\n This was originally introduced around 2012.\n Support for this is in game engines like Godot, Unreal or Unity3D.\n Modelling packages which use this are very common now."]
-    aiTextureType_METALNESS = 15,
-    #[doc = " PBR Materials\n PBR definitions from maya and other modelling packages now use this standard.\n This was originally introduced around 2012.\n Support for this is in game engines like Godot, Unreal or Unity3D.\n Modelling packages which use this are very common now."]
-    aiTextureType_DIFFUSE_ROUGHNESS = 16,
-    #[doc = " PBR Materials\n PBR definitions from maya and other modelling packages now use this standard.\n This was originally introduced around 2012.\n Support for this is in game engines like Godot, Unreal or Unity3D.\n Modelling packages which use this are very common now."]
-    aiTextureType_AMBIENT_OCCLUSION = 17,
-    #[doc = " Unknown texture\n\n  A texture reference that does not match any of the definitions\n  above is considered to be 'unknown'. It is still imported,\n  but is excluded from any further post-processing."]
-    aiTextureType_UNKNOWN = 18,
-    #[doc = " Sheen\n Generally used to simulate textiles that are covered in a layer of microfibers\n eg velvet\n https://github.com/KhronosGroup/glTF/tree/master/extensions/2.0/Khronos/KHR_materials_sheen"]
-    aiTextureType_SHEEN = 19,
-    #[doc = " Clearcoat\n Simulates a layer of 'polish' or 'lacquer' layered on top of a PBR substrate\n https://autodesk.github.io/standard-surface/#closures/coating\n https://github.com/KhronosGroup/glTF/tree/master/extensions/2.0/Khronos/KHR_materials_clearcoat"]
-    aiTextureType_CLEARCOAT = 20,
-    #[doc = " Transmission\n Simulates transmission through the surface\n May include further information such as wall thickness"]
-    aiTextureType_TRANSMISSION = 21,
-    #[doc = " Maya material declarations"]
-    aiTextureType_MAYA_BASE = 22,
-    #[doc = " Maya material declarations"]
-    aiTextureType_MAYA_SPECULAR = 23,
-    #[doc = " Maya material declarations"]
-    aiTextureType_MAYA_SPECULAR_COLOR = 24,
-    #[doc = " Maya material declarations"]
-    aiTextureType_MAYA_SPECULAR_ROUGHNESS = 25,
-    #[doc = " Anisotropy\n Simulates a surface with directional properties"]
-    aiTextureType_ANISOTROPY = 26,
-    #[doc = " gltf material declarations\n Refs: https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#metallic-roughness-material\n           \"textures for metalness and roughness properties are packed together in a single\n           texture called metallicRoughnessTexture. Its green channel contains roughness\n           values and its blue channel contains metalness values...\"\n       https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#_material_pbrmetallicroughness_metallicroughnesstexture\n           \"The metalness values are sampled from the B channel. The roughness values are\n           sampled from the G channel...\""]
-    aiTextureType_GLTF_METALLIC_ROUGHNESS = 27,
-    _aiTextureType_Force32Bit = 2147483647,
-}
+pub struct aiTextureType(pub ::std::os::raw::c_uint);
 unsafe extern "C" {
     #[doc = " @brief  Get a string for a given aiTextureType\n\n @param  in  The texture type\n @return The description string for the texture type."]
     pub fn aiTextureTypeToString(in_: aiTextureType) -> *const ::std::os::raw::c_char;
 }
 impl aiShadingMode {
-    pub const aiShadingMode_Unlit: aiShadingMode = aiShadingMode::aiShadingMode_NoShading;
+    #[doc = " Flat shading. Shading is done on per-face base,\n  diffuse only. Also known as 'faceted shading'."]
+    pub const aiShadingMode_Flat: aiShadingMode = aiShadingMode(1);
+    #[doc = " Simple Gouraud shading."]
+    pub const aiShadingMode_Gouraud: aiShadingMode = aiShadingMode(2);
+    #[doc = " Phong-Shading -"]
+    pub const aiShadingMode_Phong: aiShadingMode = aiShadingMode(3);
+    #[doc = " Phong-Blinn-Shading"]
+    pub const aiShadingMode_Blinn: aiShadingMode = aiShadingMode(4);
+    #[doc = " Toon-Shading per pixel\n\n  Also known as 'comic' shader."]
+    pub const aiShadingMode_Toon: aiShadingMode = aiShadingMode(5);
+    #[doc = " OrenNayar-Shading per pixel\n\n  Extension to standard Lambertian shading, taking the\n  roughness of the material into account"]
+    pub const aiShadingMode_OrenNayar: aiShadingMode = aiShadingMode(6);
+    #[doc = " Minnaert-Shading per pixel\n\n  Extension to standard Lambertian shading, taking the\n  \"darkness\" of the material into account"]
+    pub const aiShadingMode_Minnaert: aiShadingMode = aiShadingMode(7);
+    #[doc = " CookTorrance-Shading per pixel\n\n  Special shader for metallic surfaces."]
+    pub const aiShadingMode_CookTorrance: aiShadingMode = aiShadingMode(8);
+    #[doc = " No shading at all. Constant light influence of 1.0.\n Also known as \"Unlit\""]
+    pub const aiShadingMode_NoShading: aiShadingMode = aiShadingMode(9);
+    #[doc = " No shading at all. Constant light influence of 1.0.\n Also known as \"Unlit\""]
+    pub const aiShadingMode_Unlit: aiShadingMode = aiShadingMode(9);
+    #[doc = " Fresnel shading"]
+    pub const aiShadingMode_Fresnel: aiShadingMode = aiShadingMode(10);
+    #[doc = " Physically-Based Rendering (PBR) shading using\n Bidirectional scattering/reflectance distribution function (BSDF/BRDF)\n There are multiple methods under this banner, and model files may provide\n data for more than one PBR-BRDF method.\n Applications should use the set of provided properties to determine which\n of their preferred PBR rendering methods are likely to be available\n eg:\n - If AI_MATKEY_METALLIC_FACTOR is set, then a Metallic/Roughness is available\n - If AI_MATKEY_GLOSSINESS_FACTOR is set, then a Specular/Glossiness is available\n Note that some PBR methods allow layering of techniques"]
+    pub const aiShadingMode_PBR_BRDF: aiShadingMode = aiShadingMode(11);
+    pub const _aiShadingMode_Force32Bit: aiShadingMode = aiShadingMode(2147483647);
 }
-#[repr(u32)]
+#[repr(transparent)]
 #[doc = " @brief Defines all shading models supported by the library\n\n  Property: #AI_MATKEY_SHADING_MODEL\n\n  The list of shading modes has been taken from Blender.\n  See Blender documentation for more information. The API does\n  not distinguish between \"specular\" and \"diffuse\" shaders (thus the\n  specular term for diffuse shading models like Oren-Nayar remains\n  undefined). <br>\n  Again, this value is just a hint. Assimp tries to select the shader whose\n  most common implementation matches the original rendering results of the\n  3D modeler which wrote a particular model as closely as possible.\n"]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
-pub enum aiShadingMode {
-    #[doc = " Flat shading. Shading is done on per-face base,\n  diffuse only. Also known as 'faceted shading'."]
-    aiShadingMode_Flat = 1,
-    #[doc = " Simple Gouraud shading."]
-    aiShadingMode_Gouraud = 2,
-    #[doc = " Phong-Shading -"]
-    aiShadingMode_Phong = 3,
-    #[doc = " Phong-Blinn-Shading"]
-    aiShadingMode_Blinn = 4,
-    #[doc = " Toon-Shading per pixel\n\n  Also known as 'comic' shader."]
-    aiShadingMode_Toon = 5,
-    #[doc = " OrenNayar-Shading per pixel\n\n  Extension to standard Lambertian shading, taking the\n  roughness of the material into account"]
-    aiShadingMode_OrenNayar = 6,
-    #[doc = " Minnaert-Shading per pixel\n\n  Extension to standard Lambertian shading, taking the\n  \"darkness\" of the material into account"]
-    aiShadingMode_Minnaert = 7,
-    #[doc = " CookTorrance-Shading per pixel\n\n  Special shader for metallic surfaces."]
-    aiShadingMode_CookTorrance = 8,
-    #[doc = " No shading at all. Constant light influence of 1.0.\n Also known as \"Unlit\""]
-    aiShadingMode_NoShading = 9,
-    #[doc = " Fresnel shading"]
-    aiShadingMode_Fresnel = 10,
-    #[doc = " Physically-Based Rendering (PBR) shading using\n Bidirectional scattering/reflectance distribution function (BSDF/BRDF)\n There are multiple methods under this banner, and model files may provide\n data for more than one PBR-BRDF method.\n Applications should use the set of provided properties to determine which\n of their preferred PBR rendering methods are likely to be available\n eg:\n - If AI_MATKEY_METALLIC_FACTOR is set, then a Metallic/Roughness is available\n - If AI_MATKEY_GLOSSINESS_FACTOR is set, then a Specular/Glossiness is available\n Note that some PBR methods allow layering of techniques"]
-    aiShadingMode_PBR_BRDF = 11,
-    _aiShadingMode_Force32Bit = 2147483647,
+pub struct aiShadingMode(pub ::std::os::raw::c_uint);
+impl aiTextureFlags {
+    #[doc = " The texture's color values have to be inverted (component-wise 1-n)"]
+    pub const aiTextureFlags_Invert: aiTextureFlags = aiTextureFlags(1);
+    #[doc = " Explicit request to the application to process the alpha channel\n  of the texture.\n\n  Mutually exclusive with #aiTextureFlags_IgnoreAlpha. These\n  flags are set if the library can say for sure that the alpha\n  channel is used/is not used. If the model format does not\n  define this, it is left to the application to decide whether\n  the texture alpha channel - if any - is evaluated or not."]
+    pub const aiTextureFlags_UseAlpha: aiTextureFlags = aiTextureFlags(2);
+    #[doc = " Explicit request to the application to ignore the alpha channel\n  of the texture.\n\n  Mutually exclusive with #aiTextureFlags_UseAlpha."]
+    pub const aiTextureFlags_IgnoreAlpha: aiTextureFlags = aiTextureFlags(4);
+    pub const _aiTextureFlags_Force32Bit: aiTextureFlags = aiTextureFlags(2147483647);
 }
-#[repr(u32)]
+#[repr(transparent)]
 #[doc = "  @brief Defines some mixed flags for a particular texture.\n\n  Usually you'll instruct your cg artists how textures have to look like ...\n  and how they will be processed in your application. However, if you use\n  Assimp for completely generic loading purposes you might also need to\n  process these flags in order to display as many 'unknown' 3D models as\n  possible correctly.\n\n  This corresponds to the #AI_MATKEY_TEXFLAGS property."]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
-pub enum aiTextureFlags {
-    #[doc = " The texture's color values have to be inverted (component-wise 1-n)"]
-    aiTextureFlags_Invert = 1,
-    #[doc = " Explicit request to the application to process the alpha channel\n  of the texture.\n\n  Mutually exclusive with #aiTextureFlags_IgnoreAlpha. These\n  flags are set if the library can say for sure that the alpha\n  channel is used/is not used. If the model format does not\n  define this, it is left to the application to decide whether\n  the texture alpha channel - if any - is evaluated or not."]
-    aiTextureFlags_UseAlpha = 2,
-    #[doc = " Explicit request to the application to ignore the alpha channel\n  of the texture.\n\n  Mutually exclusive with #aiTextureFlags_UseAlpha."]
-    aiTextureFlags_IgnoreAlpha = 4,
-    _aiTextureFlags_Force32Bit = 2147483647,
+pub struct aiTextureFlags(pub ::std::os::raw::c_uint);
+impl aiBlendMode {
+    #[doc = "  Formula:\n  \n```text\n\n  SourceColor*SourceAlpha + DestColor*(1-SourceAlpha)\n  \n```\n"]
+    pub const aiBlendMode_Default: aiBlendMode = aiBlendMode(0);
+    #[doc = " Additive blending\n\n  Formula:\n  \n```text\n\n  SourceColor*1 + DestColor*1\n  \n```\n"]
+    pub const aiBlendMode_Additive: aiBlendMode = aiBlendMode(1);
+    pub const _aiBlendMode_Force32Bit: aiBlendMode = aiBlendMode(2147483647);
 }
-#[repr(u32)]
-#[doc = "  @brief Defines alpha-blend flags.\n\n  If you're familiar with OpenGL or D3D, these flags aren't new to you.\n  They define *how* the final color value of a pixel is computed, basing\n  on the previous color at that pixel and the new color value from the\n  material.\n  The blend formula is:\n  @code\n    SourceColor * SourceBlend + DestColor * DestBlend\n  @endcode\n  where DestColor is the previous color in the frame-buffer at this\n  position and SourceColor is the material color before the transparency\n  calculation.<br>\n  This corresponds to the #AI_MATKEY_BLEND_FUNC property."]
+#[repr(transparent)]
+#[doc = "  @brief Defines alpha-blend flags.\n\n  If you're familiar with OpenGL or D3D, these flags aren't new to you.\n  They define *how* the final color value of a pixel is computed, basing\n  on the previous color at that pixel and the new color value from the\n  material.\n  The blend formula is:\n  \n```text\n\n    SourceColor * SourceBlend + DestColor * DestBlend\n  \n```\n\n  where DestColor is the previous color in the frame-buffer at this\n  position and SourceColor is the material color before the transparency\n  calculation.<br>\n  This corresponds to the #AI_MATKEY_BLEND_FUNC property."]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
-pub enum aiBlendMode {
-    #[doc = "  Formula:\n  @code\n  SourceColor*SourceAlpha + DestColor*(1-SourceAlpha)\n  @endcode"]
-    aiBlendMode_Default = 0,
-    #[doc = " Additive blending\n\n  Formula:\n  @code\n  SourceColor*1 + DestColor*1\n  @endcode"]
-    aiBlendMode_Additive = 1,
-    _aiBlendMode_Force32Bit = 2147483647,
-}
+pub struct aiBlendMode(pub ::std::os::raw::c_uint);
 #[doc = "  @brief Defines how an UV channel is transformed.\n\n  This is just a helper structure for the #AI_MATKEY_UVTRANSFORM key.\n  See its documentation for more details.\n\n  Typically you'll want to build a matrix of this information. However,\n  we keep separate scaling/translation/rotation values to make it\n  easier to process and optimize UV transformations internally."]
 #[repr(C)]
 #[derive(Debug, Default, Copy, Clone, PartialEq)]
@@ -1514,23 +1528,24 @@ pub struct aiUVTransform {
     #[doc = " Rotation - in counter-clockwise direction.\n\n  The rotation angle is specified in radians. The\n  rotation center is 0.5f|0.5f. The default value\n  0.f."]
     pub mRotation: ai_real,
 }
-#[repr(u32)]
+impl aiPropertyTypeInfo {
+    #[doc = " Array of single-precision (32 Bit) floats\n\n  It is possible to use aiGetMaterialInteger[Array]() (or the C++-API\n  aiMaterial::Get()) to query properties stored in floating-point format.\n  The material system performs the type conversion automatically."]
+    pub const aiPTI_Float: aiPropertyTypeInfo = aiPropertyTypeInfo(1);
+    #[doc = " Array of double-precision (64 Bit) floats\n\n  It is possible to use aiGetMaterialInteger[Array]() (or the C++-API\n  aiMaterial::Get()) to query properties stored in floating-point format.\n  The material system performs the type conversion automatically."]
+    pub const aiPTI_Double: aiPropertyTypeInfo = aiPropertyTypeInfo(2);
+    #[doc = " The material property is an aiString.\n\n  Arrays of strings aren't possible, aiGetMaterialString() (or the\n  C++-API aiMaterial::Get()) *must* be used to query a string property."]
+    pub const aiPTI_String: aiPropertyTypeInfo = aiPropertyTypeInfo(3);
+    #[doc = " Array of (32 Bit) integers\n\n  It is possible to use aiGetMaterialFloat[Array]() (or the C++-API\n  aiMaterial::Get()) to query properties stored in integer format.\n  The material system performs the type conversion automatically."]
+    pub const aiPTI_Integer: aiPropertyTypeInfo = aiPropertyTypeInfo(4);
+    #[doc = " Simple binary buffer, content undefined. Not convertible to anything."]
+    pub const aiPTI_Buffer: aiPropertyTypeInfo = aiPropertyTypeInfo(5);
+    pub const _aiPTI_Force32Bit: aiPropertyTypeInfo = aiPropertyTypeInfo(2147483647);
+}
+#[repr(transparent)]
 #[doc = "  @brief A very primitive RTTI system for the contents of material properties."]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
-pub enum aiPropertyTypeInfo {
-    #[doc = " Array of single-precision (32 Bit) floats\n\n  It is possible to use aiGetMaterialInteger[Array]() (or the C++-API\n  aiMaterial::Get()) to query properties stored in floating-point format.\n  The material system performs the type conversion automatically."]
-    aiPTI_Float = 1,
-    #[doc = " Array of double-precision (64 Bit) floats\n\n  It is possible to use aiGetMaterialInteger[Array]() (or the C++-API\n  aiMaterial::Get()) to query properties stored in floating-point format.\n  The material system performs the type conversion automatically."]
-    aiPTI_Double = 2,
-    #[doc = " The material property is an aiString.\n\n  Arrays of strings aren't possible, aiGetMaterialString() (or the\n  C++-API aiMaterial::Get()) *must* be used to query a string property."]
-    aiPTI_String = 3,
-    #[doc = " Array of (32 Bit) integers\n\n  It is possible to use aiGetMaterialFloat[Array]() (or the C++-API\n  aiMaterial::Get()) to query properties stored in integer format.\n  The material system performs the type conversion automatically."]
-    aiPTI_Integer = 4,
-    #[doc = " Simple binary buffer, content undefined. Not convertible to anything."]
-    aiPTI_Buffer = 5,
-    _aiPTI_Force32Bit = 2147483647,
-}
-#[doc = " @brief Data structure for a single material property\n\n  As an user, you'll probably never need to deal with this data structure.\n  Just use the provided aiGetMaterialXXX() or aiMaterial::Get() family\n  of functions to query material properties easily. Processing them\n  manually is faster, but it is not the recommended way. It isn't worth\n  the effort. <br>\n  Material property names follow a simple scheme:\n  @code\n    $<name>\n    ?<name>\n       A public property, there must be corresponding AI_MATKEY_XXX define\n       2nd: Public, but ignored by the #aiProcess_RemoveRedundantMaterials\n       post-processing step.\n    ~<name>\n       A temporary property for internal use.\n  @endcode\n  @see aiMaterial"]
+pub struct aiPropertyTypeInfo(pub ::std::os::raw::c_uint);
+#[doc = " @brief Data structure for a single material property\n\n  As an user, you'll probably never need to deal with this data structure.\n  Just use the provided aiGetMaterialXXX() or aiMaterial::Get() family\n  of functions to query material properties easily. Processing them\n  manually is faster, but it is not the recommended way. It isn't worth\n  the effort. <br>\n  Material property names follow a simple scheme:\n  \n```text\n\n    $<name>\n    ?<name>\n       A public property, there must be corresponding AI_MATKEY_XXX define\n       2nd: Public, but ignored by the #aiProcess_RemoveRedundantMaterials\n       post-processing step.\n    ~<name>\n       A temporary property for internal use.\n  \n```\n\n  @see aiMaterial"]
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct aiMaterialProperty {
@@ -1577,7 +1592,7 @@ unsafe extern "C" {
     ) -> aiReturn;
 }
 unsafe extern "C" {
-    #[doc = " @brief Retrieve an array of float values with a specific key\n  from the material\n\n Pass one of the AI_MATKEY_XXX constants for the last three parameters (the\n example reads the #AI_MATKEY_UVTRANSFORM property of the first diffuse texture)\n @code\n aiUVTransform trafo;\n unsigned int max = sizeof(aiUVTransform);\n if (AI_SUCCESS != aiGetMaterialFloatArray(mat, AI_MATKEY_UVTRANSFORM(aiTextureType_DIFFUSE,0),\n    (float*)&trafo, &max) || sizeof(aiUVTransform) != max)\n {\n   // error handling\n }\n @endcode\n\n @param pMat Pointer to the input material. May not be NULL\n @param pKey Key to search for. One of the AI_MATKEY_XXX constants.\n @param pOut Pointer to a buffer to receive the result.\n @param pMax Specifies the size of the given buffer, in float's.\n        Receives the number of values (not bytes!) read.\n @param type (see the code sample above)\n @param index (see the code sample above)\n @return Specifies whether the key has been found. If not, the output\n   arrays remains unmodified and pMax is set to 0."]
+    #[doc = " @brief Retrieve an array of float values with a specific key\n  from the material\n\n Pass one of the AI_MATKEY_XXX constants for the last three parameters (the\n example reads the #AI_MATKEY_UVTRANSFORM property of the first diffuse texture)\n \n```text\n\n aiUVTransform trafo;\n unsigned int max = sizeof(aiUVTransform);\n if (AI_SUCCESS != aiGetMaterialFloatArray(mat, AI_MATKEY_UVTRANSFORM(aiTextureType_DIFFUSE,0),\n    (float*)&trafo, &max) || sizeof(aiUVTransform) != max)\n {\n   // error handling\n }\n \n```\n\n\n @param pMat Pointer to the input material. May not be NULL\n @param pKey Key to search for. One of the AI_MATKEY_XXX constants.\n @param pOut Pointer to a buffer to receive the result.\n @param pMax Specifies the size of the given buffer, in float's.\n        Receives the number of values (not bytes!) read.\n @param type (see the code sample above)\n @param index (see the code sample above)\n @return Specifies whether the key has been found. If not, the output\n   arrays remains unmodified and pMax is set to 0."]
     pub fn aiGetMaterialFloatArray(
         pMat: *const aiMaterial,
         pKey: *const ::std::os::raw::c_char,
@@ -1649,15 +1664,17 @@ unsafe extern "C" {
         flags: *mut ::std::os::raw::c_uint,
     ) -> aiReturn;
 }
-#[repr(u32)]
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
-pub enum aiAnimInterpolation {
-    aiAnimInterpolation_Step = 0,
-    aiAnimInterpolation_Linear = 1,
-    aiAnimInterpolation_Spherical_Linear = 2,
-    aiAnimInterpolation_Cubic_Spline = 3,
-    _aiAnimInterpolation_Force32Bit = 2147483647,
+impl aiAnimInterpolation {
+    pub const aiAnimInterpolation_Step: aiAnimInterpolation = aiAnimInterpolation(0);
+    pub const aiAnimInterpolation_Linear: aiAnimInterpolation = aiAnimInterpolation(1);
+    pub const aiAnimInterpolation_Spherical_Linear: aiAnimInterpolation = aiAnimInterpolation(2);
+    pub const aiAnimInterpolation_Cubic_Spline: aiAnimInterpolation = aiAnimInterpolation(3);
+    pub const _aiAnimInterpolation_Force32Bit: aiAnimInterpolation =
+        aiAnimInterpolation(2147483647);
 }
+#[repr(transparent)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct aiAnimInterpolation(pub ::std::os::raw::c_uint);
 #[doc = " A time-value pair specifying a certain 3D vector for the given time."]
 #[repr(C)]
 #[derive(Debug, Copy, Clone, PartialEq)]
@@ -1728,20 +1745,21 @@ impl Default for aiMeshMorphKey {
         }
     }
 }
-#[repr(u32)]
+impl aiAnimBehaviour {
+    #[doc = " The value from the default node transformation is taken"]
+    pub const aiAnimBehaviour_DEFAULT: aiAnimBehaviour = aiAnimBehaviour(0);
+    #[doc = " The nearest key value is used without interpolation"]
+    pub const aiAnimBehaviour_CONSTANT: aiAnimBehaviour = aiAnimBehaviour(1);
+    #[doc = " The value of the nearest two keys is linearly\n  extrapolated for the current time value."]
+    pub const aiAnimBehaviour_LINEAR: aiAnimBehaviour = aiAnimBehaviour(2);
+    #[doc = " The animation is repeated.\n\n  If the animation key go from n to m and the current\n  time is t, use the value at (t-n) % (|m-n|)."]
+    pub const aiAnimBehaviour_REPEAT: aiAnimBehaviour = aiAnimBehaviour(3);
+    pub const _aiAnimBehaviour_Force32Bit: aiAnimBehaviour = aiAnimBehaviour(2147483647);
+}
+#[repr(transparent)]
 #[doc = " Defines how an animation channel behaves outside the defined time\n  range. This corresponds to aiNodeAnim::mPreState and\n  aiNodeAnim::mPostState."]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
-pub enum aiAnimBehaviour {
-    #[doc = " The value from the default node transformation is taken"]
-    aiAnimBehaviour_DEFAULT = 0,
-    #[doc = " The nearest key value is used without interpolation"]
-    aiAnimBehaviour_CONSTANT = 1,
-    #[doc = " The value of the nearest two keys is linearly\n  extrapolated for the current time value."]
-    aiAnimBehaviour_LINEAR = 2,
-    #[doc = " The animation is repeated.\n\n  If the animation key go from n to m and the current\n  time is t, use the value at (t-n) % (|m-n|)."]
-    aiAnimBehaviour_REPEAT = 3,
-    _aiAnimBehaviour_Force32Bit = 2147483647,
-}
+pub struct aiAnimBehaviour(pub ::std::os::raw::c_uint);
 #[doc = " Describes the animation of a single node. The name specifies the\n  bone/node which is affected by this animation channel. The keyframes\n  are given in three separate series of values, one each for position,\n  rotation and scaling. The transformation matrix computed from these\n  values replaces the node's original transformation matrix at a\n  specific time.\n  This means all keys are absolute and not relative to the bone default pose.\n  The order in which the transformations are applied is\n  - as usual - scaling, rotation, translation.\n\n  @note All keys are returned in their correct, chronological order.\n  Duplicate keys don't pass the validation step. Most likely there\n  will be no negative time values, but they are not forbidden also ( so\n  implementations need to cope with them! )"]
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
@@ -1846,23 +1864,24 @@ impl Default for aiAnimation {
         }
     }
 }
-#[repr(u32)]
+impl aiMetadataType {
+    pub const AI_BOOL: aiMetadataType = aiMetadataType(0);
+    pub const AI_INT32: aiMetadataType = aiMetadataType(1);
+    pub const AI_UINT64: aiMetadataType = aiMetadataType(2);
+    pub const AI_FLOAT: aiMetadataType = aiMetadataType(3);
+    pub const AI_DOUBLE: aiMetadataType = aiMetadataType(4);
+    pub const AI_AISTRING: aiMetadataType = aiMetadataType(5);
+    pub const AI_AIVECTOR3D: aiMetadataType = aiMetadataType(6);
+    pub const AI_AIMETADATA: aiMetadataType = aiMetadataType(7);
+    pub const AI_INT64: aiMetadataType = aiMetadataType(8);
+    pub const AI_UINT32: aiMetadataType = aiMetadataType(9);
+    pub const AI_META_MAX: aiMetadataType = aiMetadataType(10);
+    pub const FORCE_32BIT: aiMetadataType = aiMetadataType(2147483647);
+}
+#[repr(transparent)]
 #[doc = " Enum used to distinguish data types"]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
-pub enum aiMetadataType {
-    AI_BOOL = 0,
-    AI_INT32 = 1,
-    AI_UINT64 = 2,
-    AI_FLOAT = 3,
-    AI_DOUBLE = 4,
-    AI_AISTRING = 5,
-    AI_AIVECTOR3D = 6,
-    AI_AIMETADATA = 7,
-    AI_INT64 = 8,
-    AI_UINT32 = 9,
-    AI_META_MAX = 10,
-    FORCE_32BIT = 2147483647,
-}
+pub struct aiMetadataType(pub ::std::os::raw::c_uint);
 #[doc = " Metadata entry\n\n The type field uniquely identifies the underlying type of the data field"]
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
@@ -1978,74 +1997,75 @@ impl Default for aiScene {
         }
     }
 }
-#[repr(u32)]
+impl aiPostProcessSteps {
+    #[doc = " <hr>Calculates the tangents and bitangents for the imported meshes.\n\n Does nothing if a mesh does not have normals. You might want this post\n processing step to be executed if you plan to use tangent space calculations\n such as normal mapping  applied to the meshes. There's an importer property,\n <tt>#AI_CONFIG_PP_CT_MAX_SMOOTHING_ANGLE</tt>, which allows you to specify\n a maximum smoothing angle for the algorithm. However, usually you'll\n want to leave it at the default value."]
+    pub const aiProcess_CalcTangentSpace: aiPostProcessSteps = aiPostProcessSteps(1);
+    #[doc = " <hr>Identifies and joins identical vertex data sets within all\n  imported meshes.\n\n After this step is run, each mesh contains unique vertices,\n so a vertex may be used by multiple faces. You usually want\n to use this post processing step. If your application deals with\n indexed geometry, this step is compulsory or you'll just waste rendering\n time. <b>If this flag is not specified</b>, no vertices are referenced by\n more than one face and <b>no index buffer is required</b> for rendering.\n Unless the importer (like ply) had to split vertices. Then you need one regardless."]
+    pub const aiProcess_JoinIdenticalVertices: aiPostProcessSteps = aiPostProcessSteps(2);
+    #[doc = " <hr>Converts all the imported data to a left-handed coordinate space.\n\n By default the data is returned in a right-handed coordinate space (which\n OpenGL prefers). In this space, +X points to the right,\n +Z points towards the viewer, and +Y points upwards. In the DirectX\n coordinate space +X points to the right, +Y points upwards, and +Z points\n away from the viewer.\n\n You'll probably want to consider this flag if you use Direct3D for\n rendering. The #aiProcess_ConvertToLeftHanded flag supersedes this\n setting and bundles all conversions typically required for D3D-based\n applications."]
+    pub const aiProcess_MakeLeftHanded: aiPostProcessSteps = aiPostProcessSteps(4);
+    #[doc = " <hr>Triangulates all faces of all meshes.\n\n By default the imported mesh data might contain faces with more than 3\n indices. For rendering you'll usually want all faces to be triangles.\n This post processing step splits up faces with more than 3 indices into\n triangles. Line and point primitives are *not* modified! If you want\n 'triangles only' with no other kinds of primitives, try the following\n solution:\n <ul>\n <li>Specify both #aiProcess_Triangulate and #aiProcess_SortByPType </li>\n <li>Ignore all point and line meshes when you process assimp's output</li>\n </ul>"]
+    pub const aiProcess_Triangulate: aiPostProcessSteps = aiPostProcessSteps(8);
+    #[doc = " <hr>Removes some parts of the data structure (animations, materials,\n  light sources, cameras, textures, vertex components).\n\n The  components to be removed are specified in a separate\n importer property, <tt>#AI_CONFIG_PP_RVC_FLAGS</tt>. This is quite useful\n if you don't need all parts of the output structure. Vertex colors\n are rarely used today for example... Calling this step to remove unneeded\n data from the pipeline as early as possible results in increased\n performance and a more optimized output data structure.\n This step is also useful if you want to force Assimp to recompute\n normals or tangents. The corresponding steps don't recompute them if\n they're already there (loaded from the source asset). By using this\n step you can make sure they are NOT there.\n\n This flag is a poor one, mainly because its purpose is usually\n misunderstood. Consider the following case: a 3D model has been exported\n from a CAD app, and it has per-face vertex colors. Vertex positions can't be\n shared, thus the #aiProcess_JoinIdenticalVertices step fails to\n optimize the data because of these nasty little vertex colors.\n Most apps don't even process them, so it's all for nothing. By using\n this step, unneeded components are excluded as early as possible\n thus opening more room for internal optimizations."]
+    pub const aiProcess_RemoveComponent: aiPostProcessSteps = aiPostProcessSteps(16);
+    #[doc = " <hr>Generates normals for all faces of all meshes.\n\n This is ignored if normals are already there at the time this flag\n is evaluated. Model importers try to load them from the source file, so\n they're usually already there. Face normals are shared between all points\n of a single face, so a single point can have multiple normals, which\n forces the library to duplicate vertices in some cases.\n #aiProcess_JoinIdenticalVertices is *senseless* then.\n\n This flag may not be specified together with #aiProcess_GenSmoothNormals."]
+    pub const aiProcess_GenNormals: aiPostProcessSteps = aiPostProcessSteps(32);
+    #[doc = " <hr>Generates smooth normals for all vertices in the mesh.\n\n This is ignored if normals are already there at the time this flag\n is evaluated. Model importers try to load them from the source file, so\n they're usually already there.\n\n This flag may not be specified together with\n #aiProcess_GenNormals. There's a importer property,\n <tt>#AI_CONFIG_PP_GSN_MAX_SMOOTHING_ANGLE</tt> which allows you to specify\n an angle maximum for the normal smoothing algorithm. Normals exceeding\n this limit are not smoothed, resulting in a 'hard' seam between two faces.\n Using a decent angle here (e.g. 80 degrees) results in very good visual\n appearance."]
+    pub const aiProcess_GenSmoothNormals: aiPostProcessSteps = aiPostProcessSteps(64);
+    #[doc = " <hr>Splits large meshes into smaller sub-meshes.\n\n This is quite useful for real-time rendering, where the number of triangles\n which can be maximally processed in a single draw-call is limited\n by the video driver/hardware. The maximum vertex buffer is usually limited\n too. Both requirements can be met with this step: you may specify both a\n triangle and vertex limit for a single mesh.\n\n The split limits can (and should!) be set through the\n <tt>#AI_CONFIG_PP_SLM_VERTEX_LIMIT</tt> and <tt>#AI_CONFIG_PP_SLM_TRIANGLE_LIMIT</tt>\n importer properties. The default values are <tt>#AI_SLM_DEFAULT_MAX_VERTICES</tt> and\n <tt>#AI_SLM_DEFAULT_MAX_TRIANGLES</tt>.\n\n Note that splitting is generally a time-consuming task, but only if there's\n something to split. The use of this step is recommended for most users."]
+    pub const aiProcess_SplitLargeMeshes: aiPostProcessSteps = aiPostProcessSteps(128);
+    #[doc = " <hr>Removes the node graph and pre-transforms all vertices with\n the local transformation matrices of their nodes.\n\n If the resulting scene can be reduced to a single mesh, with a single\n material, no lights, and no cameras, then the output scene will contain\n only a root node (with no children) that references the single mesh.\n Otherwise, the output scene will be reduced to a root node with a single\n level of child nodes, each one referencing one mesh, and each mesh\n referencing one material.\n\n In either case, for rendering, you can\n simply render all meshes in order - you don't need to pay\n attention to local transformations and the node hierarchy.\n Animations are removed during this step.\n This step is intended for applications without a scenegraph.\n The step CAN cause some problems: if e.g. a mesh of the asset\n contains normals and another, using the same material index, does not,\n they will be brought together, but the first meshes's part of\n the normal list is zeroed. However, these artifacts are rare.\n @note The <tt>#AI_CONFIG_PP_PTV_NORMALIZE</tt> configuration property\n can be set to normalize the scene's spatial dimension to the -1...1\n range."]
+    pub const aiProcess_PreTransformVertices: aiPostProcessSteps = aiPostProcessSteps(256);
+    #[doc = " <hr>Limits the number of bones simultaneously affecting a single vertex\n  to a maximum value.\n\n If any vertex is affected by more than the maximum number of bones, the least\n important vertex weights are removed and the remaining vertex weights are\n renormalized so that the weights still sum up to 1.\n The default bone weight limit is 4 (defined as <tt>#AI_LMW_MAX_WEIGHTS</tt> in\n config.h), but you can use the <tt>#AI_CONFIG_PP_LBW_MAX_WEIGHTS</tt> importer\n property to supply your own limit to the post processing step.\n\n If you intend to perform the skinning in hardware, this post processing\n step might be of interest to you."]
+    pub const aiProcess_LimitBoneWeights: aiPostProcessSteps = aiPostProcessSteps(512);
+    #[doc = " <hr>Validates the imported scene data structure.\n This makes sure that all indices are valid, all animations and\n bones are linked correctly, all material references are correct .. etc.\n\n It is recommended that you capture Assimp's log output if you use this flag,\n so you can easily find out what's wrong if a file fails the\n validation. The validator is quite strict and will find *all*\n inconsistencies in the data structure... It is recommended that plugin\n developers use it to debug their loaders. There are two types of\n validation failures:\n <ul>\n <li>Error: There's something wrong with the imported data. Further\n   postprocessing is not possible and the data is not usable at all.\n   The import fails. #Importer::GetErrorString() or #aiGetErrorString()\n   carry the error message around.</li>\n <li>Warning: There are some minor issues (e.g. 1000000 animation\n   keyframes with the same time), but further postprocessing and use\n   of the data structure is still safe. Warning details are written\n   to the log file, <tt>#AI_SCENE_FLAGS_VALIDATION_WARNING</tt> is set\n   in #aiScene::mFlags</li>\n </ul>\n\n This post-processing step is not time-consuming. Its use is not\n compulsory, but recommended."]
+    pub const aiProcess_ValidateDataStructure: aiPostProcessSteps = aiPostProcessSteps(1024);
+    #[doc = " <hr>Reorders triangles for better vertex cache locality.\n\n The step tries to improve the ACMR (average post-transform vertex cache\n miss ratio) for all meshes. The implementation runs in O(n) and is\n roughly based on the 'tipsify' algorithm (see <a href=\"\n http://www.cs.princeton.edu/gfx/pubs/Sander_2007_%3ETR/tipsy.pdf\">this\n paper</a>).\n\n If you intend to render huge models in hardware, this step might\n be of interest to you. The <tt>#AI_CONFIG_PP_ICL_PTCACHE_SIZE</tt>\n importer property can be used to fine-tune the cache optimization."]
+    pub const aiProcess_ImproveCacheLocality: aiPostProcessSteps = aiPostProcessSteps(2048);
+    #[doc = " <hr>Searches for redundant/unreferenced materials and removes them.\n\n This is especially useful in combination with the\n #aiProcess_PreTransformVertices and #aiProcess_OptimizeMeshes flags.\n Both join small meshes with equal characteristics, but they can't do\n their work if two meshes have different materials. Because several\n material settings are lost during Assimp's import filters,\n (and because many exporters don't check for redundant materials), huge\n models often have materials which are are defined several times with\n exactly the same settings.\n\n Several material settings not contributing to the final appearance of\n a surface are ignored in all comparisons (e.g. the material name).\n So, if you're passing additional information through the\n content pipeline (probably using *magic* material names), don't\n specify this flag. Alternatively take a look at the\n <tt>#AI_CONFIG_PP_RRM_EXCLUDE_LIST</tt> importer property."]
+    pub const aiProcess_RemoveRedundantMaterials: aiPostProcessSteps = aiPostProcessSteps(4096);
+    #[doc = " <hr>This step tries to determine which meshes have normal vectors\n that are facing inwards and inverts them.\n\n The algorithm is simple but effective:\n the bounding box of all vertices + their normals is compared against\n the volume of the bounding box of all vertices without their normals.\n This works well for most objects, problems might occur with planar\n surfaces. However, the step tries to filter such cases.\n The step inverts all in-facing normals. Generally it is recommended\n to enable this step, although the result is not always correct."]
+    pub const aiProcess_FixInfacingNormals: aiPostProcessSteps = aiPostProcessSteps(8192);
+    #[doc = " This step generically populates aiBone->mArmature and aiBone->mNode generically\n The point of these is it saves you later having to calculate these elements\n This is useful when handling rest information or skin information\n If you have multiple armatures on your models we strongly recommend enabling this\n Instead of writing your own multi-root, multi-armature lookups we have done the\n hard work for you :)"]
+    pub const aiProcess_PopulateArmatureData: aiPostProcessSteps = aiPostProcessSteps(16384);
+    #[doc = " <hr>This step splits meshes with more than one primitive type in\n  homogeneous sub-meshes.\n\n  The step is executed after the triangulation step. After the step\n  returns, just one bit is set in aiMesh::mPrimitiveTypes. This is\n  especially useful for real-time rendering where point and line\n  primitives are often ignored or rendered separately.\n  You can use the <tt>#AI_CONFIG_PP_SBP_REMOVE</tt> importer property to\n  specify which primitive types you need. This can be used to easily\n  exclude lines and points, which are rarely used, from the import."]
+    pub const aiProcess_SortByPType: aiPostProcessSteps = aiPostProcessSteps(32768);
+    #[doc = " <hr>This step searches all meshes for degenerate primitives and\n  converts them to proper lines or points.\n\n A face is 'degenerate' if one or more of its points are identical.\n To have the degenerate stuff not only detected and collapsed but\n removed, try one of the following procedures:\n <br><b>1.</b> (if you support lines and points for rendering but don't\n    want the degenerates)<br>\n <ul>\n   <li>Specify the #aiProcess_FindDegenerates flag.\n   </li>\n   <li>Set the <tt>#AI_CONFIG_PP_FD_REMOVE</tt> importer property to\n       1. This will cause the step to remove degenerate triangles from the\n       import as soon as they're detected. They won't pass any further\n       pipeline steps.\n   </li>\n </ul>\n <br><b>2.</b>(if you don't support lines and points at all)<br>\n <ul>\n   <li>Specify the #aiProcess_FindDegenerates flag.\n   </li>\n   <li>Specify the #aiProcess_SortByPType flag. This moves line and\n     point primitives to separate meshes.\n   </li>\n   <li>Set the <tt>#AI_CONFIG_PP_SBP_REMOVE</tt> importer property to\n       \n```text\n aiPrimitiveType_POINT | aiPrimitiveType_LINE\n       \n```\n to cause SortByPType to reject point\n       and line meshes from the scene.\n   </li>\n </ul>\n\n This step also removes very small triangles with a surface area smaller\n than 10^-6. If you rely on having these small triangles, or notice holes\n in your model, set the property <tt>#AI_CONFIG_PP_FD_CHECKAREA</tt> to\n false.\n @note Degenerate polygons are not necessarily evil and that's why\n they're not removed by default. There are several file formats which\n don't support lines or points, and some exporters bypass the\n format specification and write them as degenerate triangles instead."]
+    pub const aiProcess_FindDegenerates: aiPostProcessSteps = aiPostProcessSteps(65536);
+    #[doc = " <hr>This step searches all meshes for invalid data, such as zeroed\n  normal vectors or invalid UV coords and removes/fixes them. This is\n  intended to get rid of some common exporter errors.\n\n This is especially useful for normals. If they are invalid, and\n the step recognizes this, they will be removed and can later\n be recomputed, i.e. by the #aiProcess_GenSmoothNormals flag.<br>\n The step will also remove meshes that are infinitely small and reduce\n animation tracks consisting of hundreds if redundant keys to a single\n key. The <tt>AI_CONFIG_PP_FID_ANIM_ACCURACY</tt> config property decides\n the accuracy of the check for duplicate animation tracks."]
+    pub const aiProcess_FindInvalidData: aiPostProcessSteps = aiPostProcessSteps(131072);
+    #[doc = " <hr>This step converts non-UV mappings (such as spherical or\n  cylindrical mapping) to proper texture coordinate channels.\n\n Most applications will support UV mapping only, so you will\n probably want to specify this step in every case. Note that Assimp is not\n always able to match the original mapping implementation of the\n 3D app which produced a model perfectly. It's always better to let the\n modelling app compute the UV channels - 3ds max, Maya, Blender,\n LightWave, and Modo do this for example.\n\n @note If this step is not requested, you'll need to process the\n <tt>#AI_MATKEY_MAPPING</tt> material property in order to display all assets\n properly."]
+    pub const aiProcess_GenUVCoords: aiPostProcessSteps = aiPostProcessSteps(262144);
+    #[doc = " <hr>This step applies per-texture UV transformations and bakes\n  them into stand-alone vtexture coordinate channels.\n\n UV transformations are specified per-texture - see the\n <tt>#AI_MATKEY_UVTRANSFORM</tt> material key for more information.\n This step processes all textures with\n transformed input UV coordinates and generates a new (pre-transformed) UV channel\n which replaces the old channel. Most applications won't support UV\n transformations, so you will probably want to specify this step.\n\n @note UV transformations are usually implemented in real-time apps by\n transforming texture coordinates at vertex shader stage with a 3x3\n (homogeneous) transformation matrix."]
+    pub const aiProcess_TransformUVCoords: aiPostProcessSteps = aiPostProcessSteps(524288);
+    #[doc = " <hr>This step searches for duplicate meshes and replaces them\n  with references to the first mesh.\n\n  This step takes a while, so don't use it if speed is a concern.\n  Its main purpose is to workaround the fact that many export\n  file formats don't support instanced meshes, so exporters need to\n  duplicate meshes. This step removes the duplicates again. Please\n  note that Assimp does not currently support per-node material\n  assignment to meshes, which means that identical meshes with\n  different materials are currently *not* joined, although this is\n  planned for future versions."]
+    pub const aiProcess_FindInstances: aiPostProcessSteps = aiPostProcessSteps(1048576);
+    #[doc = " <hr>A post-processing step to reduce the number of meshes.\n\n  This will, in fact, reduce the number of draw calls.\n\n  This is a very effective optimization and is recommended to be used\n  together with #aiProcess_OptimizeGraph, if possible. The flag is fully\n  compatible with both #aiProcess_SplitLargeMeshes and #aiProcess_SortByPType."]
+    pub const aiProcess_OptimizeMeshes: aiPostProcessSteps = aiPostProcessSteps(2097152);
+    #[doc = " <hr>A post-processing step to optimize the scene hierarchy.\n\n  Nodes without animations, bones, lights or cameras assigned are\n  collapsed and joined.\n\n  Node names can be lost during this step. If you use special 'tag nodes'\n  to pass additional information through your content pipeline, use the\n  <tt>#AI_CONFIG_PP_OG_EXCLUDE_LIST</tt> importer property to specify a\n  list of node names you want to be kept. Nodes matching one of the names\n  in this list won't be touched or modified.\n\n  Use this flag with caution. Most simple files will be collapsed to a\n  single node, so complex hierarchies are usually completely lost. This is not\n  useful for editor environments, but probably a very effective\n  optimization if you just want to get the model data, convert it to your\n  own format, and render it as fast as possible.\n\n  This flag is designed to be used with #aiProcess_OptimizeMeshes for best\n  results.\n\n  @note 'Crappy' scenes with thousands of extremely small meshes packed\n  in deeply nested nodes exist for almost all file formats.\n  #aiProcess_OptimizeMeshes in combination with #aiProcess_OptimizeGraph\n  usually fixes them all and makes them renderable."]
+    pub const aiProcess_OptimizeGraph: aiPostProcessSteps = aiPostProcessSteps(4194304);
+    #[doc = " <hr>This step flips all UV coordinates along the y-axis and adjusts\n material settings and bitangents accordingly.\n\n <b>Output UV coordinate system:</b>\n \n```text\n\n 0x|0y ---------- 1x|0y\n |                 |\n |                 |\n |                 |\n 0x|1y ---------- 1x|1y\n \n```\n\n\n You'll probably want to consider this flag if you use Direct3D for\n rendering. The #aiProcess_ConvertToLeftHanded flag supersedes this\n setting and bundles all conversions typically required for D3D-based\n applications."]
+    pub const aiProcess_FlipUVs: aiPostProcessSteps = aiPostProcessSteps(8388608);
+    #[doc = " <hr>This step adjusts the output face winding order to be CW.\n\n The default face winding order is counter clockwise (CCW).\n\n <b>Output face order:</b>\n \n```text\n\n       x2\n\n                         x0\n  x1\n \n```\n"]
+    pub const aiProcess_FlipWindingOrder: aiPostProcessSteps = aiPostProcessSteps(16777216);
+    #[doc = " <hr>This step splits meshes with many bones into sub-meshes so that each\n sub-mesh has fewer or as many bones as a given limit."]
+    pub const aiProcess_SplitByBoneCount: aiPostProcessSteps = aiPostProcessSteps(33554432);
+    #[doc = " <hr>This step removes bones losslessly or according to some threshold.\n\n  In some cases (i.e. formats that require it) exporters are forced to\n  assign dummy bone weights to otherwise static meshes assigned to\n  animated meshes. Full, weight-based skinning is expensive while\n  animating nodes is extremely cheap, so this step is offered to clean up\n  the data in that regard.\n\n  Use <tt>#AI_CONFIG_PP_DB_THRESHOLD</tt> to control this.\n  Use <tt>#AI_CONFIG_PP_DB_ALL_OR_NONE</tt> if you want bones removed if and\n  only if all bones within the scene qualify for removal."]
+    pub const aiProcess_Debone: aiPostProcessSteps = aiPostProcessSteps(67108864);
+    #[doc = " <hr>This step will perform a global scale of the model.\n\n  Some importers are providing a mechanism to define a scaling unit for the\n  model. This post processing step can be used to do so. You need to get the\n  global scaling from your importer settings like in FBX. Use the flag\n  AI_CONFIG_GLOBAL_SCALE_FACTOR_KEY from the global property table to configure this.\n\n  Use <tt>#AI_CONFIG_GLOBAL_SCALE_FACTOR_KEY</tt> to setup the global scaling factor."]
+    pub const aiProcess_GlobalScale: aiPostProcessSteps = aiPostProcessSteps(134217728);
+    #[doc = " <hr>A postprocessing step to embed of textures.\n\n  This will remove external data dependencies for textures.\n  If a texture's file does not exist at the specified path\n  (due, for instance, to an absolute path generated on another system),\n  it will check if a file with the same name exists at the root folder\n  of the imported model. And if so, it uses that."]
+    pub const aiProcess_EmbedTextures: aiPostProcessSteps = aiPostProcessSteps(268435456);
+    #[doc = " <hr>A postprocessing step to embed of textures.\n\n  This will remove external data dependencies for textures.\n  If a texture's file does not exist at the specified path\n  (due, for instance, to an absolute path generated on another system),\n  it will check if a file with the same name exists at the root folder\n  of the imported model. And if so, it uses that."]
+    pub const aiProcess_ForceGenNormals: aiPostProcessSteps = aiPostProcessSteps(536870912);
+    #[doc = " <hr>Drops normals for all faces of all meshes.\n\n This is ignored if no normals are present.\n Face normals are shared between all points of a single face,\n so a single point can have multiple normals, which\n forces the library to duplicate vertices in some cases.\n #aiProcess_JoinIdenticalVertices is *senseless* then.\n This process gives sense back to aiProcess_JoinIdenticalVertices"]
+    pub const aiProcess_DropNormals: aiPostProcessSteps = aiPostProcessSteps(1073741824);
+    pub const aiProcess_GenBoundingBoxes: aiPostProcessSteps = aiPostProcessSteps(2147483648);
+}
+#[repr(transparent)]
 #[doc = " @enum  aiPostProcessSteps\n  @brief Defines the flags for all possible post processing steps.\n\n  @note Some steps are influenced by properties set on the Assimp::Importer itself\n\n  @see Assimp::Importer::ReadFile()\n  @see Assimp::Importer::SetPropertyInteger()\n  @see aiImportFile\n  @see aiImportFileEx"]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
-pub enum aiPostProcessSteps {
-    #[doc = " <hr>Calculates the tangents and bitangents for the imported meshes.\n\n Does nothing if a mesh does not have normals. You might want this post\n processing step to be executed if you plan to use tangent space calculations\n such as normal mapping  applied to the meshes. There's an importer property,\n <tt>#AI_CONFIG_PP_CT_MAX_SMOOTHING_ANGLE</tt>, which allows you to specify\n a maximum smoothing angle for the algorithm. However, usually you'll\n want to leave it at the default value."]
-    aiProcess_CalcTangentSpace = 1,
-    #[doc = " <hr>Identifies and joins identical vertex data sets within all\n  imported meshes.\n\n After this step is run, each mesh contains unique vertices,\n so a vertex may be used by multiple faces. You usually want\n to use this post processing step. If your application deals with\n indexed geometry, this step is compulsory or you'll just waste rendering\n time. <b>If this flag is not specified</b>, no vertices are referenced by\n more than one face and <b>no index buffer is required</b> for rendering.\n Unless the importer (like ply) had to split vertices. Then you need one regardless."]
-    aiProcess_JoinIdenticalVertices = 2,
-    #[doc = " <hr>Converts all the imported data to a left-handed coordinate space.\n\n By default the data is returned in a right-handed coordinate space (which\n OpenGL prefers). In this space, +X points to the right,\n +Z points towards the viewer, and +Y points upwards. In the DirectX\n coordinate space +X points to the right, +Y points upwards, and +Z points\n away from the viewer.\n\n You'll probably want to consider this flag if you use Direct3D for\n rendering. The #aiProcess_ConvertToLeftHanded flag supersedes this\n setting and bundles all conversions typically required for D3D-based\n applications."]
-    aiProcess_MakeLeftHanded = 4,
-    #[doc = " <hr>Triangulates all faces of all meshes.\n\n By default the imported mesh data might contain faces with more than 3\n indices. For rendering you'll usually want all faces to be triangles.\n This post processing step splits up faces with more than 3 indices into\n triangles. Line and point primitives are *not* modified! If you want\n 'triangles only' with no other kinds of primitives, try the following\n solution:\n <ul>\n <li>Specify both #aiProcess_Triangulate and #aiProcess_SortByPType </li>\n <li>Ignore all point and line meshes when you process assimp's output</li>\n </ul>"]
-    aiProcess_Triangulate = 8,
-    #[doc = " <hr>Removes some parts of the data structure (animations, materials,\n  light sources, cameras, textures, vertex components).\n\n The  components to be removed are specified in a separate\n importer property, <tt>#AI_CONFIG_PP_RVC_FLAGS</tt>. This is quite useful\n if you don't need all parts of the output structure. Vertex colors\n are rarely used today for example... Calling this step to remove unneeded\n data from the pipeline as early as possible results in increased\n performance and a more optimized output data structure.\n This step is also useful if you want to force Assimp to recompute\n normals or tangents. The corresponding steps don't recompute them if\n they're already there (loaded from the source asset). By using this\n step you can make sure they are NOT there.\n\n This flag is a poor one, mainly because its purpose is usually\n misunderstood. Consider the following case: a 3D model has been exported\n from a CAD app, and it has per-face vertex colors. Vertex positions can't be\n shared, thus the #aiProcess_JoinIdenticalVertices step fails to\n optimize the data because of these nasty little vertex colors.\n Most apps don't even process them, so it's all for nothing. By using\n this step, unneeded components are excluded as early as possible\n thus opening more room for internal optimizations."]
-    aiProcess_RemoveComponent = 16,
-    #[doc = " <hr>Generates normals for all faces of all meshes.\n\n This is ignored if normals are already there at the time this flag\n is evaluated. Model importers try to load them from the source file, so\n they're usually already there. Face normals are shared between all points\n of a single face, so a single point can have multiple normals, which\n forces the library to duplicate vertices in some cases.\n #aiProcess_JoinIdenticalVertices is *senseless* then.\n\n This flag may not be specified together with #aiProcess_GenSmoothNormals."]
-    aiProcess_GenNormals = 32,
-    #[doc = " <hr>Generates smooth normals for all vertices in the mesh.\n\n This is ignored if normals are already there at the time this flag\n is evaluated. Model importers try to load them from the source file, so\n they're usually already there.\n\n This flag may not be specified together with\n #aiProcess_GenNormals. There's a importer property,\n <tt>#AI_CONFIG_PP_GSN_MAX_SMOOTHING_ANGLE</tt> which allows you to specify\n an angle maximum for the normal smoothing algorithm. Normals exceeding\n this limit are not smoothed, resulting in a 'hard' seam between two faces.\n Using a decent angle here (e.g. 80 degrees) results in very good visual\n appearance."]
-    aiProcess_GenSmoothNormals = 64,
-    #[doc = " <hr>Splits large meshes into smaller sub-meshes.\n\n This is quite useful for real-time rendering, where the number of triangles\n which can be maximally processed in a single draw-call is limited\n by the video driver/hardware. The maximum vertex buffer is usually limited\n too. Both requirements can be met with this step: you may specify both a\n triangle and vertex limit for a single mesh.\n\n The split limits can (and should!) be set through the\n <tt>#AI_CONFIG_PP_SLM_VERTEX_LIMIT</tt> and <tt>#AI_CONFIG_PP_SLM_TRIANGLE_LIMIT</tt>\n importer properties. The default values are <tt>#AI_SLM_DEFAULT_MAX_VERTICES</tt> and\n <tt>#AI_SLM_DEFAULT_MAX_TRIANGLES</tt>.\n\n Note that splitting is generally a time-consuming task, but only if there's\n something to split. The use of this step is recommended for most users."]
-    aiProcess_SplitLargeMeshes = 128,
-    #[doc = " <hr>Removes the node graph and pre-transforms all vertices with\n the local transformation matrices of their nodes.\n\n If the resulting scene can be reduced to a single mesh, with a single\n material, no lights, and no cameras, then the output scene will contain\n only a root node (with no children) that references the single mesh.\n Otherwise, the output scene will be reduced to a root node with a single\n level of child nodes, each one referencing one mesh, and each mesh\n referencing one material.\n\n In either case, for rendering, you can\n simply render all meshes in order - you don't need to pay\n attention to local transformations and the node hierarchy.\n Animations are removed during this step.\n This step is intended for applications without a scenegraph.\n The step CAN cause some problems: if e.g. a mesh of the asset\n contains normals and another, using the same material index, does not,\n they will be brought together, but the first meshes's part of\n the normal list is zeroed. However, these artifacts are rare.\n @note The <tt>#AI_CONFIG_PP_PTV_NORMALIZE</tt> configuration property\n can be set to normalize the scene's spatial dimension to the -1...1\n range."]
-    aiProcess_PreTransformVertices = 256,
-    #[doc = " <hr>Limits the number of bones simultaneously affecting a single vertex\n  to a maximum value.\n\n If any vertex is affected by more than the maximum number of bones, the least\n important vertex weights are removed and the remaining vertex weights are\n renormalized so that the weights still sum up to 1.\n The default bone weight limit is 4 (defined as <tt>#AI_LMW_MAX_WEIGHTS</tt> in\n config.h), but you can use the <tt>#AI_CONFIG_PP_LBW_MAX_WEIGHTS</tt> importer\n property to supply your own limit to the post processing step.\n\n If you intend to perform the skinning in hardware, this post processing\n step might be of interest to you."]
-    aiProcess_LimitBoneWeights = 512,
-    #[doc = " <hr>Validates the imported scene data structure.\n This makes sure that all indices are valid, all animations and\n bones are linked correctly, all material references are correct .. etc.\n\n It is recommended that you capture Assimp's log output if you use this flag,\n so you can easily find out what's wrong if a file fails the\n validation. The validator is quite strict and will find *all*\n inconsistencies in the data structure... It is recommended that plugin\n developers use it to debug their loaders. There are two types of\n validation failures:\n <ul>\n <li>Error: There's something wrong with the imported data. Further\n   postprocessing is not possible and the data is not usable at all.\n   The import fails. #Importer::GetErrorString() or #aiGetErrorString()\n   carry the error message around.</li>\n <li>Warning: There are some minor issues (e.g. 1000000 animation\n   keyframes with the same time), but further postprocessing and use\n   of the data structure is still safe. Warning details are written\n   to the log file, <tt>#AI_SCENE_FLAGS_VALIDATION_WARNING</tt> is set\n   in #aiScene::mFlags</li>\n </ul>\n\n This post-processing step is not time-consuming. Its use is not\n compulsory, but recommended."]
-    aiProcess_ValidateDataStructure = 1024,
-    #[doc = " <hr>Reorders triangles for better vertex cache locality.\n\n The step tries to improve the ACMR (average post-transform vertex cache\n miss ratio) for all meshes. The implementation runs in O(n) and is\n roughly based on the 'tipsify' algorithm (see <a href=\"\n http://www.cs.princeton.edu/gfx/pubs/Sander_2007_%3ETR/tipsy.pdf\">this\n paper</a>).\n\n If you intend to render huge models in hardware, this step might\n be of interest to you. The <tt>#AI_CONFIG_PP_ICL_PTCACHE_SIZE</tt>\n importer property can be used to fine-tune the cache optimization."]
-    aiProcess_ImproveCacheLocality = 2048,
-    #[doc = " <hr>Searches for redundant/unreferenced materials and removes them.\n\n This is especially useful in combination with the\n #aiProcess_PreTransformVertices and #aiProcess_OptimizeMeshes flags.\n Both join small meshes with equal characteristics, but they can't do\n their work if two meshes have different materials. Because several\n material settings are lost during Assimp's import filters,\n (and because many exporters don't check for redundant materials), huge\n models often have materials which are are defined several times with\n exactly the same settings.\n\n Several material settings not contributing to the final appearance of\n a surface are ignored in all comparisons (e.g. the material name).\n So, if you're passing additional information through the\n content pipeline (probably using *magic* material names), don't\n specify this flag. Alternatively take a look at the\n <tt>#AI_CONFIG_PP_RRM_EXCLUDE_LIST</tt> importer property."]
-    aiProcess_RemoveRedundantMaterials = 4096,
-    #[doc = " <hr>This step tries to determine which meshes have normal vectors\n that are facing inwards and inverts them.\n\n The algorithm is simple but effective:\n the bounding box of all vertices + their normals is compared against\n the volume of the bounding box of all vertices without their normals.\n This works well for most objects, problems might occur with planar\n surfaces. However, the step tries to filter such cases.\n The step inverts all in-facing normals. Generally it is recommended\n to enable this step, although the result is not always correct."]
-    aiProcess_FixInfacingNormals = 8192,
-    #[doc = " This step generically populates aiBone->mArmature and aiBone->mNode generically\n The point of these is it saves you later having to calculate these elements\n This is useful when handling rest information or skin information\n If you have multiple armatures on your models we strongly recommend enabling this\n Instead of writing your own multi-root, multi-armature lookups we have done the\n hard work for you :)"]
-    aiProcess_PopulateArmatureData = 16384,
-    #[doc = " <hr>This step splits meshes with more than one primitive type in\n  homogeneous sub-meshes.\n\n  The step is executed after the triangulation step. After the step\n  returns, just one bit is set in aiMesh::mPrimitiveTypes. This is\n  especially useful for real-time rendering where point and line\n  primitives are often ignored or rendered separately.\n  You can use the <tt>#AI_CONFIG_PP_SBP_REMOVE</tt> importer property to\n  specify which primitive types you need. This can be used to easily\n  exclude lines and points, which are rarely used, from the import."]
-    aiProcess_SortByPType = 32768,
-    #[doc = " <hr>This step searches all meshes for degenerate primitives and\n  converts them to proper lines or points.\n\n A face is 'degenerate' if one or more of its points are identical.\n To have the degenerate stuff not only detected and collapsed but\n removed, try one of the following procedures:\n <br><b>1.</b> (if you support lines and points for rendering but don't\n    want the degenerates)<br>\n <ul>\n   <li>Specify the #aiProcess_FindDegenerates flag.\n   </li>\n   <li>Set the <tt>#AI_CONFIG_PP_FD_REMOVE</tt> importer property to\n       1. This will cause the step to remove degenerate triangles from the\n       import as soon as they're detected. They won't pass any further\n       pipeline steps.\n   </li>\n </ul>\n <br><b>2.</b>(if you don't support lines and points at all)<br>\n <ul>\n   <li>Specify the #aiProcess_FindDegenerates flag.\n   </li>\n   <li>Specify the #aiProcess_SortByPType flag. This moves line and\n     point primitives to separate meshes.\n   </li>\n   <li>Set the <tt>#AI_CONFIG_PP_SBP_REMOVE</tt> importer property to\n       @code aiPrimitiveType_POINT | aiPrimitiveType_LINE\n       @endcode to cause SortByPType to reject point\n       and line meshes from the scene.\n   </li>\n </ul>\n\n This step also removes very small triangles with a surface area smaller\n than 10^-6. If you rely on having these small triangles, or notice holes\n in your model, set the property <tt>#AI_CONFIG_PP_FD_CHECKAREA</tt> to\n false.\n @note Degenerate polygons are not necessarily evil and that's why\n they're not removed by default. There are several file formats which\n don't support lines or points, and some exporters bypass the\n format specification and write them as degenerate triangles instead."]
-    aiProcess_FindDegenerates = 65536,
-    #[doc = " <hr>This step searches all meshes for invalid data, such as zeroed\n  normal vectors or invalid UV coords and removes/fixes them. This is\n  intended to get rid of some common exporter errors.\n\n This is especially useful for normals. If they are invalid, and\n the step recognizes this, they will be removed and can later\n be recomputed, i.e. by the #aiProcess_GenSmoothNormals flag.<br>\n The step will also remove meshes that are infinitely small and reduce\n animation tracks consisting of hundreds if redundant keys to a single\n key. The <tt>AI_CONFIG_PP_FID_ANIM_ACCURACY</tt> config property decides\n the accuracy of the check for duplicate animation tracks."]
-    aiProcess_FindInvalidData = 131072,
-    #[doc = " <hr>This step converts non-UV mappings (such as spherical or\n  cylindrical mapping) to proper texture coordinate channels.\n\n Most applications will support UV mapping only, so you will\n probably want to specify this step in every case. Note that Assimp is not\n always able to match the original mapping implementation of the\n 3D app which produced a model perfectly. It's always better to let the\n modelling app compute the UV channels - 3ds max, Maya, Blender,\n LightWave, and Modo do this for example.\n\n @note If this step is not requested, you'll need to process the\n <tt>#AI_MATKEY_MAPPING</tt> material property in order to display all assets\n properly."]
-    aiProcess_GenUVCoords = 262144,
-    #[doc = " <hr>This step applies per-texture UV transformations and bakes\n  them into stand-alone vtexture coordinate channels.\n\n UV transformations are specified per-texture - see the\n <tt>#AI_MATKEY_UVTRANSFORM</tt> material key for more information.\n This step processes all textures with\n transformed input UV coordinates and generates a new (pre-transformed) UV channel\n which replaces the old channel. Most applications won't support UV\n transformations, so you will probably want to specify this step.\n\n @note UV transformations are usually implemented in real-time apps by\n transforming texture coordinates at vertex shader stage with a 3x3\n (homogeneous) transformation matrix."]
-    aiProcess_TransformUVCoords = 524288,
-    #[doc = " <hr>This step searches for duplicate meshes and replaces them\n  with references to the first mesh.\n\n  This step takes a while, so don't use it if speed is a concern.\n  Its main purpose is to workaround the fact that many export\n  file formats don't support instanced meshes, so exporters need to\n  duplicate meshes. This step removes the duplicates again. Please\n  note that Assimp does not currently support per-node material\n  assignment to meshes, which means that identical meshes with\n  different materials are currently *not* joined, although this is\n  planned for future versions."]
-    aiProcess_FindInstances = 1048576,
-    #[doc = " <hr>A post-processing step to reduce the number of meshes.\n\n  This will, in fact, reduce the number of draw calls.\n\n  This is a very effective optimization and is recommended to be used\n  together with #aiProcess_OptimizeGraph, if possible. The flag is fully\n  compatible with both #aiProcess_SplitLargeMeshes and #aiProcess_SortByPType."]
-    aiProcess_OptimizeMeshes = 2097152,
-    #[doc = " <hr>A post-processing step to optimize the scene hierarchy.\n\n  Nodes without animations, bones, lights or cameras assigned are\n  collapsed and joined.\n\n  Node names can be lost during this step. If you use special 'tag nodes'\n  to pass additional information through your content pipeline, use the\n  <tt>#AI_CONFIG_PP_OG_EXCLUDE_LIST</tt> importer property to specify a\n  list of node names you want to be kept. Nodes matching one of the names\n  in this list won't be touched or modified.\n\n  Use this flag with caution. Most simple files will be collapsed to a\n  single node, so complex hierarchies are usually completely lost. This is not\n  useful for editor environments, but probably a very effective\n  optimization if you just want to get the model data, convert it to your\n  own format, and render it as fast as possible.\n\n  This flag is designed to be used with #aiProcess_OptimizeMeshes for best\n  results.\n\n  @note 'Crappy' scenes with thousands of extremely small meshes packed\n  in deeply nested nodes exist for almost all file formats.\n  #aiProcess_OptimizeMeshes in combination with #aiProcess_OptimizeGraph\n  usually fixes them all and makes them renderable."]
-    aiProcess_OptimizeGraph = 4194304,
-    #[doc = " <hr>This step flips all UV coordinates along the y-axis and adjusts\n material settings and bitangents accordingly.\n\n <b>Output UV coordinate system:</b>\n @code\n 0x|0y ---------- 1x|0y\n |                 |\n |                 |\n |                 |\n 0x|1y ---------- 1x|1y\n @endcode\n\n You'll probably want to consider this flag if you use Direct3D for\n rendering. The #aiProcess_ConvertToLeftHanded flag supersedes this\n setting and bundles all conversions typically required for D3D-based\n applications."]
-    aiProcess_FlipUVs = 8388608,
-    #[doc = " <hr>This step adjusts the output face winding order to be CW.\n\n The default face winding order is counter clockwise (CCW).\n\n <b>Output face order:</b>\n @code\n       x2\n\n                         x0\n  x1\n @endcode"]
-    aiProcess_FlipWindingOrder = 16777216,
-    #[doc = " <hr>This step splits meshes with many bones into sub-meshes so that each\n sub-mesh has fewer or as many bones as a given limit."]
-    aiProcess_SplitByBoneCount = 33554432,
-    #[doc = " <hr>This step removes bones losslessly or according to some threshold.\n\n  In some cases (i.e. formats that require it) exporters are forced to\n  assign dummy bone weights to otherwise static meshes assigned to\n  animated meshes. Full, weight-based skinning is expensive while\n  animating nodes is extremely cheap, so this step is offered to clean up\n  the data in that regard.\n\n  Use <tt>#AI_CONFIG_PP_DB_THRESHOLD</tt> to control this.\n  Use <tt>#AI_CONFIG_PP_DB_ALL_OR_NONE</tt> if you want bones removed if and\n  only if all bones within the scene qualify for removal."]
-    aiProcess_Debone = 67108864,
-    #[doc = " <hr>This step will perform a global scale of the model.\n\n  Some importers are providing a mechanism to define a scaling unit for the\n  model. This post processing step can be used to do so. You need to get the\n  global scaling from your importer settings like in FBX. Use the flag\n  AI_CONFIG_GLOBAL_SCALE_FACTOR_KEY from the global property table to configure this.\n\n  Use <tt>#AI_CONFIG_GLOBAL_SCALE_FACTOR_KEY</tt> to setup the global scaling factor."]
-    aiProcess_GlobalScale = 134217728,
-    #[doc = " <hr>A postprocessing step to embed of textures.\n\n  This will remove external data dependencies for textures.\n  If a texture's file does not exist at the specified path\n  (due, for instance, to an absolute path generated on another system),\n  it will check if a file with the same name exists at the root folder\n  of the imported model. And if so, it uses that."]
-    aiProcess_EmbedTextures = 268435456,
-    #[doc = " <hr>A postprocessing step to embed of textures.\n\n  This will remove external data dependencies for textures.\n  If a texture's file does not exist at the specified path\n  (due, for instance, to an absolute path generated on another system),\n  it will check if a file with the same name exists at the root folder\n  of the imported model. And if so, it uses that."]
-    aiProcess_ForceGenNormals = 536870912,
-    #[doc = " <hr>Drops normals for all faces of all meshes.\n\n This is ignored if no normals are present.\n Face normals are shared between all points of a single face,\n so a single point can have multiple normals, which\n forces the library to duplicate vertices in some cases.\n #aiProcess_JoinIdenticalVertices is *senseless* then.\n This process gives sense back to aiProcess_JoinIdenticalVertices"]
-    aiProcess_DropNormals = 1073741824,
-    aiProcess_GenBoundingBoxes = 2147483648,
-}
+pub struct aiPostProcessSteps(pub ::std::os::raw::c_uint);
 #[doc = "  @brief  Describes an file format which Assimp can export to.\n\n  Use #aiGetExportFormatCount() to learn how many export-formats are supported by\n  the current Assimp-build and #aiGetExportFormatDescription() to retrieve the\n  description of the export format option."]
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
@@ -2246,15 +2266,16 @@ unsafe extern "C" {
     #[doc = " @brief Returns assimp's compile flags\n  @return Any bitwise combination of the ASSIMP_CFLAGS_xxx constants."]
     pub fn aiGetCompileFlags() -> ::std::os::raw::c_uint;
 }
-#[repr(u32)]
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
-pub enum aiRustPropertyKind {
-    aiRustPropertyKind_Integer = 0,
-    aiRustPropertyKind_Float = 1,
-    aiRustPropertyKind_String = 2,
-    aiRustPropertyKind_Matrix4x4 = 3,
-    aiRustPropertyKind_Boolean = 4,
+impl aiRustPropertyKind {
+    pub const aiRustPropertyKind_Integer: aiRustPropertyKind = aiRustPropertyKind(0);
+    pub const aiRustPropertyKind_Float: aiRustPropertyKind = aiRustPropertyKind(1);
+    pub const aiRustPropertyKind_String: aiRustPropertyKind = aiRustPropertyKind(2);
+    pub const aiRustPropertyKind_Matrix4x4: aiRustPropertyKind = aiRustPropertyKind(3);
+    pub const aiRustPropertyKind_Boolean: aiRustPropertyKind = aiRustPropertyKind(4);
 }
+#[repr(transparent)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct aiRustPropertyKind(pub ::std::os::raw::c_uint);
 #[repr(C)]
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct aiRustProperty {

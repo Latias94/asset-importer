@@ -6,6 +6,8 @@ use std::{
 
 use flate2::{Compression, write::GzEncoder};
 
+#[path = "../../build_support/library_filename.rs"]
+mod library_filename;
 #[path = "../../build_support/version.rs"]
 mod version;
 
@@ -66,7 +68,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     fs::create_dir_all(&ar_dst_dir)?;
     println!("Packaging at: {}", ar_dst_dir.display());
 
-    validate_from_dir(&from_dir, link_type, &target_os)?;
+    validate_from_dir(&from_dir, link_type, target)?;
 
     let tar_file = fs::File::create(ar_dst_dir.join(&ar_filename))?;
     let mut archive = tar::Builder::new(GzEncoder::new(tar_file, Compression::best()));
@@ -80,7 +82,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     )?;
 
     let lib_root = pick_lib_root(&from_dir)?;
-    append_assimp_libs(&mut archive, &lib_root, link_type, &target_os)?;
+    append_assimp_libs(&mut archive, &lib_root, link_type, target)?;
 
     if target_os == "windows" && link_type == "dylib" {
         append_windows_runtime_dlls(&mut archive, &from_dir.join("bin"))?;
@@ -230,7 +232,7 @@ fn append_assimp_libs(
     archive: &mut tar::Builder<GzEncoder<fs::File>>,
     lib_root: &Path,
     link_type: &str,
-    target_os: &str,
+    target: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
     if !lib_root.exists() {
         return Err(format!("lib root not found at {}", lib_root.display()).into());
@@ -243,15 +245,10 @@ fn append_assimp_libs(
         let Some(name) = p.file_name().and_then(|s| s.to_str()) else {
             continue;
         };
-        let lower = name.to_ascii_lowercase();
-
-        let keep = if target_os == "windows" {
-            lower.ends_with(".lib") && (lower.starts_with("assimp") || lower.contains("zlib"))
-        } else if link_type == "static" {
-            lower.starts_with("libassimp") && lower.ends_with(".a")
-        } else {
-            lower.starts_with("libassimp") && (lower.ends_with(".dylib") || lower.contains(".so"))
-        };
+        let keep = library_filename::assimp_link_name(name, target, link_type == "static")
+            .is_some()
+            || (link_type == "static"
+                && library_filename::windows_zlib_link_name(name, target).is_some());
 
         if !keep {
             continue;
@@ -263,10 +260,10 @@ fn append_assimp_libs(
 
     if added == 0 {
         return Err(format!(
-            "No Assimp libraries selected from {} for link_type={} target_os={}",
+            "No Assimp libraries selected from {} for link_type={} target={}",
             lib_root.display(),
             link_type,
-            target_os
+            target
         )
         .into());
     }
@@ -302,7 +299,7 @@ fn append_dir_all_files(
 fn validate_from_dir(
     from_dir: &Path,
     link_type: &str,
-    target_os: &str,
+    target: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let include_version = from_dir.join("include").join("assimp").join("version.h");
     if !include_version.exists() {
@@ -324,51 +321,29 @@ fn validate_from_dir(
         .into());
     }
 
-    let lib_dir = from_dir.join("lib");
-    let lib64_dir = from_dir.join("lib64");
+    let lib_dir = pick_lib_root(from_dir)?;
     let bin_dir = from_dir.join("bin");
-
-    let lib_roots = [lib_dir.as_path(), lib64_dir.as_path()];
-
+    let target_os = target_os_from_triple(target);
     let mut has_static = false;
     let mut has_shared = false;
-    let mut has_windows_lib = false;
+    let mut has_zlib = false;
 
-    for root in lib_roots {
-        if !root.exists() {
+    for entry in fs::read_dir(&lib_dir)?.flatten() {
+        let path = entry.path();
+        let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
             continue;
-        }
-        for entry in fs::read_dir(root)?.flatten() {
-            let p = entry.path();
-            let Some(name) = p.file_name().and_then(|s| s.to_str()) else {
-                continue;
-            };
-            let lower = name.to_ascii_lowercase();
-
-            if target_os == "windows" {
-                if lower.starts_with("assimp") && lower.ends_with(".lib") {
-                    has_windows_lib = true;
-                }
-                continue;
-            }
-
-            if lower.starts_with("libassimp") && lower.ends_with(".a") {
-                has_static = true;
-            }
-            if lower.starts_with("libassimp")
-                && (lower.ends_with(".dylib") || lower.contains(".so"))
-            {
-                has_shared = true;
-            }
-        }
+        };
+        has_static |= library_filename::assimp_link_name(name, target, true).is_some();
+        has_shared |= library_filename::assimp_link_name(name, target, false).is_some();
+        has_zlib |= library_filename::windows_zlib_link_name(name, target).is_some();
     }
 
     let has_windows_dll = if target_os == "windows" && bin_dir.exists() {
-        fs::read_dir(&bin_dir)?.flatten().any(|e| {
-            e.path()
-                .extension()
-                .and_then(|s| s.to_str())
-                .is_some_and(|ext| ext.eq_ignore_ascii_case("dll"))
+        fs::read_dir(&bin_dir)?.flatten().any(|entry| {
+            entry.file_name().to_str().is_some_and(|name| {
+                let lower = name.to_ascii_lowercase();
+                lower.contains("assimp") && lower.ends_with(".dll")
+            })
         })
     } else {
         false
@@ -376,19 +351,20 @@ fn validate_from_dir(
 
     match (target_os, link_type) {
         ("windows", "static") => {
-            if !has_windows_lib {
+            if !has_static || !has_zlib {
                 return Err(format!(
-                    "Windows static package is missing assimp *.lib under {} (or {}).",
-                    lib_dir.display(),
-                    lib64_dir.display()
+                    "Windows static package for {} is missing Assimp and/or bundled zlib static libraries under {}.",
+                    target,
+                    lib_dir.display()
                 )
                 .into());
             }
         }
         ("windows", "dylib") => {
-            if !has_windows_lib || !has_windows_dll {
+            if !has_shared || !has_windows_dll {
                 return Err(format!(
-                    "Windows dylib package is missing assimp import lib (*.lib) and/or runtime DLLs (bin/*.dll). lib={}, bin={}",
+                    "Windows dylib package for {} is missing its Assimp import library and/or runtime DLLs (bin/*.dll). lib={}, bin={}",
+                    target,
                     lib_dir.display(),
                     bin_dir.display()
                 )

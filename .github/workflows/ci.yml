@@ -50,7 +50,7 @@ jobs:
 
       - name: Install Windows dependencies
         if: runner.os == 'Windows'
-        run: choco install -y cmake
+        run: choco install -y cmake llvm
 
       - name: Select static CRT (Windows)
         if: ${{ runner.os == 'Windows' && matrix.crt == 'static' }}
@@ -77,6 +77,14 @@ jobs:
         run: cargo test --workspace --no-default-features --features "${{ matrix.features }}"
         env:
           ASSET_IMPORTER_FORCE_BUILD: "1"
+
+      - name: Check regenerated MSVC bindings and all safe API features
+        if: runner.os == 'Windows'
+        run: cargo check --workspace --all-targets --no-default-features --features "${{ matrix.features }},export,raw-sys,type-extensions,glam,mint,bytemuck,demo,asset-importer-sys/generate-bindings"
+        env:
+          ASSET_IMPORTER_FORCE_BUILD: "1"
+          ASSET_IMPORTER_FORCE_GENERATE_BINDINGS: "1"
+          LIBCLANG_PATH: C:\Program Files\LLVM\bin
 
   feature-check:
     name: Feature Check (ubuntu-latest)

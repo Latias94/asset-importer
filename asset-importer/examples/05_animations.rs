@@ -8,7 +8,6 @@ use std::error::Error;
 use asset_importer::postprocess::PostProcessSteps;
 
 fn main() -> Result<(), Box<dyn Error>> {
-    common::init_logging_from_env();
     let path = common::resolve_model_path(common::ModelSource::ArgOrExamplesDir, "morph_mesh.glb");
     let scene = common::import_scene(&path, PostProcessSteps::empty())?;
 
@@ -78,6 +77,5 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
     }
 
-    common::shutdown_logging();
     Ok(())
 }

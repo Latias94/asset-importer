@@ -16,8 +16,6 @@ use std::error::Error;
 use asset_importer::postprocess::PostProcessSteps;
 
 fn main() -> Result<(), Box<dyn Error>> {
-    common::init_logging_from_env();
-
     let path = common::resolve_model_path(common::ModelSource::ArgOnly, "unused");
     let scene = common::import_scene(&path, PostProcessSteps::empty())?;
 
@@ -105,6 +103,5 @@ fn main() -> Result<(), Box<dyn Error>> {
         println!("No rigged meshes with bones found in this model.");
     }
 
-    common::shutdown_logging();
     Ok(())
 }

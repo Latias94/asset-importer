@@ -364,6 +364,8 @@ impl Matrix4x4 {
     /// Decompose into `(scale, rotation, translation)`.
     ///
     /// This matches the method name provided by `glam::Mat4` to keep the API ergonomic.
+    /// Reflections are represented by a negative X scale; the original per-axis signs
+    /// cannot be recovered uniquely.
     pub fn to_scale_rotation_translation(self) -> (Vector3D, Quaternion, Vector3D) {
         let translation = Vector3D::new(self.w_axis.x, self.w_axis.y, self.w_axis.z);
 
@@ -371,7 +373,10 @@ impl Matrix4x4 {
         let y = Vector3D::new(self.y_axis.x, self.y_axis.y, self.y_axis.z);
         let z = Vector3D::new(self.z_axis.x, self.z_axis.y, self.z_axis.z);
 
-        let scale = Vector3D::new(x.length(), y.length(), z.length());
+        let mut scale = Vector3D::new(x.length(), y.length(), z.length());
+        if x.dot(y.cross(z)) < 0.0 {
+            scale.x = -scale.x;
+        }
 
         let rx = if scale.x == 0.0 {
             Vector3D::new(1.0, 0.0, 0.0)

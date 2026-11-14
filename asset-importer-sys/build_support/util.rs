@@ -1,5 +1,8 @@
 use std::path::{Path, PathBuf};
 
+#[path = "library_filename.rs"]
+pub mod library_filename;
+
 pub fn warn(message: impl AsRef<str>) {
     println!("cargo:warning={}", message.as_ref());
 }

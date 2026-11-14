@@ -4,7 +4,7 @@
 //! allowing you to access additional information stored in 3D models.
 
 use crate::{
-    error::Result,
+    error::{Error, Result},
     ffi, sys,
     types::{Vector3D, ai_string_to_string},
 };
@@ -23,8 +23,8 @@ impl MetadataEntryData {
     /// `entry.mData` must be a valid pointer for the corresponding metadata type.
     unsafe fn from_entry(entry: &sys::aiMetadataEntry) -> Result<Self> {
         if entry.mData.is_null() {
-            return Err(crate::error::Error::invalid_parameter(
-                "Null metadata data".to_string(),
+            return Err(Error::invalid_scene(
+                "Null data for assigned metadata value",
             ));
         }
         Ok(Self {
@@ -158,6 +158,10 @@ pub enum MetadataType {
     Int64,
     /// 32-bit unsigned integer
     UInt32,
+    /// A key without an assigned value (`AI_META_MAX`).
+    Unassigned,
+    /// An unsupported native type, preserved without reading its payload.
+    Unknown(u32),
 }
 
 /// A metadata entry containing a typed value
@@ -183,6 +187,10 @@ pub enum MetadataEntry {
     Int64(i64),
     /// 32-bit unsigned integer
     UInt32(u32),
+    /// A key without an assigned value (`AI_META_MAX` with null data).
+    Unassigned,
+    /// An unsupported native type, preserved without reading or retaining its payload.
+    Unknown(u32),
 }
 
 impl MetadataEntry {
@@ -199,6 +207,8 @@ impl MetadataEntry {
             MetadataEntry::Metadata(_) => MetadataType::Metadata,
             MetadataEntry::Int64(_) => MetadataType::Int64,
             MetadataEntry::UInt32(_) => MetadataType::UInt32,
+            MetadataEntry::Unassigned => MetadataType::Unassigned,
+            MetadataEntry::Unknown(raw) => MetadataType::Unknown(*raw),
         }
     }
 
@@ -297,7 +307,11 @@ impl Metadata {
         }
     }
 
-    /// Create metadata from a raw Assimp metadata pointer
+    /// Create metadata from a raw Assimp metadata pointer.
+    ///
+    /// Null metadata represents an absent collection. Unassigned and unknown entries keep
+    /// their keys; invalid known values fail the entire conversion, including nested values.
+    /// Errors identify the failing key and native type instead of returning partial metadata.
     ///
     /// # Safety
     ///
@@ -309,12 +323,12 @@ impl Metadata {
 
         let align = std::mem::align_of::<sys::aiMetadata>();
         if align > 1 && (metadata_ptr as usize) % align != 0 {
-            return Ok(Self::new());
+            return Err(Error::invalid_scene("Unaligned metadata pointer"));
         }
 
         let metadata = unsafe { &*metadata_ptr };
         if metadata.mNumProperties > 0 && (metadata.mKeys.is_null() || metadata.mValues.is_null()) {
-            return Ok(Self::new());
+            return Err(Error::invalid_scene("Null metadata key or value array"));
         }
         let mut entries = std::collections::HashMap::new();
 
@@ -322,14 +336,25 @@ impl Metadata {
         let n = metadata.mNumProperties as usize;
         let keys = ffi::slice_from_ptr_len(metadata, metadata.mKeys, n);
         let values = ffi::slice_from_ptr_len(metadata, metadata.mValues, n);
-        for (key_ai_string, entry) in keys.iter().zip(values.iter()) {
+        if keys.len() != n || values.len() != n {
+            return Err(Error::invalid_scene(
+                "Invalid metadata key or value array layout",
+            ));
+        }
+        for (index, (key_ai_string, entry)) in keys.iter().zip(values.iter()).enumerate() {
+            if key_ai_string.length as usize > key_ai_string.data.len() {
+                return Err(Error::invalid_scene(format!(
+                    "Invalid metadata key length at index {index}"
+                )));
+            }
             let key = ai_string_to_string(key_ai_string);
-            if key.is_empty() {
-                continue;
-            }
-            if let Ok(entry) = unsafe { Self::parse_metadata_entry(entry) } {
-                entries.insert(key, entry);
-            }
+            let decoded = unsafe { Self::parse_metadata_entry(entry) }.map_err(|error| {
+                Error::invalid_scene(format!(
+                    "Failed to decode metadata key {key:?} (type {}): {error}",
+                    entry.mType.0
+                ))
+            })?;
+            entries.insert(key, decoded);
         }
 
         Ok(Self { entries })
@@ -341,19 +366,25 @@ impl Metadata {
     }
 
     /// Create metadata from a raw Assimp metadata pointer (requires `raw-sys`).
-    #[cfg(feature = "raw-sys")]
+    ///
+    /// Unassigned keys and unknown native types are preserved. Malformed known values or
+    /// invalid array layouts return an error; nested errors include the key path and type.
+    /// A null pointer represents an absent collection and returns empty metadata.
     ///
     /// # Safety
     /// `metadata_ptr` must be either null or point to a valid `aiMetadata` value provided by
     /// Assimp. The pointee (and any referenced key/value arrays) must remain valid for the
     /// duration of this call.
+    #[cfg(feature = "raw-sys")]
     pub unsafe fn from_raw(metadata_ptr: *const sys::aiMetadata) -> Result<Self> {
         unsafe { Self::from_raw_sys(metadata_ptr) }
     }
 
     /// Parse a single metadata entry
+    #[allow(clippy::unnecessary_cast)] // Native enum signedness depends on the target ABI.
     unsafe fn parse_metadata_entry(entry: &sys::aiMetadataEntry) -> Result<MetadataEntry> {
-        let data = unsafe { MetadataEntryData::from_entry(entry) }?;
+        // Construct the decoder only for known, assigned types. Unknown payloads are opaque.
+        let data = || unsafe { MetadataEntryData::from_entry(entry) };
 
         match entry.mType {
             sys::aiMetadataType::AI_BOOL => {
@@ -361,40 +392,48 @@ impl Metadata {
                 //
                 // Don't read a Rust `bool` directly: if a corrupted/malicious scene stores a value
                 // other than 0/1, materializing it as `bool` is UB. Decode as a byte instead.
-                Ok(MetadataEntry::Bool(unsafe { data.read_bool_byte() }))
+                Ok(MetadataEntry::Bool(unsafe { data()?.read_bool_byte() }))
             }
             sys::aiMetadataType::AI_INT32 => {
-                Ok(MetadataEntry::Int32(unsafe { data.read_ne_i32() }))
+                Ok(MetadataEntry::Int32(unsafe { data()?.read_ne_i32() }))
             }
             sys::aiMetadataType::AI_UINT64 => {
-                Ok(MetadataEntry::UInt64(unsafe { data.read_ne_u64() }))
+                Ok(MetadataEntry::UInt64(unsafe { data()?.read_ne_u64() }))
             }
             sys::aiMetadataType::AI_FLOAT => {
-                Ok(MetadataEntry::Float(unsafe { data.read_ne_f32() }))
+                Ok(MetadataEntry::Float(unsafe { data()?.read_ne_f32() }))
             }
             sys::aiMetadataType::AI_DOUBLE => {
-                Ok(MetadataEntry::Double(unsafe { data.read_ne_f64() }))
+                Ok(MetadataEntry::Double(unsafe { data()?.read_ne_f64() }))
             }
             sys::aiMetadataType::AI_AISTRING => {
-                let ai_string = unsafe { data.read_ai_string() };
+                let ai_string = unsafe { data()?.read_ai_string() };
+                if ai_string.length as usize > ai_string.data.len() {
+                    return Err(Error::invalid_scene("Invalid metadata string length"));
+                }
                 Ok(MetadataEntry::String(ai_string_to_string(&ai_string)))
             }
             sys::aiMetadataType::AI_AIVECTOR3D => {
-                Ok(MetadataEntry::Vector3D(unsafe { data.read_vector3d() }))
+                Ok(MetadataEntry::Vector3D(unsafe { data()?.read_vector3d() }))
             }
             sys::aiMetadataType::AI_AIMETADATA => {
+                data()?;
                 let nested_metadata = Self::from_sys_ptr(entry.mData as *const sys::aiMetadata)?;
                 Ok(MetadataEntry::Metadata(nested_metadata))
             }
             sys::aiMetadataType::AI_INT64 => {
-                Ok(MetadataEntry::Int64(unsafe { data.read_ne_i64() }))
+                Ok(MetadataEntry::Int64(unsafe { data()?.read_ne_i64() }))
             }
             sys::aiMetadataType::AI_UINT32 => {
-                Ok(MetadataEntry::UInt32(unsafe { data.read_ne_u32() }))
+                Ok(MetadataEntry::UInt32(unsafe { data()?.read_ne_u32() }))
             }
-            _ => Err(crate::error::Error::invalid_parameter(
-                "Unknown metadata type".to_string(),
+            sys::aiMetadataType::AI_META_MAX if entry.mData.is_null() => {
+                Ok(MetadataEntry::Unassigned)
+            }
+            sys::aiMetadataType::AI_META_MAX => Err(Error::invalid_scene(
+                "Unassigned metadata type has non-null data",
             )),
+            other => Ok(MetadataEntry::Unknown(other.0 as u32)),
         }
     }
 
@@ -504,6 +543,183 @@ impl Default for Metadata {
 mod tests {
     use super::*;
 
+    fn ai_string(value: &str) -> sys::aiString {
+        let mut string = sys::aiString::default();
+        assert!(value.len() < string.data.len());
+        string.length = value.len() as u32;
+        for (target, byte) in string.data.iter_mut().zip(value.bytes()) {
+            *target = byte as std::os::raw::c_char;
+        }
+        string
+    }
+
+    fn raw_metadata(
+        keys: &mut [sys::aiString],
+        values: &mut [sys::aiMetadataEntry],
+    ) -> sys::aiMetadata {
+        assert_eq!(keys.len(), values.len());
+        // The fixture borrows Rust-owned arrays and never transfers them to a native destructor.
+        sys::aiMetadata {
+            mNumProperties: keys.len() as u32,
+            mKeys: keys.as_mut_ptr(),
+            mValues: values.as_mut_ptr(),
+        }
+    }
+
+    #[test]
+    fn unassigned_entries_preserve_named_and_empty_keys() {
+        let mut keys = [ai_string("pending"), ai_string("")];
+        let mut values = [sys::aiMetadataEntry {
+            mType: sys::aiMetadataType::AI_META_MAX,
+            mData: std::ptr::null_mut(),
+        }; 2];
+        let raw = raw_metadata(&mut keys, &mut values);
+        let metadata = unsafe { Metadata::from_raw_sys(&raw) }.unwrap();
+        assert_eq!(metadata.len(), 2);
+        assert!(metadata.contains_key("pending"));
+        assert!(metadata.keys().any(|key| key == "pending"));
+        assert!(matches!(
+            metadata.get("pending"),
+            Some(MetadataEntry::Unassigned)
+        ));
+        assert_eq!(
+            metadata.get("pending").unwrap().metadata_type(),
+            MetadataType::Unassigned
+        );
+        assert!(matches!(metadata.get(""), Some(MetadataEntry::Unassigned)));
+        assert_eq!(metadata.get_i32("pending"), None);
+    }
+
+    #[test]
+    fn unknown_types_preserve_raw_values_without_reading_payloads() {
+        let mut keys = [ai_string("future_null"), ai_string("future_opaque")];
+        let mut values = [
+            sys::aiMetadataEntry {
+                mType: sys::aiMetadataType(77),
+                mData: std::ptr::null_mut(),
+            },
+            sys::aiMetadataEntry {
+                mType: sys::aiMetadataType(78),
+                mData: std::ptr::dangling_mut::<u8>().cast(),
+            },
+        ];
+        let raw = raw_metadata(&mut keys, &mut values);
+        let metadata = unsafe { Metadata::from_raw_sys(&raw) }.unwrap();
+        assert_eq!(metadata.len(), 2);
+        assert!(matches!(
+            metadata.get("future_null"),
+            Some(MetadataEntry::Unknown(77))
+        ));
+        assert!(matches!(
+            metadata.get("future_opaque"),
+            Some(MetadataEntry::Unknown(78))
+        ));
+        assert_eq!(
+            metadata.get("future_opaque").unwrap().metadata_type(),
+            MetadataType::Unknown(78)
+        );
+    }
+
+    #[test]
+    fn known_null_values_fail_with_key_and_type_diagnostics() {
+        for type_info in [
+            sys::aiMetadataType::AI_BOOL,
+            sys::aiMetadataType::AI_INT32,
+            sys::aiMetadataType::AI_AISTRING,
+            sys::aiMetadataType::AI_AIMETADATA,
+        ] {
+            let mut keys = [ai_string("broken")];
+            let mut values = [sys::aiMetadataEntry {
+                mType: type_info,
+                mData: std::ptr::null_mut(),
+            }];
+            let raw = raw_metadata(&mut keys, &mut values);
+            let error = unsafe { Metadata::from_raw_sys(&raw) }.unwrap_err();
+            assert!(matches!(error, Error::InvalidScene { .. }));
+            let message = error.to_string();
+            assert!(message.contains("broken"), "{message}");
+            assert!(
+                message.contains(&format!("type {}", type_info.0)),
+                "{message}"
+            );
+            assert!(message.contains("Null data"), "{message}");
+        }
+    }
+
+    #[test]
+    fn nested_metadata_keeps_unassigned_keys_and_propagates_decode_errors() {
+        let mut nested_keys = [ai_string("pending")];
+        let mut nested_values = [sys::aiMetadataEntry {
+            mType: sys::aiMetadataType::AI_META_MAX,
+            mData: std::ptr::null_mut(),
+        }];
+        let mut nested = raw_metadata(&mut nested_keys, &mut nested_values);
+        let mut keys = [ai_string("child")];
+        let mut values = [sys::aiMetadataEntry {
+            mType: sys::aiMetadataType::AI_AIMETADATA,
+            mData: std::ptr::from_mut(&mut nested).cast(),
+        }];
+        let raw = raw_metadata(&mut keys, &mut values);
+        let metadata = unsafe { Metadata::from_raw_sys(&raw) }.unwrap();
+        let child = metadata.get("child").unwrap().as_metadata().unwrap();
+        assert_eq!(child.len(), 1);
+        assert!(matches!(
+            child.get("pending"),
+            Some(MetadataEntry::Unassigned)
+        ));
+
+        nested_values[0].mType = sys::aiMetadataType::AI_INT32;
+        nested = raw_metadata(&mut nested_keys, &mut nested_values);
+        values[0].mData = std::ptr::from_mut(&mut nested).cast();
+        let raw = raw_metadata(&mut keys, &mut values);
+        let message = unsafe { Metadata::from_raw_sys(&raw) }
+            .unwrap_err()
+            .to_string();
+        assert!(message.contains("child"), "{message}");
+        assert!(message.contains("pending"), "{message}");
+        assert!(
+            message.contains(&format!("type {}", sys::aiMetadataType::AI_INT32.0)),
+            "{message}"
+        );
+    }
+
+    #[test]
+    fn invalid_array_and_string_layouts_return_errors() {
+        let raw = sys::aiMetadata {
+            mNumProperties: 1,
+            mKeys: std::ptr::null_mut(),
+            mValues: std::ptr::null_mut(),
+        };
+        assert!(unsafe { Metadata::from_raw_sys(&raw) }.is_err());
+        assert!(
+            unsafe { Metadata::from_raw_sys(std::ptr::null()) }
+                .unwrap()
+                .is_empty()
+        );
+
+        let mut string = sys::aiString {
+            length: sys::AI_MAXLEN + 1,
+            ..Default::default()
+        };
+        let mut keys = [ai_string("bad_string")];
+        let mut values = [sys::aiMetadataEntry {
+            mType: sys::aiMetadataType::AI_AISTRING,
+            mData: std::ptr::from_mut(&mut string).cast(),
+        }];
+        let raw = raw_metadata(&mut keys, &mut values);
+        let message = unsafe { Metadata::from_raw_sys(&raw) }
+            .unwrap_err()
+            .to_string();
+        assert!(message.contains("bad_string"), "{message}");
+        assert!(
+            message.contains("Invalid metadata string length"),
+            "{message}"
+        );
+        values[0].mType = sys::aiMetadataType::AI_META_MAX;
+        let raw = raw_metadata(&mut keys, &mut values);
+        assert!(unsafe { Metadata::from_raw_sys(&raw) }.is_err());
+    }
+
     #[test]
     fn parse_bool_is_robust_to_noncanonical_values() {
         let mut b0: u8 = 0;
@@ -542,8 +758,7 @@ mod tests {
     fn from_raw_sys_rejects_unaligned_pointers() {
         let buf = [0u64; 8];
         let unaligned = unsafe { (buf.as_ptr() as *const u8).add(1) } as *const sys::aiMetadata;
-        let meta = unsafe { Metadata::from_raw_sys(unaligned) }.unwrap();
-        assert!(meta.is_empty());
+        assert!(unsafe { Metadata::from_raw_sys(unaligned) }.is_err());
     }
 
     #[test]

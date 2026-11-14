@@ -9,7 +9,6 @@ use asset_importer::{get_import_extensions, version};
 use asset_importer::get_export_formats;
 
 fn main() {
-    common::init_logging_from_env();
     println!("Assimp version: {}", version::assimp_version());
 
     let exts = get_import_extensions();
@@ -30,6 +29,4 @@ fn main() {
 
     #[cfg(not(feature = "export"))]
     println!("(Enable `export` feature to list export formats)");
-
-    common::shutdown_logging();
 }

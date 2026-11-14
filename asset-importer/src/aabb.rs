@@ -210,29 +210,51 @@ impl AABB {
     ///
     /// Note: This may result in a larger AABB than necessary for rotated boxes,
     /// as the result is still axis-aligned.
+    /// Non-finite bounds or homogeneous coordinates, and boxes touching or crossing
+    /// the homogeneous `w = 0` plane, conservatively produce an infinite bound.
     pub fn transformed(&self, matrix: &Matrix4x4) -> Self {
         if self.is_empty() {
             return *self;
         }
 
-        // Transform all 8 corners of the AABB
-        let corners = [
-            Vector3D::new(self.min.x, self.min.y, self.min.z),
-            Vector3D::new(self.max.x, self.min.y, self.min.z),
-            Vector3D::new(self.min.x, self.max.y, self.min.z),
-            Vector3D::new(self.max.x, self.max.y, self.min.z),
-            Vector3D::new(self.min.x, self.min.y, self.max.z),
-            Vector3D::new(self.max.x, self.min.y, self.max.z),
-            Vector3D::new(self.min.x, self.max.y, self.max.z),
-            Vector3D::new(self.max.x, self.max.y, self.max.z),
-        ];
+        if [
+            self.min.x, self.min.y, self.min.z, self.max.x, self.max.y, self.max.z,
+        ]
+        .iter()
+        .any(|value| !value.is_finite())
+        {
+            return Self::infinite();
+        }
 
-        let transformed_corners: Vec<Vector3D> = corners
-            .iter()
-            .map(|&corner| matrix.transform_point3(corner))
-            .collect();
+        let corners = self
+            .corners()
+            .map(|corner| matrix.mul_vec4(corner.extend(1.0)));
+        let mut min_w = f32::INFINITY;
+        let mut max_w = f32::NEG_INFINITY;
+        for corner in &corners {
+            if !corner.x.is_finite()
+                || !corner.y.is_finite()
+                || !corner.z.is_finite()
+                || !corner.w.is_finite()
+            {
+                return Self::infinite();
+            }
+            min_w = min_w.min(corner.w);
+            max_w = max_w.max(corner.w);
+        }
 
-        Self::from_points(transformed_corners)
+        // Homogeneous w is affine, so its extrema occur at the box corners.
+        if min_w <= 0.0 && max_w >= 0.0 {
+            return Self::infinite();
+        }
+
+        Self::from_points(corners.map(|corner| {
+            Vector3D::new(
+                corner.x / corner.w,
+                corner.y / corner.w,
+                corner.z / corner.w,
+            )
+        }))
     }
 
     /// Expand the AABB by a uniform amount in all directions

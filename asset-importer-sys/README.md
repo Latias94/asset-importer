@@ -119,8 +119,8 @@ asset-importer-sys = {
 | Feature | Requirements |
 |---------|-------------|
 | Default vendored source | CMake (≥3.22), C++ compiler, Git |
-| `prebuilt` | None |
-| `system` | System assimp installation, libclang/bindgen |
+| `prebuilt` | C++17 compiler for the Rust bridge; no CMake or Assimp source build |
+| `system` | System assimp installation, libclang/bindgen, C++17 compiler for the bridge |
 | `build-assimp` | CMake (≥3.22), C++ compiler, Git |
 
 #### Detailed Requirements for Source Build
@@ -174,8 +174,8 @@ unsafe {
     
     let scene = sys::aiImportFile(
         filename.as_ptr(),
-        (sys::aiPostProcessSteps::aiProcess_Triangulate as u32)
-            | (sys::aiPostProcessSteps::aiProcess_FlipUVs as u32)
+        (sys::aiPostProcessSteps::aiProcess_Triangulate.0)
+            | (sys::aiPostProcessSteps::aiProcess_FlipUVs.0)
     );
     
     if !scene.is_null() {
@@ -189,6 +189,10 @@ unsafe {
 ## Goals
 
 Provides comprehensive FFI bindings for the latest Assimp with flexible build options and optional convenience features.
+
+## Native enums
+
+Native enum types are transparent integer newtypes with associated constants. Read the underlying value through `.0` (for example, `aiTextureType::aiTextureType_DIFFUSE.0`) and construct unknown values through the tuple constructor. This preserves file-provided values and combined flags without creating invalid Rust enum discriminants.
 
 ## Bindings Generation
 

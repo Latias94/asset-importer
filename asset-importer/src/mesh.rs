@@ -505,22 +505,22 @@ impl Mesh {
 
     /// Check if the mesh contains points
     pub fn has_points(&self) -> bool {
-        self.primitive_types() & (sys::aiPrimitiveType::aiPrimitiveType_POINT as u32) != 0
+        self.primitive_types() & (sys::aiPrimitiveType::aiPrimitiveType_POINT.0 as u32) != 0
     }
 
     /// Check if the mesh contains lines
     pub fn has_lines(&self) -> bool {
-        self.primitive_types() & (sys::aiPrimitiveType::aiPrimitiveType_LINE as u32) != 0
+        self.primitive_types() & (sys::aiPrimitiveType::aiPrimitiveType_LINE.0 as u32) != 0
     }
 
     /// Check if the mesh contains triangles
     pub fn has_triangles(&self) -> bool {
-        self.primitive_types() & (sys::aiPrimitiveType::aiPrimitiveType_TRIANGLE as u32) != 0
+        self.primitive_types() & (sys::aiPrimitiveType::aiPrimitiveType_TRIANGLE.0 as u32) != 0
     }
 
     /// Check if the mesh contains polygons
     pub fn has_polygons(&self) -> bool {
-        self.primitive_types() & (sys::aiPrimitiveType::aiPrimitiveType_POLYGON as u32) != 0
+        self.primitive_types() & (sys::aiPrimitiveType::aiPrimitiveType_POLYGON.0 as u32) != 0
     }
 
     /// Get the axis-aligned bounding box of the mesh
@@ -1090,6 +1090,8 @@ pub enum MorphingMethod {
     MorphNormalized,
     /// Relative morph targets (additive)
     MorphRelative,
+    /// Unrecognized native morphing method.
+    Other(u32),
 }
 
 impl MorphingMethod {
@@ -1101,7 +1103,7 @@ impl MorphingMethod {
                 MorphingMethod::MorphNormalized
             }
             sys::aiMorphingMethod::aiMorphingMethod_MORPH_RELATIVE => MorphingMethod::MorphRelative,
-            _ => MorphingMethod::Unknown,
+            other => MorphingMethod::Other(other.0 as u32),
         }
     }
 }

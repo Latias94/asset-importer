@@ -16,8 +16,6 @@ use std::{error::Error, path::PathBuf, sync::Arc};
 use asset_importer::{Importer, postprocess::PostProcessSteps};
 
 fn main() -> Result<(), Box<dyn Error>> {
-    common::init_logging_from_env();
-
     let args: Vec<String> = std::env::args().collect();
     let path = if args.len() >= 2 {
         PathBuf::from(&args[1])
@@ -64,6 +62,5 @@ fn main() -> Result<(), Box<dyn Error>> {
         scene_shared.num_textures()
     );
 
-    common::shutdown_logging();
     Ok(())
 }

@@ -14,7 +14,6 @@ use std::{
 use asset_importer::postprocess::PostProcessSteps;
 
 fn main() -> Result<(), Box<dyn Error>> {
-    common::init_logging_from_env();
     let path = common::resolve_model_path(common::ModelSource::ArgOrExamplesDir, "box.obj");
     let scene = Arc::new(common::import_scene(&path, PostProcessSteps::empty())?);
 
@@ -61,6 +60,5 @@ fn main() -> Result<(), Box<dyn Error>> {
         total_triangles.load(Ordering::Relaxed)
     );
 
-    common::shutdown_logging();
     Ok(())
 }
