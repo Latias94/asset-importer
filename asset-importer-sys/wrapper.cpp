@@ -17,6 +17,7 @@
 #include <assimp/IOStream.hpp>
 #include <assimp/ProgressHandler.hpp>
 #include <assimp/config.h>
+#include <cmath>
 #include <cstdio>
 #include <cstring>
 #include <exception>
@@ -396,6 +397,40 @@ static bool postprocess_is_supported(unsigned int flags) {
         g_last_error_msg = "SplitLargeMeshes is unsupported because Assimp 6.0.6 can retain freed meshes, write through null channel pointers, or fail to advance";
         return false;
     }
+    if (flags & aiProcess_SplitByBoneCount) {
+        g_last_error_msg = "SplitByBoneCount is unsupported because Assimp 6.0.6 can fail to advance, read null morph positions, or free meshes twice on failure";
+        return false;
+    }
+    return true;
+}
+
+static bool global_scale_is_supported(const Assimp::Importer& importer, unsigned int flags) {
+    if (!(flags & aiProcess_GlobalScale)) {
+        return true;
+    }
+    ai_real scale = importer.GetPropertyFloat(AI_CONFIG_GLOBAL_SCALE_FACTOR_KEY, 1.0f);
+    float importer_scale = importer.GetPropertyFloat(AI_CONFIG_APP_SCALE_KEY, 1.0f);
+    scale *= importer_scale;
+    if (!std::isfinite(scale) || scale == 0) {
+        g_last_error_msg = "GlobalScale requires a finite, nonzero effective scale (GLOBAL_SCALE_FACTOR * APP_SCALE_FACTOR)";
+        return false;
+    }
+    if (scale == 1.0f) {
+        return true;
+    }
+    const aiScene* scene = importer.GetScene();
+    for (unsigned int mesh_index = 0; mesh_index < scene->mNumMeshes; ++mesh_index) {
+        const aiMesh* mesh = scene->mMeshes[mesh_index];
+        for (unsigned int morph = 0; morph < mesh->mNumAnimMeshes; ++morph) {
+            const aiAnimMesh* target = mesh->mAnimMeshes[morph];
+            if (target->mNumVertices && !target->mVertices) {
+                g_last_error_msg = "GlobalScale cannot scale mesh " + std::to_string(mesh_index) +
+                    ", morph target " + std::to_string(morph) +
+                    ": a nonempty morph target has no position channel";
+                return false;
+            }
+        }
+    }
     return true;
 }
 
@@ -470,9 +505,10 @@ static aiRustScene* import_with_bridge(
 
     const bool guard_scene_copy = (flags & aiProcess_PreTransformVertices) &&
         importer.GetPropertyBool(AI_CONFIG_PP_PTV_KEEP_HIERARCHY, false);
+    const bool guard_postprocess = guard_scene_copy || (flags & aiProcess_GlobalScale);
     // ReadFile validates before ScenePreprocessor. Defer the remaining steps so
-    // the shared-mesh copy in PreTransformVertices cannot precede our guard.
-    const unsigned int read_flags = guard_scene_copy ? (flags & aiProcess_ValidateDataStructure) : flags;
+    // scene-copy and scaling checks precede the post-processing pipeline.
+    const unsigned int read_flags = guard_postprocess ? (flags & aiProcess_ValidateDataStructure) : flags;
     const aiScene* scene = nullptr;
     if (path) {
         scene = importer.ReadFile(path, read_flags);
@@ -487,8 +523,9 @@ static aiRustScene* import_with_bridge(
         return nullptr;
     }
 
-    if (scene && guard_scene_copy) {
-        if (!scene_can_be_copied(scene, false)) {
+    if (scene && guard_postprocess) {
+        if ((guard_scene_copy && !scene_can_be_copied(scene, false)) ||
+            !global_scale_is_supported(importer, flags)) {
             return nullptr;
         }
         scene = importer.ApplyPostProcessing(flags & ~aiProcess_ValidateDataStructure);
@@ -590,6 +627,9 @@ bool aiApplyPostProcessingRust(struct aiRustScene* owner, unsigned int flags) {
         if ((flags & aiProcess_PreTransformVertices) &&
             owner->importer.GetPropertyBool(AI_CONFIG_PP_PTV_KEEP_HIERARCHY, false) &&
             !scene_can_be_copied(owner->importer.GetScene(), false)) {
+            return false;
+        }
+        if (!global_scale_is_supported(owner->importer, flags)) {
             return false;
         }
         if (!owner->importer.ApplyPostProcessing(flags)) {

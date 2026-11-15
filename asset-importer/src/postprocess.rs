@@ -8,8 +8,8 @@ use bitflags::bitflags;
 bitflags! {
     /// Supported post-processing steps that can be applied to imported scenes.
     ///
-    /// Assimp 6.0.6's SplitLargeMeshes step is excluded because it can invalidate
-    /// scene ownership or write through null channel pointers.
+    /// Assimp 6.0.6's SplitLargeMeshes and SplitByBoneCount steps are excluded
+    /// because they can invalidate scene ownership, access null channels, or fail to advance.
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
     pub struct PostProcessSteps: u32 {
         /// Calculates the tangents and bitangents for the imported meshes.
@@ -84,9 +84,6 @@ bitflags! {
         /// Flips face winding order from CCW to CW or vice versa.
         const FLIP_WINDING_ORDER = sys::aiPostProcessSteps::aiProcess_FlipWindingOrder.0 as u32;
 
-        /// Splits meshes into sub-meshes whose bone counts do not exceed the configured limit.
-        const SPLIT_BY_BONE_COUNT = sys::aiPostProcessSteps::aiProcess_SplitByBoneCount.0 as u32;
-
         /// Removes bones losslessly or according to some threshold.
         const DEBONE = sys::aiPostProcessSteps::aiProcess_Debone.0 as u32;
 
@@ -123,11 +120,23 @@ impl PostProcessSteps {
     /// Some post-processing steps are mutually exclusive and cannot be used together.
     /// This function checks for such conflicts and returns an error if any are found.
     pub fn validate(&self) -> Result<(), String> {
-        if self.bits() & !Self::all().bits() != 0 {
+        if self.bits() & sys::aiPostProcessSteps::aiProcess_SplitLargeMeshes.0 as u32 != 0 {
             return Err(
-                "Unsupported post-processing flags; SplitLargeMeshes is disabled because Assimp 6.0.6 cannot execute it safely"
+                "SplitLargeMeshes is disabled because Assimp 6.0.6 cannot execute it safely"
                     .to_owned(),
             );
+        }
+        if self.bits() & sys::aiPostProcessSteps::aiProcess_SplitByBoneCount.0 as u32 != 0 {
+            return Err(
+                "SplitByBoneCount is disabled because Assimp 6.0.6 cannot execute it safely"
+                    .to_owned(),
+            );
+        }
+        let unsupported = self.bits() & !Self::all().bits();
+        if unsupported != 0 {
+            return Err(format!(
+                "Unsupported post-processing flags: {unsupported:#010x}"
+            ));
         }
         // Check for mutually exclusive flags
         if self.contains(PostProcessSteps::GEN_SMOOTH_NORMALS)
