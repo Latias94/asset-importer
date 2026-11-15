@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-11-15
+
 ### Changed
 - **Breaking:** Native enums exposed through `raw-sys` are integer newtypes; access the raw value through `.0`. Unknown light types, animation behaviors, morphing methods, material types and metadata types remain representable.
 - **Breaking:** `ShadingModel::PbrBrdf` replaces the two workflow-specific variants. Assimp's generic PBR mode cannot identify a material workflow by itself.
@@ -23,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Native imports preserve Unix path bytes. Custom file systems and file exports reject non-UTF-8 paths instead of accessing a lossy replacement path.
 
 ### Fixed
+- Global scaling validates the importer's final effective scale and rejects zero or nonfinite values before native processing. Nonidentity scaling also rejects morph targets without positions, preventing a null-pointer access on valid normal-only glTF targets. Import without scaling or with an effective scale of one remains supported.
 - Texture queries initialize all optional native outputs, including UV transforms; missing optional properties no longer result in uninitialized reads.
 - All material value queries use bounded Rust decoding, including texture parameters, float/color properties and numeric strings. Unknown types and malformed payloads no longer reach native string or unchecked integer-conversion fallbacks.
 - Integer material queries decode bounded native bytes, support one-byte booleans, and validate floating-point conversions. This avoids zero-capacity writes and the upstream Double-as-string conversion path. Emissive texture helpers also find glTF's `Emissive` slot.
@@ -40,6 +43,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Zero-copy views check size, alignment, and field offsets against generated bindings at compile time, and the byte-view example correctly reads indices from individual faces.
 
 ### Removed
+- **Breaking:** Removed `SPLIT_BY_BONE_COUNT` from the safe API. The bridge rejects this step before import or scene mutation because Assimp 6.0.6 can loop without progress or free meshes twice when a later split fails.
 - **Breaking:** Removed `SPLIT_LARGE_MESHES` and its limit constants from the safe API and presets. The bridge rejects the step before import or scene mutation because Assimp 6.0.6 can retain freed meshes, write through null sparse-channel pointers, or fail to advance. Split geometry in the application until an upstream fix is verified.
 - **Breaking:** Removed `ExportBuilder::with_preprocessing`, whose native execution skipped property initialization and could silently lose transformations. Prepare scenes through the import builder or `Scene::apply_postprocess` before exporting; export properties configure the output format only. Raw bridge preprocessing arguments must be zero, and blob exports reject configured file systems.
 - **Breaking:** Removed the unsynchronized native global logging facade and disabled log-stream compatibility stubs. Use operation results and progress callbacks for application-level diagnostics.

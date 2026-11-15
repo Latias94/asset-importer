@@ -5,38 +5,59 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   CARGO_TERM_COLOR: always
+  CARGO_BUILD_JOBS: 2
+  CMAKE_BUILD_PARALLEL_LEVEL: 2
+  API_FEATURES: export,raw-sys,type-extensions,glam,mint,bytemuck
 
 jobs:
   test:
-    name: Test (${{ matrix.os }}, ${{ contains(matrix.features, 'static-link') && 'static' || 'dylib' }}, ${{ matrix.crt }})
+    name: Source (${{ matrix.os }}, ${{ matrix.link }}, CRT ${{ matrix.crt }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-        # Always build from source in CI to avoid prebuilt/version skew
-        features: ["build-assimp", "build-assimp,static-link"]
-        # Add CRT dimension; only meaningful on Windows
+        os: [ubuntu-24.04, windows-2025, macos-15]
+        link: [static, dylib]
         crt: [dynamic, static]
         exclude:
-          - os: ubuntu-latest
+          - os: ubuntu-24.04
             crt: static
-          - os: macos-latest
+          - os: macos-15
             crt: static
+    env:
+      TEST_FEATURES: ${{ matrix.link == 'static' && 'static-link,' || '' }}export,raw-sys,type-extensions,glam,mint,bytemuck
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           submodules: recursive
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: Install nextest
+        uses: taiki-e/install-action@v2
+        with:
+          tool: nextest
 
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
+        with:
+          key: source-${{ matrix.link }}-${{ matrix.crt }}
 
       - name: Install Linux dependencies
         if: runner.os == 'Linux'
@@ -50,209 +71,101 @@ jobs:
 
       - name: Install Windows dependencies
         if: runner.os == 'Windows'
-        run: choco install -y cmake llvm
+        run: choco install -y cmake
 
-      - name: Select static CRT (Windows)
-        if: ${{ runner.os == 'Windows' && matrix.crt == 'static' }}
-        shell: pwsh
-        run: echo "RUSTFLAGS=-C target-feature=+crt-static" >> $env:GITHUB_ENV
+      - name: Select static CRT
+        if: runner.os == 'Windows' && matrix.crt == 'static'
+        shell: bash
+        run: echo "RUSTFLAGS=-C target-feature=+crt-static" >> "$GITHUB_ENV"
 
-      - name: Echo build parameters
+      - name: Verify pregenerated builds have no bindgen dependency
         shell: bash
         run: |
-          echo "OS=${{ matrix.os }}"
-          echo "FEATURES=${{ matrix.features }}"
-          echo "CRT=${{ matrix.crt }}"
-          echo "RUSTFLAGS=${RUSTFLAGS:-<empty>}"
+          dependencies="$(cargo tree --workspace --locked --no-default-features --features "$TEST_FEATURES" --edges normal,build --prefix none)"
+          if printf '%s\n' "$dependencies" | grep -E '^(bindgen|clang-sys) v'; then
+            echo "Source builds must use the shipped bindings without libclang."
+            exit 1
+          fi
 
       - name: Clean cached local build outputs
         run: cargo clean -p asset-importer-sys -p asset-importer
 
-      - name: Build workspace (from source)
-        run: cargo build --workspace --no-default-features --features "${{ matrix.features }}"
-        env:
-          ASSET_IMPORTER_FORCE_BUILD: "1"
+      - name: Test source builds and optional integrations
+        run: cargo nextest run --workspace --locked --no-default-features --features "${{ env.TEST_FEATURES }}"
 
-      - name: Run tests
-        run: cargo test --workspace --no-default-features --features "${{ matrix.features }}"
-        env:
-          ASSET_IMPORTER_FORCE_BUILD: "1"
+      - name: Check examples
+        if: matrix.crt == 'dynamic'
+        run: cargo check --workspace --all-targets --locked --no-default-features --features "${{ env.TEST_FEATURES }},demo"
 
-      - name: Check regenerated MSVC bindings and all safe API features
-        if: runner.os == 'Windows'
-        run: cargo check --workspace --all-targets --no-default-features --features "${{ matrix.features }},export,raw-sys,type-extensions,glam,mint,bytemuck,demo,asset-importer-sys/generate-bindings"
-        env:
-          ASSET_IMPORTER_FORCE_BUILD: "1"
-          ASSET_IMPORTER_FORCE_GENERATE_BINDINGS: "1"
-          LIBCLANG_PATH: C:\Program Files\LLVM\bin
+      - name: Check Clippy
+        if: runner.os == 'Linux' && matrix.link == 'dylib'
+        run: cargo clippy --workspace --all-targets --locked --no-default-features --features "${{ env.TEST_FEATURES }},demo" -- -D warnings
 
-  feature-check:
-    name: Feature Check (ubuntu-latest)
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          submodules: recursive
+      - name: Test documentation examples
+        if: runner.os == 'Linux' && matrix.link == 'dylib'
+        run: cargo test --workspace --doc --locked --no-default-features --features "${{ env.TEST_FEATURES }}"
 
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+      - name: Test default features
+        if: runner.os == 'Linux' && matrix.link == 'dylib'
+        run: cargo nextest run --workspace --locked
 
-      - name: Cache Rust dependencies
-        uses: Swatinem/rust-cache@v2
-
-      - name: Install Linux dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y cmake build-essential
-
-      - name: Clean cached local build outputs
-        run: cargo clean -p asset-importer-sys -p asset-importer
-
-      - name: Check all examples and optional integrations
-        run: cargo check --workspace --all-targets --no-default-features --features "build-assimp,export,raw-sys,type-extensions,glam,mint,bytemuck,demo"
-        env:
-          ASSET_IMPORTER_FORCE_BUILD: "1"
-
-      - name: Test all optional integrations
-        run: cargo test --workspace --no-default-features --features "build-assimp,export,raw-sys,type-extensions,glam,mint,bytemuck"
-        env:
-          ASSET_IMPORTER_FORCE_BUILD: "1"
-
-  system-macos:
-    name: System Assimp (macos-latest)
-    runs-on: macos-latest
-    continue-on-error: true
-    steps:
-      - name: Checkout repository (no submodules)
-        uses: actions/checkout@v4
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Cache Rust dependencies
-        uses: Swatinem/rust-cache@v2
-
-      - name: Install deps (assimp + pkg-config)
-        run: |
-          brew update
-          brew install assimp pkg-config
-
-      - name: Install LLVM (libclang) for bindgen
-        uses: KyleMayes/install-llvm-action@v1
-        with:
-          directory: ${{ runner.temp }}/llvm
-          cached: true
-          version: '14.0'
-
-      - name: Build + test (system)
-        run: cargo test -p asset-importer --no-default-features --features system
-
-  system-windows:
-    name: System Assimp (windows-latest)
-    runs-on: windows-latest
-    continue-on-error: true
-    steps:
-      - name: Checkout repository (no submodules)
-        uses: actions/checkout@v4
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Cache Rust dependencies
-        uses: Swatinem/rust-cache@v2
-
-      - name: Install deps (llvm + cmake)
-        run: choco install -y llvm cmake
-
-      - name: Setup vcpkg
-        uses: lukka/run-vcpkg@v11
-        with:
-          vcpkgGitCommitId: 9a98f93671f984351377044210854900bfd73171
-          runVcpkgInstall: false
-
-      - name: Install assimp via vcpkg (x64-windows)
-        shell: pwsh
-        run: |
-          $triplet = 'x64-windows'
-          vcpkg install "assimp:$triplet"
-          $candidates = @($env:VCPKG_ROOT, $env:VCPKG_INSTALLATION_ROOT, $env:VCPKG_INSTALLED_DIR) | Where-Object { $_ -and $_.Trim() -ne '' }
-          if ($candidates.Count -eq 0) { throw 'VCPKG root not found in environment.' }
-
-          $root = $null
-          foreach ($c in $candidates) {
-            $probe = $c
-            if ($probe -match '[\\/]+installed$') { $probe = Split-Path $probe -Parent }
-            if (Test-Path (Join-Path $probe "installed\\$triplet")) { $root = $probe; break }
-          }
-          if (-not $root) { $root = $candidates[0] }
-
-          echo "VCPKG_ROOT=$root" >> $env:GITHUB_ENV
-          echo "VCPKGRS_TRIPLET=$triplet" >> $env:GITHUB_ENV
-          echo "VCPKGRS_DYNAMIC=1" >> $env:GITHUB_ENV
-          echo (Join-Path $root "installed\\$triplet\\bin") >> $env:GITHUB_PATH
-          echo (Join-Path $root "installed\\$triplet\\debug\\bin") >> $env:GITHUB_PATH
-
-      - name: Build + test (system)
-        run: cargo test -p asset-importer --no-default-features --features system
-
-  prebuilt:
-    name: Prebuilt Assimp (${{ matrix.os }})
+  bindings:
+    name: Regenerated bindings (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
-    # Prebuilt binaries are validated in `.github/workflows/prebuilt-binaries.yml`.
-    # Running prebuilt tests in regular CI is brittle (it depends on release artifacts being available).
-    if: ${{ startsWith(github.ref, 'refs/tags/') }}
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-    steps:
-      - name: Checkout repository (no submodules)
-        uses: actions/checkout@v4
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Cache Rust dependencies
-        uses: Swatinem/rust-cache@v2
-
-      - name: Build + test (prebuilt)
-        run: cargo test -p asset-importer --no-default-features --features prebuilt
-
-  clippy:
-    name: Clippy
-    runs-on: ubuntu-latest
+        os: [ubuntu-24.04, windows-2025]
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           submodules: recursive
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
-          components: clippy
+          components: rustfmt
 
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
+        with:
+          key: generated-bindings
 
-      - name: Install dependencies
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake build-essential
+          sudo apt-get install -y cmake build-essential libclang-dev
+
+      - name: Install Windows dependencies
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          choco install -y cmake llvm
+          echo "LIBCLANG_PATH=C:\Program Files\LLVM\bin" >> $env:GITHUB_ENV
 
       - name: Clean cached local build outputs
         run: cargo clean -p asset-importer-sys -p asset-importer
 
-      - name: Run clippy
-        run: cargo clippy --workspace --all-targets --no-default-features --features "build-assimp,export,raw-sys,type-extensions,glam,mint,bytemuck,demo" -- -D warnings
+      - name: Check pregenerated bindings are current
+        if: runner.os == 'Linux'
+        run: python3 tools/update_bindings.py --check
+
+      - name: Check MSVC bindings against the safe API
+        if: runner.os == 'Windows'
+        run: cargo check --workspace --all-targets --locked --no-default-features --features "build-assimp,${{ env.API_FEATURES }},demo,asset-importer-sys/generate-bindings"
+        env:
+          ASSET_IMPORTER_FORCE_GENERATE_BINDINGS: "1"
 
   msrv:
     name: Rust 1.85 compatibility
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           submodules: recursive
 
@@ -261,23 +174,140 @@ jobs:
 
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
+        with:
+          key: msrv
 
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake build-essential libclang-dev
+          sudo apt-get install -y cmake build-essential
 
-      - name: Check examples and optional integrations on the minimum Rust version
-        run: cargo check --workspace --all-targets --locked --features "build-assimp,export,raw-sys,type-extensions,glam,mint,bytemuck,demo,asset-importer-sys/generate-bindings"
+      - name: Clean cached local build outputs
+        run: cargo clean -p asset-importer-sys -p asset-importer
+
+      - name: Check examples and optional integrations
+        run: cargo check --workspace --all-targets --locked --no-default-features --features "build-assimp,${{ env.API_FEATURES }},demo"
+
+  package:
+    name: Published packages and docs.rs
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: package
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake build-essential
+
+      - name: Clean cached local build outputs
+        run: cargo clean -p asset-importer-sys -p asset-importer
+
+      - name: Package and verify both crates
+        run: cargo package --workspace --locked
+
+      - name: Build documentation without native tools or libclang
+        run: cargo doc --workspace --no-deps --locked --features type-extensions
         env:
-          ASSET_IMPORTER_FORCE_GENERATE_BINDINGS: "1"
+          DOCS_RS: "1"
+          CMAKE: /nonexistent/cmake
+          CXX: /nonexistent/c++
+
+  system-macos:
+    name: System Assimp (macos-15)
+    runs-on: macos-15
+    timeout-minutes: 60
+    continue-on-error: true
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: system
+
+      - name: Install dependencies
+        run: brew install assimp pkg-config llvm
+
+      - name: Locate libclang
+        run: echo "LIBCLANG_PATH=$(brew --prefix llvm)/lib" >> "$GITHUB_ENV"
+
+      - name: Test system library
+        run: cargo test -p asset-importer --locked --no-default-features --features system
+
+  system-windows:
+    name: System Assimp (windows-2025)
+    runs-on: windows-2025
+    timeout-minutes: 60
+    continue-on-error: true
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: system
+
+      - name: Install dependencies
+        run: |
+          choco install -y llvm cmake
+          echo "LIBCLANG_PATH=C:\Program Files\LLVM\bin" >> $env:GITHUB_ENV
+
+      - name: Setup vcpkg
+        uses: lukka/run-vcpkg@v11
+        with:
+          vcpkgGitCommitId: 9a98f93671f984351377044210854900bfd73171
+          runVcpkgInstall: false
+
+      - name: Install Assimp
+        shell: pwsh
+        run: |
+          $triplet = 'x64-windows'
+          vcpkg install "assimp:$triplet"
+          $candidates = @($env:VCPKG_ROOT, $env:VCPKG_INSTALLATION_ROOT, $env:VCPKG_INSTALLED_DIR) | Where-Object { $_ -and $_.Trim() -ne '' }
+          if ($candidates.Count -eq 0) { throw 'VCPKG root not found in environment.' }
+          $root = $null
+          foreach ($candidate in $candidates) {
+            $probe = $candidate
+            if ($probe -match '[\\/]+installed$') { $probe = Split-Path $probe -Parent }
+            if (Test-Path (Join-Path $probe "installed\\$triplet")) { $root = $probe; break }
+          }
+          if (-not $root) { throw 'Assimp installation not found under the vcpkg roots.' }
+          echo "VCPKG_ROOT=$root" >> $env:GITHUB_ENV
+          echo "VCPKGRS_TRIPLET=$triplet" >> $env:GITHUB_ENV
+          echo "VCPKGRS_DYNAMIC=1" >> $env:GITHUB_ENV
+          echo (Join-Path $root "installed\\$triplet\\bin") >> $env:GITHUB_PATH
+          echo (Join-Path $root "installed\\$triplet\\debug\\bin") >> $env:GITHUB_PATH
+
+      - name: Test system library
+        run: cargo test -p asset-importer --locked --no-default-features --features system
 
   fmt:
     name: Format
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -286,3 +316,11 @@ jobs:
 
       - name: Check formatting
         run: cargo fmt --all -- --check
+
+      - name: Install actionlint
+        uses: taiki-e/install-action@v2
+        with:
+          tool: actionlint
+
+      - name: Check workflows
+        run: actionlint

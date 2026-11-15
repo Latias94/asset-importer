@@ -1,0 +1,171 @@
+name: Publish to crates.io
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Published release tag (v0.9.0 or a crate-specific tag)'
+        required: true
+        type: string
+      package:
+        description: 'Follow the tag, or select one crate to resume a partial release'
+        type: choice
+        default: auto
+        options: [auto, asset-importer-sys, asset-importer]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: crates-io-publish
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_BUILD_JOBS: 2
+  CMAKE_BUILD_PARALLEL_LEVEL: 2
+  RELEASE_TAG: ${{ inputs.tag || github.event.release.tag_name }}
+
+jobs:
+  validate:
+    name: Validate published release
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      sha: ${{ steps.candidate.outputs.sha }}
+      scope: ${{ steps.candidate.outputs.scope }}
+    steps:
+      - name: Checkout release tag
+        uses: actions/checkout@v7
+        with:
+          ref: refs/tags/${{ env.RELEASE_TAG }}
+
+      - name: Parse release tag
+        id: version
+        run: bash .github/scripts/parse-version.sh "$RELEASE_TAG"
+
+      - name: Validate versions and select packages
+        id: candidate
+        shell: python
+        env:
+          TAG_VERSION: ${{ steps.version.outputs.version }}
+          TAG_CRATE: ${{ steps.version.outputs.crate }}
+          REQUESTED_PACKAGE: ${{ inputs.package || 'auto' }}
+        run: |
+          import os
+          import pathlib
+          import subprocess
+          import tomllib
+
+          packages = ("asset-importer-sys", "asset-importer") if os.environ["RELEASE_TAG"].startswith("v") else (os.environ["TAG_CRATE"],)
+          versions = {}
+          for package in packages:
+              manifest = tomllib.loads(pathlib.Path(package, "Cargo.toml").read_text())
+              versions[package] = manifest["package"]["version"]
+              if versions[package] != os.environ["TAG_VERSION"]:
+                  raise SystemExit(f"Release tag does not match {package}/Cargo.toml.")
+          requested = os.environ["REQUESTED_PACKAGE"]
+          if requested != "auto" and requested not in packages:
+              raise SystemExit("Requested crate does not belong to this release tag.")
+          scope = requested if requested != "auto" else "workspace" if len(packages) == 2 else packages[0]
+          sha = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+          with open(os.environ["GITHUB_OUTPUT"], "a") as output:
+              output.write(f"sha={sha}\nscope={scope}\n")
+
+      - name: Require successful CI and public native archives
+        uses: actions/github-script@v9
+        env:
+          CANDIDATE_SHA: ${{ steps.candidate.outputs.sha }}
+          TAG_VERSION: ${{ steps.version.outputs.version }}
+          RELEASE_CRATE: ${{ steps.version.outputs.crate }}
+        with:
+          script: |
+            const { data: release } = await github.rest.repos.getReleaseByTag({
+              ...context.repo,
+              tag: process.env.RELEASE_TAG,
+            });
+            if (release.draft) throw new Error('Publish the GitHub release before publishing crates.');
+
+            const { data: { workflow_runs: runs } } = await github.rest.actions.listWorkflowRuns({
+              ...context.repo,
+              workflow_id: 'ci.yml',
+              head_sha: process.env.CANDIDATE_SHA,
+              event: 'push',
+              per_page: 100,
+            });
+            const latest = runs.filter(run => run.head_branch === 'main')
+              .sort((a, b) => b.run_number - a.run_number)[0];
+            if (!latest || latest.status !== 'completed' || latest.conclusion !== 'success') {
+              throw new Error('The release commit requires successful main-branch CI.');
+            }
+
+            if (process.env.RELEASE_CRATE === 'asset-importer-sys') {
+              const assets = new Set(release.assets.filter(asset => asset.state === 'uploaded').map(asset => asset.name));
+              const targets = ['x86_64-unknown-linux-gnu', 'x86_64-apple-darwin', 'aarch64-apple-darwin', 'x86_64-pc-windows-msvc'];
+              for (const target of targets) {
+                for (const link of ['static', 'dylib']) {
+                  for (const suffix of target.includes('windows') ? ['-md', '-mt'] : ['']) {
+                    const archive = `asset-importer-${process.env.TAG_VERSION}-${target}-${link}${suffix}.tar.gz`;
+                    if (!assets.has(archive)) throw new Error(`Missing public native archive: ${archive}`);
+                  }
+                }
+              }
+            }
+
+  publish:
+    name: Publish crates with OIDC
+    needs: validate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    environment: crates-io
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      PUBLISH_SCOPE: ${{ needs.validate.outputs.scope }}
+    steps:
+      - name: Checkout validated candidate
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.validate.outputs.sha }}
+          submodules: recursive
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: publish
+
+      - name: Install native build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake build-essential
+
+      - name: Verify packages before authentication
+        run: |
+          if [ "$PUBLISH_SCOPE" = "workspace" ]; then
+            cargo publish --workspace --locked --dry-run
+          else
+            cargo publish -p "$PUBLISH_SCOPE" --locked --dry-run
+          fi
+
+      - name: Acquire short-lived crates.io token
+        id: auth
+        uses: rust-lang/crates-io-auth-action@v1
+
+      - name: Publish verified packages in dependency order
+        run: |
+          if [ "$PUBLISH_SCOPE" = "workspace" ]; then
+            cargo publish --workspace --locked --no-verify
+          else
+            cargo publish -p "$PUBLISH_SCOPE" --locked --no-verify
+          fi
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}

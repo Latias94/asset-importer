@@ -125,6 +125,8 @@ Practical guidance:
 - Sparse morph UV/color channels are rejected before native scene copies used by export or hierarchy-preserving vertex pre-transformation. This prevents Assimp 6.0.6 from sharing and then freeing the source buffers.
 - Export also rejects node metadata and mesh-animation layouts that Assimp cannot deep-copy safely, including empty node metadata. These scenes remain readable; the error identifies the unsupported layout.
 - `SPLIT_LARGE_MESHES` and its two limit constants were removed from the safe API and presets. The bridge rejects the native step before reading or mutating a scene because Assimp 6.0.6 can retain freed meshes, write through null sparse-channel pointers, or loop without progress. Split geometry in your application until a verified upstream fix is available; raw upstream bindings remain unsafe.
+- `SPLIT_BY_BONE_COUNT` was also removed. The bridge rejects this step before reading or mutating a scene because Assimp 6.0.6 can loop without progress or free meshes twice when a later split fails.
+- `GLOBAL_SCALE` requires a finite, nonzero effective scale, including the importer's format-specific scale. Nonidentity scaling rejects morph targets that omit positions, such as valid glTF targets containing only normals, before executing native post-processing. These scenes remain importable without scaling or with an effective scale of one.
 - The native global logging facade (`Logger`, `LogStream`, `logging`, and `enable_verbose_logging`) was removed. Log operation results and progress in your application; native logging through `raw-sys` requires the caller to synchronize global Assimp state.
 - `ImportExtensions::raw_assimp_list()` now returns `&str`. Empty native capability lists remain empty instead of advertising fallback formats.
 - Prebuilt 0.9 packages must be generated for this release. Until published, use the default source build or provide local packages with `ASSET_IMPORTER_PACKAGE_DIR`.
@@ -139,7 +141,8 @@ asset-importer = "0.9"
 
 - **Most reliable**: Uses the bundled Assimp source that matches this crate
 - **Release independent**: Does not depend on prebuilt GitHub release artifacts
-- **Requires**: CMake, a C++ compiler, and Git
+- **Requires**: CMake and a C++17 compiler; Git is only needed for repository submodules
+- **No binding toolchain**: Uses shipped Rust bindings without LLVM/libclang or bindgen
 
 You can also select the same vendored source build explicitly:
 
@@ -157,6 +160,11 @@ asset-importer = { version = "0.9", features = ["prebuilt"] }
 - **Convenient**: Skips CMake and the Assimp source build; a C++17 compiler is still required for the Rust bridge
 - **Requires**: Matching release artifacts from GitHub releases
 - **Version checked**: Stale packages are rejected if their manifest does not match the bundled Assimp version
+- **No binding toolchain**: Uses the same shipped Rust bindings as source builds
+
+Source compilation stays the default because it works across targets and does not depend on GitHub
+release downloads or an additional native binary cache. Use `prebuilt` when build time matters and
+your target has a matching archive. Both modes still compile the small C++17 bridge.
 
 ### System Library
 
@@ -167,6 +175,7 @@ asset-importer = { version = "0.9", features = ["system"] }
 - **Lightweight**: Uses existing system installation
 - **Setup required**: Install via `brew install assimp` (macOS), `apt install libassimp-dev` (Ubuntu)
 - **Version dependent**: Behavior may vary based on system library version
+- **Bindings**: Regenerates bindings from the installed headers and requires libclang
 
 ### Additional Features
 
@@ -199,7 +208,11 @@ When using the default source build or the explicit `build-assimp` feature, you'
 
 - **CMake** (3.22 or later)
 - **C++ Compiler** (MSVC on Windows, GCC/Clang on Linux/macOS)
-- **Git** (for submodules)
+- **Git** (only for submodules when building a repository checkout; crates.io packages include the source)
+
+Default source builds and `prebuilt` builds use the checked-in bindings and do not require a separate
+LLVM/libclang installation. Only `system` builds and maintainers regenerating bindings need libclang.
+See [Bindings Generation](asset-importer-sys/README.md#bindings-generation) for the update command and CI checks.
 
 ### Platform-Specific Setup
 

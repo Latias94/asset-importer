@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-11-15
+
 ### Changed
 - **Breaking:** All native enum types use bindgen integer newtypes with associated constants. Unknown file values and flag combinations remain valid at the FFI boundary; use `.0` to read their integer representation.
 - Source builds explicitly bundle minizip while retaining system zlib on Unix. Windows GNU source/prebuilt/package paths distinguish static archives from DLL import archives and retain bundled zlib.
@@ -18,6 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Updated build/download dependencies and added `BUNDLED_ASSIMP_VERSION`. macOS fallback deployment targets now match Rust's supported baseline: 10.13 for Intel and 11.0 for ARM64.
 
 ### Fixed
+- The bridge rejects `aiProcess_SplitByBoneCount` before import or scene mutation, preventing nonprogressing splits and double frees during failure cleanup in Assimp 6.0.6.
+- Global scaling checks the importer's final `GLOBAL_SCALE_FACTOR * APP_SCALE_FACTOR` before native processing. Zero and nonfinite effective scales are rejected, as are nonidentity scales on morph targets without positions. These guards apply to source, prebuilt, and system providers.
 - The C++ bridge guards all scene-copy operations it exposes against sparse morph channel aliasing and blocks 3MF blob/custom I/O writes to the host file system.
 - Export copies reject empty/unsupported node metadata and mesh animation channels that Assimp would leave shared with the source. Already unique indices with a stale non-verbose flag are normalized on an independent private scene.
 - Native Doxygen code blocks render as text in generated Rust documentation, so diagrams and C/C++ examples are not compiled as Rust doctests.
