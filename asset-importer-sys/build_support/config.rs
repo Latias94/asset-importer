@@ -128,6 +128,7 @@ impl BuildConfig {
         println!("cargo:rerun-if-env-changed=ASSET_IMPORTER_VERBOSE");
         println!("cargo:rerun-if-env-changed=CARGO_TARGET_DIR");
         println!("cargo:rerun-if-env-changed=CARGO_NET_OFFLINE");
+        println!("cargo:rerun-if-env-changed=DOCS_RS");
 
         // System discovery knobs (pkg-config/vcpkg)
         println!("cargo:rerun-if-env-changed=PKG_CONFIG");

@@ -63,6 +63,13 @@ pub fn run(cfg: &BuildConfig, plan: &BuildPlan) {
         );
     }
 
+    if cfg.force_generate_bindings && !cfg!(feature = "generate-bindings") {
+        panic!(
+            "ASSET_IMPORTER_FORCE_GENERATE_BINDINGS requires feature `generate-bindings`.\n\
+             Hint: enable `asset-importer-sys/generate-bindings` or unset ASSET_IMPORTER_FORCE_GENERATE_BINDINGS."
+        );
+    }
+
     // For non-system builds we strongly prefer the shipped pregenerated bindings, so builds are
     // fast, deterministic, and do not require libclang.
     if !is_system && !cfg.force_generate_bindings && copy_pregenerated_bindings(cfg) {

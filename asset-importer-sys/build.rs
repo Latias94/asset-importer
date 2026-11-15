@@ -29,7 +29,7 @@ fn main() {
     // Link Assimp (system / prebuilt / built-from-source).
     plan.emit_link(&cfg);
 
-    // Generate Rust bindings (always from headers that match the chosen link strategy).
+    // Use shipped bindings, or generate bindings from the selected headers when requested.
     bindings::run(&cfg, &plan);
 
     // Build our small C++ bridge (progress handler + IOSystem wrappers).

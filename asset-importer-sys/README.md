@@ -41,7 +41,8 @@ asset-importer-sys = "0.9"
 asset-importer-sys = { version = "0.9", features = ["build-assimp"] }
 ```
 - Builds Assimp from bundled source
-- Requires: CMake, C++ compiler, Git
+- Requires: CMake and a C++17 compiler; Git only for repository submodules
+- Uses shipped bindings without LLVM/libclang or bindgen
 - Best compatibility across platforms
 
 ### Prebuilt Binaries
@@ -50,7 +51,8 @@ asset-importer-sys = { version = "0.9", features = ["build-assimp"] }
 asset-importer-sys = { version = "0.9", features = ["prebuilt"] }
 ```
 - Downloads prebuilt libraries from GitHub releases
-- No build dependencies required
+- Requires a C++17 compiler for the bridge; skips CMake and the Assimp source build
+- Uses shipped bindings without LLVM/libclang or bindgen
 - Fastest option for development
 - Requires a package whose manifest matches the bundled Assimp version
 
@@ -62,6 +64,9 @@ Uses system-installed assimp. Install via package manager:
 - **macOS**: `brew install assimp`
 - **Ubuntu/Debian**: `sudo apt install libassimp-dev`
 - **Windows**: Use vcpkg or manual installation
+
+This mode requires libclang to regenerate bindings from the installed headers. The high-level
+crate's `system` feature enables `generate-bindings` automatically; direct sys consumers enable both.
 
 On Windows with vcpkg, pick a triplet that matches your desired CRT:
 - `x64-windows` → dynamic CRT (/MD)
@@ -118,10 +123,13 @@ asset-importer-sys = {
 
 | Feature | Requirements |
 |---------|-------------|
-| Default vendored source | CMake (≥3.22), C++ compiler, Git |
+| Default vendored source | CMake (≥3.22), C++17 compiler |
 | `prebuilt` | C++17 compiler for the Rust bridge; no CMake or Assimp source build |
 | `system` | System assimp installation, libclang/bindgen, C++17 compiler for the bridge |
-| `build-assimp` | CMake (≥3.22), C++ compiler, Git |
+| `build-assimp` | CMake (≥3.22), C++17 compiler |
+
+Source and prebuilt builds use pregenerated bindings and do not require libclang. Git is only needed
+to initialize submodules in a repository checkout; crates.io source packages include Assimp.
 
 #### Detailed Requirements for Source Build
 
@@ -131,7 +139,7 @@ asset-importer-sys = {
   - Windows: MSVC 2019+ (Visual Studio Build Tools)
   - macOS: Clang (Xcode Command Line Tools)
   - Linux: GCC 7+ or Clang 6+
-- **Git**: For submodule management
+- **Git**: For submodule management in repository checkouts
 
 **Platform Setup:**
 
@@ -196,11 +204,43 @@ Native enum types are transparent integer newtypes with associated constants. Re
 
 ## Bindings Generation
 
-Bindings are generated using [bindgen](https://github.com/rust-lang/rust-bindgen) from the Assimp headers. The generated bindings include:
+`src/bindings_pregenerated.rs` is generated with [bindgen](https://github.com/rust-lang/rust-bindgen)
+from the bundled Assimp headers and is included in the published crate. Default source builds,
+explicit `build-assimp` builds, prebuilt consumers, and docs.rs copy this file without running
+bindgen. The generated bindings include:
 
 - All `ai*` functions
 - All `ai*` types and constants
 - Proper struct layouts for FFI
+
+Only `system` builds regenerate bindings automatically, because their installed headers can differ
+from the bundled version. For non-system builds, enabling `generate-bindings` makes bindgen available
+but still prefers the shipped file. Maintainers also set `ASSET_IMPORTER_FORCE_GENERATE_BINDINGS=1`
+to regenerate it.
+
+After updating the Assimp submodule and `assimp-version.txt`, install libclang and the Rust `rustfmt`
+component, then run from the repository root on native Linux or macOS:
+
+```console
+python3 tools/update_bindings.py
+python3 tools/update_bindings.py --check
+```
+
+Set `LIBCLANG_PATH` if libclang is not discoverable. The update tool invokes the existing Cargo build
+with `build-assimp,generate-bindings`, locates the exact output from Cargo's JSON messages, and updates
+only the pregenerated file.
+`--check` reports differences without changing the checked-in file. Review generated changes and
+commit them with the Assimp upgrade.
+
+MSVC gives some native enums a different signedness. Its regenerated output is compiled separately
+in CI and must not replace the shared pregenerated file. On Windows, validate fresh bindings with
+`ASSET_IMPORTER_FORCE_GENERATE_BINDINGS=1`, feature `asset-importer-sys/generate-bindings`, and
+`LIBCLANG_PATH` pointing to the LLVM `bin` directory.
+
+CI checks regeneration on Linux and compiles the safe API against fresh MSVC bindings. Source and
+prebuilt test jobs separately assert that `bindgen` and `clang-sys` are absent from their dependency
+graphs, then run the tests with the shipped bindings. The minimum Rust version also uses the shipped
+bindings, so a bindgen upgrade cannot hide incompatible pregenerated output.
 
 ## Safety
 
